@@ -48,11 +48,11 @@ export const PROVIDERS: ProviderDef[] = [
   },
   {
     id: 'sketchfab',
-    label: 'Pick from library (Sketchfab)',
-    detail: 'Search a model library and drop a licensed model into the slot.',
-    cost: 'Free–$',
-    available: false,
-    unavailableReason: 'Needs a Sketchfab API token — planned for P1.',
+    label: 'Search Sketchfab library',
+    detail:
+      'Search millions of licensed 3D models and drop one straight into this slot — no download or generation. Permissive licenses only (CC0 / CC-BY / CC-BY-SA), poly-budgeted, attribution recorded.',
+    cost: 'Free',
+    available: true,
   },
   {
     id: 'upload',

@@ -48,8 +48,10 @@ The long-term goal: become the **single source of structured city data that AI a
 ### Simulated or stubbed (code paths exist, backends pending)
 
 - **AI generation (`Generate 3D`)** — the job queue, progress UI, slot-hash caching, and approve/revert flow are fully implemented, but the worker is a local simulation that produces an enhanced procedural variant. Wiring a real GPU endpoint replaces one function (`runGeneration()` in [src/gateway/providers.ts](src/gateway/providers.ts)).
-- **Meshy / Sketchfab providers** — entries exist in the provider menu, disabled until API keys/integration are added.
+- **Meshy provider** — entry exists in the provider menu, disabled until an API key is added.
 - **CLIP-based visual matching** and **ESA WorldCover rasters** — declared adapters; land cover is currently OSM-derived.
+
+> **Sketchfab library search is now live** (dev): the Replace panel can search Sketchfab's model library and drop a licensed model straight into a slot. See the *Asset library & Sketchfab* section below.
 
 ### Planned (vision — not yet started)
 
@@ -67,6 +69,27 @@ The long-term goal: become the **single source of structured city data that AI a
 |---|---|
 | ![Area picker](docs/screenshots/01-area-picker.png) *Pick any area in the world* | ![Editor](docs/screenshots/02-editor.png) *Procedural city + quality lints* |
 | ![Replace panel](docs/screenshots/03-selection.png) *Select a building → content resolution trail, real-world reference, provider menu* | ![Drive mode](docs/screenshots/04-drive.png) *Drive preview: eye-level validation with lane markings and street lighting* |
+
+---
+
+## Asset library & Sketchfab
+
+Every OSM feature can be backed by a real 3D asset, selected deterministically and normalized to real-world size on placement. Assets come from two sources, both feeding one manifest and one pool system:
+
+- **Bundled packs** in `assets/library/<pack>/` — the first is the CC0 Quaternius Downtown City MegaKit (153 models).
+- **Sketchfab** via the Data API — curated offline into a labeled catalog, and searchable live inside the editor.
+
+**Tooling** (needs `SKETCHFAB_API_TOKEN`):
+
+```bash
+node tools/build-asset-manifest.mjs      # scan library → assets/manifest.json + coverage report
+node tools/sketchfab-curate.mjs          # search each coverage gap → assets/sketchfab-catalog.json (labeled index)
+node tools/sketchfab-fetch.mjs           # download the vetted drivable-street set into the library, then re-scan
+```
+
+The scanner measures real geometry (bounding box in meters, triangle count), classifies each asset to OSM tags, groups them into weighted `(tag × style)` pools picked by `hash(feature_id)` — varied but deterministic — and flags anything unclassifiable, oversized, or over its polygon budget. Bundling the Sketchfab set took coverage from **10/24 → 18/24** pipeline tags (see [assets/coverage-report.md](assets/coverage-report.md)). Only permissive licenses (CC0 / CC-BY / CC-BY-SA) are surfaced; attribution is recorded in each pack's `NOTICE.md`, the manifest, and scene exports.
+
+**In the editor**, select a building or replaceable prop and choose **Search Sketchfab library** in the Replace panel: a live, license-filtered, poly-budgeted search returns a thumbnail grid; picking one downloads the model, fits it to the slot, and swaps it in with its license as provenance. The token stays server-side (Vite dev proxy); a static production build needs an equivalent backend proxy, and the feature disables itself gracefully if the proxy is absent.
 
 ---
 
@@ -248,7 +271,13 @@ flowchart LR
 
 ## Environment variables
 
-**None.** The app uses no `import.meta.env` / `process.env` values and requires no `.env` file. All external services (Overpass, Nominatim, GBIF, Wikidata, CARTO tiles) are public, keyless endpoints.
+The core app needs **none** — building cities from OSM uses only public, keyless endpoints (Overpass, Nominatim, GBIF, Wikidata, CARTO tiles), so `npm run dev` works with no `.env`.
+
+One **optional** variable unlocks the Sketchfab library features. Copy [.env.example](.env.example) to `.env` (gitignored) and fill it in:
+
+| Variable | Purpose |
+|---|---|
+| `SKETCHFAB_API_TOKEN` | Enables the in-app **Search Sketchfab library** replace flow and the `tools/sketchfab-*.mjs` curation/fetch scripts. Injected server-side by the Vite dev server — never shipped to the client bundle. Get one at [sketchfab.com/settings/password](https://sketchfab.com/settings/password). |
 
 **Planned configuration** *(not yet implemented — today these are code-level switches in [src/gateway/providers.ts](src/gateway/providers.ts))*:
 
@@ -256,7 +285,6 @@ flowchart LR
 |---|---|
 | Trellis GPU endpoint URL | Replace the simulated generation worker with a real image-to-3D service |
 | Meshy API key | Enable the premium Meshy generation provider |
-| Sketchfab OAuth token | Enable in-panel Sketchfab library search + download |
 
 ---
 

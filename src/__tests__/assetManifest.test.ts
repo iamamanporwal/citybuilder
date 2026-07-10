@@ -16,21 +16,33 @@ describe('asset manifest integrity', () => {
       expect(a.semantic).toBeTruthy()
       expect(a.style).toBeTruthy()
       expect(Array.isArray(a.osmTags)).toBe(true)
-      expect(a.license).toBe('CC0-1.0')
+      expect(a.license).toBeTruthy() // CC0-1.0 (Quaternius) or a CC-BY* label (Sketchfab)
       expect(a.lods.length).toBeGreaterThan(0)
       expect(a.triangles).toBeGreaterThan(0)
     }
   })
 
-  it('every pool entry references an existing, unflagged asset', () => {
+  it('every pool entry references an existing asset with no pool-excluding flag', () => {
+    // `oversized` is advisory (non-metric source, normalized on placement);
+    // unclassified/no-geometry/high-poly are genuine disqualifiers.
+    const EXCLUDING = ['unclassified', 'no-geometry', 'high-poly']
     for (const [key, pool] of Object.entries(manifest.pools as Record<string, any>)) {
       expect(pool.entries.length, key).toBeGreaterThan(0)
       for (const e of pool.entries) {
         const a = libraryAsset(e.id)
         expect(a, `${key} → ${e.id}`).toBeTruthy()
-        expect(a!.flags).toEqual([])
+        expect(a!.flags.some((f) => EXCLUDING.includes(f)), `${e.id} flags ${a!.flags}`).toBe(false)
         expect(e.weight).toBeGreaterThan(0)
+        // non-metric assets must carry the normalize hint so placement rescales
+        if (a!.flags.includes('oversized')) expect(e.normalizeScale).toBe(true)
       }
+    }
+  })
+
+  it('Sketchfab-curated drivable props are pooled and pickable', () => {
+    for (const tag of ['natural=tree', 'highway=street_lamp', 'highway=traffic_signals', 'amenity=bench', 'emergency=fire_hydrant']) {
+      const a = pickAssetFor(tag, `node/${tag}`)
+      expect(a, tag).toBeTruthy()
     }
   })
 
@@ -58,8 +70,9 @@ describe('deterministic pool picking', () => {
     expect(picked.size).toBeGreaterThan(1)
   })
 
-  it('unknown tags return null (procgen fallback)', () => {
-    expect(pickAssetFor('natural=tree', 'node/1')).toBeNull()
+  it('uncovered tags return null (procgen fallback)', () => {
+    // barrier=hedge has no library asset yet — must fall back to procgen
+    expect(pickAssetFor('barrier=hedge', 'node/1')).toBeNull()
   })
 
   it('reference-only pools (locked roads) are never picked', () => {
@@ -77,11 +90,15 @@ describe('scale normalization', () => {
     expect(s.x).toBeCloseTo(s.y, 5) // unknown axes keep proportions
   })
 
-  it('clamps runaway scales from mis-tagged features', () => {
+  it('clamps runaway up-scaling but allows shrink-to-fit for non-metric assets', () => {
+    // upper clamp guards a mis-tagged feature from exploding a real-scale asset
     const s = normalizeScale(bollard, { y: 500 })
     expect(s.y).toBeLessThanOrEqual(4)
-    const t = normalizeScale(bollard, { y: 0.001 })
-    expect(t.y).toBeGreaterThanOrEqual(0.25)
+    // a 1000x-scale Sketchfab prop must be allowed to shrink far below 1
+    const huge = { ...bollard, sizeMeters: { x: 500, y: 1000, z: 500 } }
+    const t = normalizeScale(huge, { y: 6 }) // fit a 1000m asset to a 6m lamp
+    expect(t.y).toBeCloseTo(0.006, 4)
+    expect(t.y * huge.sizeMeters!.y).toBeCloseTo(6, 3)
   })
 
   it('grounding lifts the scaled bbox min to y=0', () => {

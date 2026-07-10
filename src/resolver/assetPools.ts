@@ -31,7 +31,9 @@ interface Pool {
   style: string
   semantic: string
   referenceOnly: boolean
-  entries: { id: string; weight: number }[]
+  // normalizeScale:true marks a non-metric source asset that must be scaled to
+  // real bounds on placement (see normalizeScale / the wide default clamp).
+  entries: { id: string; weight: number; normalizeScale?: boolean }[]
 }
 
 const assetsById = new Map<string, LibraryAsset>(
@@ -82,7 +84,11 @@ export function pickAssetFor(
 export function normalizeScale(
   asset: LibraryAsset,
   target: { x?: number; y?: number; z?: number },
-  clamp: [number, number] = [0.25, 4],
+  // Wide default: assets arrive at wildly different authoring scales (metric
+  // Quaternius ~1×, non-metric Sketchfab up to ~1000×). The lower bound must
+  // allow aggressive shrink-to-fit; the upper bound still guards a mis-tagged
+  // OSM feature from exploding a correctly-scaled asset.
+  clamp: [number, number] = [0.001, 4],
 ): { x: number; y: number; z: number } {
   const size = asset.sizeMeters
   if (!size) return { x: 1, y: 1, z: 1 }

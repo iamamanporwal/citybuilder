@@ -1,0 +1,98 @@
+{
+  "streetlight_street_light_2d44b3.glb": {
+    "semantic": "street_furniture",
+    "role": "streetlight",
+    "style": "modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "license": "CC-BY (attribution)",
+    "attribution": "\"Street Light\" by KloWorks — CC-BY (attribution)",
+    "source": "Sketchfab (KloWorks)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-2d44b333f56c4faaab1bd2007868cc37"
+  },
+  "traffic_light_traffic_light_793e07.glb": {
+    "semantic": "street_furniture",
+    "role": "traffic-light",
+    "style": "us",
+    "osmTags": [
+      "highway=traffic_signals"
+    ],
+    "license": "CC-BY-SA (attribution, share-alike)",
+    "attribution": "\"Traffic light\" by 1-3D.com — CC-BY-SA (attribution, share-alike)",
+    "source": "Sketchfab (1-3D.com)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-793e078faa02407bb6ece323048852c4"
+  },
+  "tree_pine_tree_proto_series_free_08014e.glb": {
+    "semantic": "vegetation",
+    "role": "tree",
+    "style": "deciduous",
+    "osmTags": [
+      "natural=tree"
+    ],
+    "license": "CC-BY (attribution)",
+    "attribution": "\"Pine Tree - Proto Series - Free\" by BitGem — CC-BY (attribution)",
+    "source": "Sketchfab (BitGem)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-08014e92a59244c992884091218230b8"
+  },
+  "bench_picnic_table_low_poly_fe35ac.glb": {
+    "semantic": "street_furniture",
+    "role": "bench",
+    "style": "park",
+    "osmTags": [
+      "amenity=bench"
+    ],
+    "license": "CC-BY (attribution)",
+    "attribution": "\"Picnic Table - Low Poly\" by Derek Flanagan — CC-BY (attribution)",
+    "source": "Sketchfab (Derek Flanagan)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-fe35acda3a5245da8459d1a062e28190"
+  },
+  "trash_can_trash_can_minecraft_831dd4.glb": {
+    "semantic": "street_furniture",
+    "role": "trash-can",
+    "style": "city",
+    "osmTags": [
+      "amenity=waste_basket"
+    ],
+    "license": "CC-BY (attribution)",
+    "attribution": "\"Trash Can [Minecraft]\" by sedona1029 — CC-BY (attribution)",
+    "source": "Sketchfab (sedona1029)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-831dd489b8044ba8bb77f0ca253dcfde"
+  },
+  "hydrant_psx_low_poly_fire_hydrant_1d2b13.glb": {
+    "semantic": "street_furniture",
+    "role": "hydrant",
+    "style": "us",
+    "osmTags": [
+      "emergency=fire_hydrant"
+    ],
+    "license": "CC-BY-SA (attribution, share-alike)",
+    "attribution": "\"PSX Low-poly Fire Hydrant\" by korkskrew2000 — CC-BY-SA (attribution, share-alike)",
+    "source": "Sketchfab (korkskrew2000)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-1d2b139c1d1948918bf55d361d1132aa"
+  },
+  "bus_stop_bus_stop_shelter_bca23b.glb": {
+    "semantic": "street_furniture",
+    "role": "bus-stop",
+    "style": "modern",
+    "osmTags": [
+      "highway=bus_stop"
+    ],
+    "license": "CC-BY (attribution)",
+    "attribution": "\"Bus Stop Shelter\" by R3indeer — CC-BY (attribution)",
+    "source": "Sketchfab (R3indeer)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-bca23ba2d6794c4aab20c9a3d6e01b6a"
+  },
+  "fence_old_fence_3a98ea.glb": {
+    "semantic": "barrier",
+    "role": "fence",
+    "style": "metal",
+    "osmTags": [
+      "barrier=fence"
+    ],
+    "license": "CC-BY (attribution)",
+    "attribution": "\"Old fence\" by Yury Misiyuk — CC-BY (attribution)",
+    "source": "Sketchfab (Yury Misiyuk)",
+    "sourceUrl": "https://sketchfab.com/3d-models/none-3a98eabc0aa9475db5fcf7fab235751b"
+  }
+}

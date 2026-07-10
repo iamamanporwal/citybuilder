@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generated": "run: node tools/build-asset-manifest.mjs",
-  "pickContract": "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY",
+  "pickContract": "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   "counts": {
-    "assets": 153,
-    "pooled": 153,
-    "flaggedForReview": 0,
-    "pools": 36
+    "assets": 161,
+    "pooled": 161,
+    "flaggedForReview": 4,
+    "pools": 44
   },
   "assets": [
     {
@@ -321,6 +321,57 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Corner_Plain.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Corner_Plain.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Corner_Plain.fbx"
+      },
+      "semantic": "building_module",
+      "role": "corner",
+      "style": "brick-red",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=brick"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 2
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -2
+        ],
+        "max": [
+          1,
+          3,
+          0
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 12,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_RedBrick",
+        "MI_InteriorWall"
+      ],
+      "textures": [
+        "T_RedBrick_Normal.png",
+        "T_RedBrick_BaseColor.png",
+        "T_RedBrick_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Bottom",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_CornerColumn_Bottom.gltf",
       "engineExports": {
@@ -479,56 +530,6 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_CornerColumn_Center.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_CornerColumn_Center.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_CornerColumn_Center.fbx"
-      },
-      "semantic": "building_module",
-      "role": "column",
-      "style": "brick-red",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=brick"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 1.14,
-        "y": 3,
-        "z": 1.14
-      },
-      "bbox": {
-        "min": [
-          -0.97,
-          0,
-          -0.97
-        ],
-        "max": [
-          0.17,
-          3,
-          0.17
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 32,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_RedBrick_Pale"
-      ],
-      "textures": [
-        "T_RedBrick_Normal.png",
-        "T_RedBrick_BaseColor.png",
-        "T_RedBrick_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center_Half",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_CornerColumn_Center_Half.gltf",
       "engineExports": {
@@ -558,6 +559,56 @@
         "max": [
           0.97,
           1.999,
+          0.17
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 32,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_RedBrick_Pale"
+      ],
+      "textures": [
+        "T_RedBrick_Normal.png",
+        "T_RedBrick_BaseColor.png",
+        "T_RedBrick_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_CornerColumn_Center.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_CornerColumn_Center.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_CornerColumn_Center.fbx"
+      },
+      "semantic": "building_module",
+      "role": "column",
+      "style": "brick-red",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=brick"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.14,
+        "y": 3,
+        "z": 1.14
+      },
+      "bbox": {
+        "min": [
+          -0.97,
+          0,
+          -0.97
+        ],
+        "max": [
+          0.17,
+          3,
           0.17
         ]
       },
@@ -627,57 +678,6 @@
         "T_Trim_Normal.png",
         "T_Trim_BaseColor.png",
         "T_Trim_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Corner_Plain.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Corner_Plain.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Corner_Plain.fbx"
-      },
-      "semantic": "building_module",
-      "role": "corner",
-      "style": "brick-red",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=brick"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 2
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -2
-        ],
-        "max": [
-          1,
-          3,
-          0
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 12,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_RedBrick",
-        "MI_InteriorWall"
-      ],
-      "textures": [
-        "T_RedBrick_Normal.png",
-        "T_RedBrick_BaseColor.png",
-        "T_RedBrick_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -897,14 +897,14 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Brick_Inset",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Inset.gltf",
+      "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Inset_Window_Curved_Small.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Inset.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Inset.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Inset_Window_Curved_Small.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Inset_Window_Curved_Small.fbx"
       },
       "semantic": "building_module",
-      "role": "wall",
+      "role": "window",
       "style": "brick-red",
       "osmTags": [
         "building:part=yes",
@@ -915,28 +915,87 @@
       "sizeMeters": {
         "x": 4,
         "y": 3,
-        "z": 0.2
+        "z": 0.343
       },
       "bbox": {
         "min": [
           -2,
           0,
-          -0.2
+          -0.244
         ],
         "max": [
           2,
           3,
-          0
+          0.099
         ]
       },
       "groundOffsetY": 0,
-      "triangles": 72,
+      "triangles": 568,
       "lods": [
         "LOD0"
       ],
       "materials": [
         "MI_RedBrick_Pale",
         "MI_Trim",
+        "MI_Glass",
+        "MI_InteriorWall",
+        "MI_FakeInterior"
+      ],
+      "textures": [
+        "T_RedBrick_Normal.png",
+        "T_RedBrick_BaseColor.png",
+        "T_RedBrick_ORM.png",
+        "T_Trim_Normal.png",
+        "T_Trim_BaseColor.png",
+        "T_Trim_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Inset_Window_Curved.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Inset_Window_Curved.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Inset_Window_Curved.fbx"
+      },
+      "semantic": "building_module",
+      "role": "window",
+      "style": "brick-red",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=brick"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4,
+        "y": 3,
+        "z": 0.374
+      },
+      "bbox": {
+        "min": [
+          -2,
+          0,
+          -0.242
+        ],
+        "max": [
+          2,
+          3,
+          0.132
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 656,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_RedBrick_Pale",
+        "MI_Trim",
+        "MI_Glass",
+        "MI_FakeInterior",
         "MI_InteriorWall"
       ],
       "textures": [
@@ -1009,14 +1068,14 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Inset_Window_Curved.gltf",
+      "id": "quaternius-downtown-city-megakit/Brick_Inset",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Inset.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Inset_Window_Curved.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Inset_Window_Curved.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Inset.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Inset.fbx"
       },
       "semantic": "building_module",
-      "role": "window",
+      "role": "wall",
       "style": "brick-red",
       "osmTags": [
         "building:part=yes",
@@ -1027,88 +1086,29 @@
       "sizeMeters": {
         "x": 4,
         "y": 3,
-        "z": 0.374
+        "z": 0.2
       },
       "bbox": {
         "min": [
           -2,
           0,
-          -0.242
+          -0.2
         ],
         "max": [
           2,
           3,
-          0.132
+          0
         ]
       },
       "groundOffsetY": 0,
-      "triangles": 656,
+      "triangles": 72,
       "lods": [
         "LOD0"
       ],
       "materials": [
         "MI_RedBrick_Pale",
         "MI_Trim",
-        "MI_Glass",
-        "MI_FakeInterior",
         "MI_InteriorWall"
-      ],
-      "textures": [
-        "T_RedBrick_Normal.png",
-        "T_RedBrick_BaseColor.png",
-        "T_RedBrick_ORM.png",
-        "T_Trim_Normal.png",
-        "T_Trim_BaseColor.png",
-        "T_Trim_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Inset_Window_Curved_Small.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Inset_Window_Curved_Small.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Inset_Window_Curved_Small.fbx"
-      },
-      "semantic": "building_module",
-      "role": "window",
-      "style": "brick-red",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=brick"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 4,
-        "y": 3,
-        "z": 0.343
-      },
-      "bbox": {
-        "min": [
-          -2,
-          0,
-          -0.244
-        ],
-        "max": [
-          2,
-          3,
-          0.099
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 568,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_RedBrick_Pale",
-        "MI_Trim",
-        "MI_Glass",
-        "MI_InteriorWall",
-        "MI_FakeInterior"
       ],
       "textures": [
         "T_RedBrick_Normal.png",
@@ -1374,11 +1374,11 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Plain_3.gltf",
+      "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Plain_3_noWear.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Plain_3.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Plain_3.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Plain_3_noWear.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Plain_3_noWear.fbx"
       },
       "semantic": "building_module",
       "role": "wall",
@@ -1425,11 +1425,11 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Plain_3_noWear.gltf",
+      "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Plain_3.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Plain_3_noWear.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Plain_3_noWear.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Plain_3.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Plain_3.fbx"
       },
       "semantic": "building_module",
       "role": "wall",
@@ -1582,61 +1582,6 @@
         "T_MetalConcrete_Normal.png",
         "T_MetalConcrete_BaseColor.png",
         "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_TopTrim.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_TopTrim.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_TopTrim.fbx"
-      },
-      "semantic": "building_module",
-      "role": "cornice",
-      "style": "brick-red",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=brick"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 0.2
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.2
-        ],
-        "max": [
-          1,
-          3,
-          0
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 16,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_RedBrick_Pale",
-        "MI_Trim",
-        "MI_InteriorWall"
-      ],
-      "textures": [
-        "T_RedBrick_Normal.png",
-        "T_RedBrick_BaseColor.png",
-        "T_RedBrick_ORM.png",
-        "T_Trim_Normal.png",
-        "T_Trim_BaseColor.png",
-        "T_Trim_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -1808,6 +1753,61 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_TopTrim.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_TopTrim.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_TopTrim.fbx"
+      },
+      "semantic": "building_module",
+      "role": "cornice",
+      "style": "brick-red",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=brick"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 0.2
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.2
+        ],
+        "max": [
+          1,
+          3,
+          0
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 16,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_RedBrick_Pale",
+        "MI_Trim",
+        "MI_InteriorWall"
+      ],
+      "textures": [
+        "T_RedBrick_Normal.png",
+        "T_RedBrick_BaseColor.png",
+        "T_RedBrick_ORM.png",
+        "T_Trim_Normal.png",
+        "T_Trim_BaseColor.png",
+        "T_Trim_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Brick_Window_CurvedDouble",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Window_CurvedDouble.gltf",
       "engineExports": {
@@ -1922,63 +1922,6 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Window_Trim.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Window_Trim.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Window_Trim.fbx"
-      },
-      "semantic": "building_module",
-      "role": "window",
-      "style": "brick-red",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=brick"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 0.304
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.257
-        ],
-        "max": [
-          1,
-          3,
-          0.047
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 652,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_RedBrick",
-        "MI_Trim",
-        "MI_Glass",
-        "MI_FakeInterior",
-        "MI_InteriorWall"
-      ],
-      "textures": [
-        "T_RedBrick_Normal.png",
-        "T_RedBrick_BaseColor.png",
-        "T_RedBrick_ORM.png",
-        "T_Trim_Normal.png",
-        "T_Trim_BaseColor.png",
-        "T_Trim_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
       "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Window_Trim_Single.gltf",
       "engineExports": {
@@ -2013,6 +1956,63 @@
       },
       "groundOffsetY": 0,
       "triangles": 426,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_RedBrick",
+        "MI_Trim",
+        "MI_Glass",
+        "MI_FakeInterior",
+        "MI_InteriorWall"
+      ],
+      "textures": [
+        "T_RedBrick_Normal.png",
+        "T_RedBrick_BaseColor.png",
+        "T_RedBrick_ORM.png",
+        "T_Trim_Normal.png",
+        "T_Trim_BaseColor.png",
+        "T_Trim_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Brick_Window_Trim.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Brick_Window_Trim.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Brick_Window_Trim.fbx"
+      },
+      "semantic": "building_module",
+      "role": "window",
+      "style": "brick-red",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=brick"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 0.304
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.257
+        ],
+        "max": [
+          1,
+          3,
+          0.047
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 652,
       "lods": [
         "LOD0"
       ],
@@ -3348,54 +3348,6 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Decal_Crosswalk.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Decal_Crosswalk.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Decal_Crosswalk.fbx"
-      },
-      "semantic": "road_decal",
-      "role": "crosswalk",
-      "style": "paint-us",
-      "osmTags": [
-        "highway=crossing",
-        "crossing=marked"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 4.538,
-        "y": 0,
-        "z": 5.426
-      },
-      "bbox": {
-        "min": [
-          -2.269,
-          -0.148,
-          -2.713
-        ],
-        "max": [
-          2.269,
-          -0.148,
-          2.713
-        ]
-      },
-      "groundOffsetY": 0.148,
-      "triangles": 2,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_StreetDecals"
-      ],
-      "textures": [
-        "T_Street_Decals.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
       "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Decal_Crosswalk_Wide.gltf",
       "engineExports": {
@@ -3444,6 +3396,54 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Decal_Crosswalk.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Decal_Crosswalk.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Decal_Crosswalk.fbx"
+      },
+      "semantic": "road_decal",
+      "role": "crosswalk",
+      "style": "paint-us",
+      "osmTags": [
+        "highway=crossing",
+        "crossing=marked"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.538,
+        "y": 0,
+        "z": 5.426
+      },
+      "bbox": {
+        "min": [
+          -2.269,
+          -0.148,
+          -2.713
+        ],
+        "max": [
+          2.269,
+          -0.148,
+          2.713
+        ]
+      },
+      "groundOffsetY": 0.148,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_StreetDecals"
+      ],
+      "textures": [
+        "T_Street_Decals.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Decal_Curve_2Lane_Stripe",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Decal_Curve_2Lane_Stripe.gltf",
       "engineExports": {
@@ -3477,53 +3477,6 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 32,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_StreetDecals"
-      ],
-      "textures": [
-        "T_Street_Decals.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Decal_Curve_4LaneShort.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Decal_Curve_4LaneShort.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Decal_Curve_4LaneShort.fbx"
-      },
-      "semantic": "road_decal",
-      "role": "lane-marking",
-      "style": "paint-us",
-      "osmTags": [],
-      "internalTags": [
-        "road_marking"
-      ],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 9.1,
-        "y": 0,
-        "z": 9.1
-      },
-      "bbox": {
-        "min": [
-          0,
-          -0.148,
-          0
-        ],
-        "max": [
-          9.1,
-          -0.148,
-          9.1
-        ]
-      },
-      "groundOffsetY": 0.148,
-      "triangles": 48,
       "lods": [
         "LOD0"
       ],
@@ -3614,6 +3567,53 @@
           14.8,
           -0.148,
           14.8
+        ]
+      },
+      "groundOffsetY": 0.148,
+      "triangles": 48,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_StreetDecals"
+      ],
+      "textures": [
+        "T_Street_Decals.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Decal_Curve_4LaneShort.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Decal_Curve_4LaneShort.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Decal_Curve_4LaneShort.fbx"
+      },
+      "semantic": "road_decal",
+      "role": "lane-marking",
+      "style": "paint-us",
+      "osmTags": [],
+      "internalTags": [
+        "road_marking"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 9.1,
+        "y": 0,
+        "z": 9.1
+      },
+      "bbox": {
+        "min": [
+          0,
+          -0.148,
+          0
+        ],
+        "max": [
+          9.1,
+          -0.148,
+          9.1
         ]
       },
       "groundOffsetY": 0.148,
@@ -3820,6 +3820,158 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Door_1",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Door_1.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Door_1.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Door_1.fbx"
+      },
+      "semantic": "building_module",
+      "role": "door",
+      "style": "painted-trim",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=concrete"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1,
+        "y": 2.2,
+        "z": 0.259
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.129
+        ],
+        "max": [
+          0,
+          2.2,
+          0.13
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 676,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Door_2",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Door_2.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Door_2.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Door_2.fbx"
+      },
+      "semantic": "building_module",
+      "role": "door",
+      "style": "painted-trim",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=concrete"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1,
+        "y": 2.2,
+        "z": 0.21
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.103
+        ],
+        "max": [
+          0,
+          2.2,
+          0.107
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 186,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Trim_MetalConcrete",
+        "MI_Glass"
+      ],
+      "textures": [
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Door_3",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Door_3.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Door_3.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Door_3.fbx"
+      },
+      "semantic": "building_module",
+      "role": "door",
+      "style": "painted-trim",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=concrete"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1,
+        "y": 2.2,
+        "z": 0.189
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.095
+        ],
+        "max": [
+          0,
+          2.2,
+          0.094
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 278,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Trim_MetalConcrete",
+        "MI_Glass"
+      ],
+      "textures": [
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/DoorFrame_Metal_Single.gltf",
       "engineExports": {
@@ -3972,158 +4124,6 @@
         "T_Trim_Normal.png",
         "T_Trim_BaseColor.png",
         "T_Trim_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Door_1",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Door_1.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Door_1.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Door_1.fbx"
-      },
-      "semantic": "building_module",
-      "role": "door",
-      "style": "painted-trim",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=concrete"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 1,
-        "y": 2.2,
-        "z": 0.259
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.129
-        ],
-        "max": [
-          0,
-          2.2,
-          0.13
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 676,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Door_2",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Door_2.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Door_2.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Door_2.fbx"
-      },
-      "semantic": "building_module",
-      "role": "door",
-      "style": "painted-trim",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=concrete"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 1,
-        "y": 2.2,
-        "z": 0.21
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.103
-        ],
-        "max": [
-          0,
-          2.2,
-          0.107
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 186,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_MetalConcrete",
-        "MI_Glass"
-      ],
-      "textures": [
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Door_3",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Door_3.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Door_3.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Door_3.fbx"
-      },
-      "semantic": "building_module",
-      "role": "door",
-      "style": "painted-trim",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=concrete"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 1,
-        "y": 2.2,
-        "z": 0.189
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.095
-        ],
-        "max": [
-          0,
-          2.2,
-          0.094
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 278,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_MetalConcrete",
-        "MI_Glass"
-      ],
-      "textures": [
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -4692,6 +4692,60 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Metal_FirstFloor_Wall_1.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Metal_FirstFloor_Wall_1.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Metal_FirstFloor_Wall_1.fbx"
+      },
+      "semantic": "building_module",
+      "role": "wall",
+      "style": "metal-glass",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=metal"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 1,
+        "z": 0.242
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.2
+        ],
+        "max": [
+          1,
+          1,
+          0.042
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 8,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Trim_Dark",
+        "MI_InteriorWall"
+      ],
+      "textures": [
+        "T_Trim_Normal.png",
+        "T_Trim_BaseColor.png",
+        "T_Trim_ORM.png",
+        "T_RedBrick_Normal.png",
+        "T_RedBrick_BaseColor.png",
+        "T_RedBrick_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Metal_FirstFloor_Wall.gltf",
       "engineExports": {
@@ -4741,60 +4795,6 @@
         "T_MetalConcrete_Normal.png",
         "T_MetalConcrete_BaseColor.png",
         "T_MetalConcrete_ORM.png",
-        "T_RedBrick_Normal.png",
-        "T_RedBrick_BaseColor.png",
-        "T_RedBrick_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Metal_FirstFloor_Wall_1.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Metal_FirstFloor_Wall_1.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Metal_FirstFloor_Wall_1.fbx"
-      },
-      "semantic": "building_module",
-      "role": "wall",
-      "style": "metal-glass",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=metal"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 1,
-        "z": 0.242
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.2
-        ],
-        "max": [
-          1,
-          1,
-          0.042
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 8,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_Dark",
-        "MI_InteriorWall"
-      ],
-      "textures": [
-        "T_Trim_Normal.png",
-        "T_Trim_BaseColor.png",
-        "T_Trim_ORM.png",
         "T_RedBrick_Normal.png",
         "T_RedBrick_BaseColor.png",
         "T_RedBrick_ORM.png"
@@ -5024,6 +5024,58 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Metal_Window_Half.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Metal_Window_Half.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Metal_Window_Half.fbx"
+      },
+      "semantic": "building_module",
+      "role": "window",
+      "style": "metal-glass",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=metal"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 0.228
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -0.213
+        ],
+        "max": [
+          1,
+          3,
+          0.015
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 312,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Trim_MetalConcrete",
+        "MI_Glass",
+        "MI_FakeInterior"
+      ],
+      "textures": [
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Metal_Window",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Metal_Window.gltf",
       "engineExports": {
@@ -5072,58 +5124,6 @@
         "T_RedBrick_Normal.png",
         "T_RedBrick_BaseColor.png",
         "T_RedBrick_ORM.png",
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Metal_Window_Half.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Metal_Window_Half.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Metal_Window_Half.fbx"
-      },
-      "semantic": "building_module",
-      "role": "window",
-      "style": "metal-glass",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=metal"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 0.228
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -0.213
-        ],
-        "max": [
-          1,
-          3,
-          0.015
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 312,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_MetalConcrete",
-        "MI_Glass",
-        "MI_FakeInterior"
-      ],
-      "textures": [
         "T_MetalConcrete_Normal.png",
         "T_MetalConcrete_BaseColor.png",
         "T_MetalConcrete_ORM.png"
@@ -5383,56 +5383,6 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Roof_2x2",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_2x2.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_2x2.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_2x2.fbx"
-      },
-      "semantic": "building_module",
-      "role": "roof",
-      "style": "painted-trim",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=concrete"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 0,
-        "z": 2
-      },
-      "bbox": {
-        "min": [
-          -1,
-          -0.2,
-          -1
-        ],
-        "max": [
-          1,
-          -0.2,
-          1
-        ]
-      },
-      "groundOffsetY": 0.2,
-      "triangles": 2,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Asphalt"
-      ],
-      "textures": [
-        "T_Concrete_Normal.png",
-        "T_Concrete_Asphalt_BaseColor.png",
-        "T_Concrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
       "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_Center",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_2x2_90Angle_Center.gltf",
       "engineExports": {
@@ -5583,6 +5533,56 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Roof_2x2",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_2x2.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_2x2.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_2x2.fbx"
+      },
+      "semantic": "building_module",
+      "role": "roof",
+      "style": "painted-trim",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=concrete"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 0,
+        "z": 2
+      },
+      "bbox": {
+        "min": [
+          -1,
+          -0.2,
+          -1
+        ],
+        "max": [
+          1,
+          -0.2,
+          1
+        ]
+      },
+      "groundOffsetY": 0.2,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Asphalt"
+      ],
+      "textures": [
+        "T_Concrete_Normal.png",
+        "T_Concrete_Asphalt_BaseColor.png",
+        "T_Concrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Roof_4x4",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_4x4.gltf",
       "engineExports": {
@@ -5627,6 +5627,224 @@
         "T_Concrete_Normal.png",
         "T_Concrete_Asphalt_BaseColor.png",
         "T_Concrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_Center.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_Center.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_Center.fbx"
+      },
+      "semantic": "building_module",
+      "role": "roof",
+      "style": "slate",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=slate"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 2
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -2
+        ],
+        "max": [
+          1,
+          3,
+          0
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 6,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Roof_Slate",
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_RoofSlate_Normal.png",
+        "T_RoofSlate_BaseColor.png",
+        "T_RoofSlate_ORM.png",
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Roof_Slate_Corner",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_Corner.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_Corner.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_Corner.fbx"
+      },
+      "semantic": "building_module",
+      "role": "roof",
+      "style": "slate",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=slate"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.023,
+        "y": 3.028,
+        "z": 2.035
+      },
+      "bbox": {
+        "min": [
+          -1.023,
+          -0.014,
+          -2
+        ],
+        "max": [
+          1,
+          3.014,
+          0.035
+        ]
+      },
+      "groundOffsetY": 0.014,
+      "triangles": 44,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Roof_Slate"
+      ],
+      "textures": [
+        "T_RoofSlate_Normal.png",
+        "T_RoofSlate_BaseColor.png",
+        "T_RoofSlate_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Roof_Slate_InnerCorner",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_InnerCorner.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_InnerCorner.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_InnerCorner.fbx"
+      },
+      "semantic": "building_module",
+      "role": "roof",
+      "style": "slate",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=slate"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 2
+      },
+      "bbox": {
+        "min": [
+          -2,
+          0,
+          0
+        ],
+        "max": [
+          0,
+          3,
+          2
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 10,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Roof_Slate",
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_RoofSlate_Normal.png",
+        "T_RoofSlate_BaseColor.png",
+        "T_RoofSlate_ORM.png",
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_Window_1.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_Window_1.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_Window_1.fbx"
+      },
+      "semantic": "building_module",
+      "role": "window",
+      "style": "slate",
+      "osmTags": [
+        "building:part=yes",
+        "building:material=slate"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2,
+        "y": 3,
+        "z": 2.119
+      },
+      "bbox": {
+        "min": [
+          -1,
+          0,
+          -2
+        ],
+        "max": [
+          1,
+          3,
+          0.119
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 370,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Roof_Slate",
+        "MI_Trim",
+        "MI_Glass",
+        "MI_FakeInterior",
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_RoofSlate_Normal.png",
+        "T_RoofSlate_BaseColor.png",
+        "T_RoofSlate_ORM.png",
+        "T_Trim_Normal.png",
+        "T_Trim_BaseColor.png",
+        "T_Trim_ORM.png",
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -5863,274 +6081,6 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_Center.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_Center.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_Center.fbx"
-      },
-      "semantic": "building_module",
-      "role": "roof",
-      "style": "slate",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=slate"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 2
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -2
-        ],
-        "max": [
-          1,
-          3,
-          0
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 6,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Roof_Slate",
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_RoofSlate_Normal.png",
-        "T_RoofSlate_BaseColor.png",
-        "T_RoofSlate_ORM.png",
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Roof_Slate_Corner",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_Corner.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_Corner.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_Corner.fbx"
-      },
-      "semantic": "building_module",
-      "role": "roof",
-      "style": "slate",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=slate"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2.023,
-        "y": 3.028,
-        "z": 2.035
-      },
-      "bbox": {
-        "min": [
-          -1.023,
-          -0.014,
-          -2
-        ],
-        "max": [
-          1,
-          3.014,
-          0.035
-        ]
-      },
-      "groundOffsetY": 0.014,
-      "triangles": 44,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Roof_Slate"
-      ],
-      "textures": [
-        "T_RoofSlate_Normal.png",
-        "T_RoofSlate_BaseColor.png",
-        "T_RoofSlate_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Roof_Slate_InnerCorner",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_InnerCorner.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_InnerCorner.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_InnerCorner.fbx"
-      },
-      "semantic": "building_module",
-      "role": "roof",
-      "style": "slate",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=slate"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 2
-      },
-      "bbox": {
-        "min": [
-          -2,
-          0,
-          0
-        ],
-        "max": [
-          0,
-          3,
-          2
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 10,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Roof_Slate",
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_RoofSlate_Normal.png",
-        "T_RoofSlate_BaseColor.png",
-        "T_RoofSlate_ORM.png",
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Roof_Slate_Window_1.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Roof_Slate_Window_1.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Roof_Slate_Window_1.fbx"
-      },
-      "semantic": "building_module",
-      "role": "window",
-      "style": "slate",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=slate"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 2,
-        "y": 3,
-        "z": 2.119
-      },
-      "bbox": {
-        "min": [
-          -1,
-          0,
-          -2
-        ],
-        "max": [
-          1,
-          3,
-          0.119
-        ]
-      },
-      "groundOffsetY": 0,
-      "triangles": 370,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Roof_Slate",
-        "MI_Trim",
-        "MI_Glass",
-        "MI_FakeInterior",
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_RoofSlate_Normal.png",
-        "T_RoofSlate_BaseColor.png",
-        "T_RoofSlate_ORM.png",
-        "T_Trim_Normal.png",
-        "T_Trim_BaseColor.png",
-        "T_Trim_ORM.png",
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Corner_Flat_3m.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Sidewalk_Corner_Flat_3m.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Sidewalk_Corner_Flat_3m.fbx"
-      },
-      "semantic": "sidewalk_module",
-      "role": "sidewalk",
-      "style": "concrete-us",
-      "osmTags": [
-        "highway=footway",
-        "footway=sidewalk"
-      ],
-      "internalTags": [],
-      "referenceOnly": true,
-      "sizeMeters": {
-        "x": 3.01,
-        "y": 0.15,
-        "z": 3.01
-      },
-      "bbox": {
-        "min": [
-          -1.51,
-          -0.15,
-          -1.5
-        ],
-        "max": [
-          1.5,
-          0,
-          1.51
-        ]
-      },
-      "groundOffsetY": 0.15,
-      "triangles": 97,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m_Stripe",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Corner_Flat_3m_Stripe.gltf",
       "engineExports": {
@@ -6179,11 +6129,11 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Corner_Round_3m.gltf",
+      "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Corner_Flat_3m.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Sidewalk_Corner_Round_3m.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Sidewalk_Corner_Round_3m.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Sidewalk_Corner_Flat_3m.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Sidewalk_Corner_Flat_3m.fbx"
       },
       "semantic": "sidewalk_module",
       "role": "sidewalk",
@@ -6212,7 +6162,7 @@
         ]
       },
       "groundOffsetY": 0.15,
-      "triangles": 177,
+      "triangles": 97,
       "lods": [
         "LOD0"
       ],
@@ -6271,6 +6221,56 @@
       ],
       "textures": [
         "T_Street_Decals.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Corner_Round_3m.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Sidewalk_Corner_Round_3m.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Sidewalk_Corner_Round_3m.fbx"
+      },
+      "semantic": "sidewalk_module",
+      "role": "sidewalk",
+      "style": "concrete-us",
+      "osmTags": [
+        "highway=footway",
+        "footway=sidewalk"
+      ],
+      "internalTags": [],
+      "referenceOnly": true,
+      "sizeMeters": {
+        "x": 3.01,
+        "y": 0.15,
+        "z": 3.01
+      },
+      "bbox": {
+        "min": [
+          -1.51,
+          -0.15,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          0,
+          1.51
+        ]
+      },
+      "groundOffsetY": 0.15,
+      "triangles": 177,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -6380,6 +6380,54 @@
       "flags": []
     },
     {
+      "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Straight_3m_Stripe.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Sidewalk_Straight_3m_Stripe.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Sidewalk_Straight_3m_Stripe.fbx"
+      },
+      "semantic": "sidewalk_module",
+      "role": "sidewalk",
+      "style": "concrete-us",
+      "osmTags": [
+        "highway=footway",
+        "footway=sidewalk"
+      ],
+      "internalTags": [],
+      "referenceOnly": true,
+      "sizeMeters": {
+        "x": 3,
+        "y": 0,
+        "z": 0.2
+      },
+      "bbox": {
+        "min": [
+          -1.5,
+          -0.148,
+          1.7
+        ],
+        "max": [
+          1.5,
+          -0.148,
+          1.9
+        ]
+      },
+      "groundOffsetY": 0.148,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_StreetDecals"
+      ],
+      "textures": [
+        "T_Street_Decals.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Straight_3m.gltf",
       "engineExports": {
@@ -6424,54 +6472,6 @@
         "T_MetalConcrete_Normal.png",
         "T_MetalConcrete_BaseColor.png",
         "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Sidewalk_Straight_3m_Stripe.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Sidewalk_Straight_3m_Stripe.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Sidewalk_Straight_3m_Stripe.fbx"
-      },
-      "semantic": "sidewalk_module",
-      "role": "sidewalk",
-      "style": "concrete-us",
-      "osmTags": [
-        "highway=footway",
-        "footway=sidewalk"
-      ],
-      "internalTags": [],
-      "referenceOnly": true,
-      "sizeMeters": {
-        "x": 3,
-        "y": 0,
-        "z": 0.2
-      },
-      "bbox": {
-        "min": [
-          -1.5,
-          -0.148,
-          1.7
-        ],
-        "max": [
-          1.5,
-          -0.148,
-          1.9
-        ]
-      },
-      "groundOffsetY": 0.148,
-      "triangles": 2,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_StreetDecals"
-      ],
-      "textures": [
-        "T_Street_Decals.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -6526,56 +6526,6 @@
         "T_Concrete_Normal.png",
         "T_Concrete_BaseColor.png",
         "T_Concrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
-      "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Stairs_Rails_Metal.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Stairs_Rails_Metal.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Stairs_Rails_Metal.fbx"
-      },
-      "semantic": "building_module",
-      "role": "stairs",
-      "style": "painted-trim",
-      "osmTags": [
-        "building:part=yes",
-        "building:material=concrete"
-      ],
-      "internalTags": [],
-      "referenceOnly": false,
-      "sizeMeters": {
-        "x": 1.964,
-        "y": 1.981,
-        "z": 2.306
-      },
-      "bbox": {
-        "min": [
-          -0.982,
-          -0.012,
-          0
-        ],
-        "max": [
-          0.982,
-          1.969,
-          2.306
-        ]
-      },
-      "groundOffsetY": 0.012,
-      "triangles": 564,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -6682,53 +6632,47 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Street_2Lane",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_2Lane.gltf",
+      "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Stairs_Rails_Metal.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_2Lane.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_2Lane.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Stairs_Rails_Metal.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Stairs_Rails_Metal.fbx"
       },
-      "semantic": "road_module",
-      "role": "carriageway-2lane",
-      "style": "asphalt-us",
+      "semantic": "building_module",
+      "role": "stairs",
+      "style": "painted-trim",
       "osmTags": [
-        "highway=residential",
-        "highway=tertiary"
+        "building:part=yes",
+        "building:material=concrete"
       ],
       "internalTags": [],
-      "referenceOnly": true,
+      "referenceOnly": false,
       "sizeMeters": {
-        "x": 6,
-        "y": 0.15,
-        "z": 12
+        "x": 1.964,
+        "y": 1.981,
+        "z": 2.306
       },
       "bbox": {
         "min": [
-          -3,
-          -0.15,
-          -6
+          -0.982,
+          -0.012,
+          0
         ],
         "max": [
-          3,
-          0,
-          6
+          0.982,
+          1.969,
+          2.306
         ]
       },
-      "groundOffsetY": 0.15,
-      "triangles": 220,
+      "groundOffsetY": 0.012,
+      "triangles": 564,
       "lods": [
         "LOD0"
       ],
       "materials": [
-        "MI_Asphalt",
-        "MI_StreetDecals",
         "MI_Trim_MetalConcrete"
       ],
       "textures": [
-        "T_Concrete_Normal.png",
-        "T_Concrete_Asphalt_BaseColor.png",
-        "T_Concrete_ORM.png",
-        "T_Street_Decals.png",
         "T_MetalConcrete_Normal.png",
         "T_MetalConcrete_BaseColor.png",
         "T_MetalConcrete_ORM.png"
@@ -6790,40 +6734,40 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Street_4Lane",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_4Lane.gltf",
+      "id": "quaternius-downtown-city-megakit/Street_2Lane",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_2Lane.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_4Lane.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_4Lane.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_2Lane.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_2Lane.fbx"
       },
       "semantic": "road_module",
-      "role": "carriageway-4lane",
+      "role": "carriageway-2lane",
       "style": "asphalt-us",
       "osmTags": [
-        "highway=secondary",
-        "highway=primary"
+        "highway=residential",
+        "highway=tertiary"
       ],
       "internalTags": [],
       "referenceOnly": true,
       "sizeMeters": {
         "x": 6,
         "y": 0.15,
-        "z": 18
+        "z": 12
       },
       "bbox": {
         "min": [
           -3,
           -0.15,
-          -9
+          -6
         ],
         "max": [
           3,
           0,
-          9
+          6
         ]
       },
       "groundOffsetY": 0.15,
-      "triangles": 252,
+      "triangles": 220,
       "lods": [
         "LOD0"
       ],
@@ -6892,6 +6836,62 @@
         "T_Concrete_Asphalt_BaseColor.png",
         "T_Concrete_ORM.png",
         "T_Street_Decals.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Street_4Lane",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_4Lane.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_4Lane.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_4Lane.fbx"
+      },
+      "semantic": "road_module",
+      "role": "carriageway-4lane",
+      "style": "asphalt-us",
+      "osmTags": [
+        "highway=secondary",
+        "highway=primary"
+      ],
+      "internalTags": [],
+      "referenceOnly": true,
+      "sizeMeters": {
+        "x": 6,
+        "y": 0.15,
+        "z": 18
+      },
+      "bbox": {
+        "min": [
+          -3,
+          -0.15,
+          -9
+        ],
+        "max": [
+          3,
+          0,
+          9
+        ]
+      },
+      "groundOffsetY": 0.15,
+      "triangles": 252,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Asphalt",
+        "MI_StreetDecals",
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_Concrete_Normal.png",
+        "T_Concrete_Asphalt_BaseColor.png",
+        "T_Concrete_ORM.png",
+        "T_Street_Decals.png",
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
@@ -7151,62 +7151,6 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_Curve_2Lane.gltf",
-      "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_Curve_2Lane.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_Curve_2Lane.fbx"
-      },
-      "semantic": "road_module",
-      "role": "carriageway-2lane",
-      "style": "asphalt-us",
-      "osmTags": [
-        "highway=residential",
-        "highway=tertiary"
-      ],
-      "internalTags": [],
-      "referenceOnly": true,
-      "sizeMeters": {
-        "x": 12,
-        "y": 0.15,
-        "z": 12
-      },
-      "bbox": {
-        "min": [
-          0,
-          -0.15,
-          0
-        ],
-        "max": [
-          12,
-          0,
-          12
-        ]
-      },
-      "groundOffsetY": 0.15,
-      "triangles": 505,
-      "lods": [
-        "LOD0"
-      ],
-      "materials": [
-        "MI_Asphalt",
-        "MI_StreetDecals",
-        "MI_Trim_MetalConcrete"
-      ],
-      "textures": [
-        "T_Concrete_Normal.png",
-        "T_Concrete_Asphalt_BaseColor.png",
-        "T_Concrete_ORM.png",
-        "T_Street_Decals.png",
-        "T_MetalConcrete_Normal.png",
-        "T_MetalConcrete_BaseColor.png",
-        "T_MetalConcrete_ORM.png"
-      ],
-      "source": "Quaternius — Downtown City MegaKit (free)",
-      "license": "CC0-1.0",
-      "flags": []
-    },
-    {
       "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane_Curb",
       "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_Curve_2Lane_Curb.gltf",
       "engineExports": {
@@ -7257,25 +7201,25 @@
       "flags": []
     },
     {
-      "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
-      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_Curve_4LaneShort.gltf",
+      "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_Curve_2Lane.gltf",
       "engineExports": {
-        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_Curve_4LaneShort.fbx",
-        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_Curve_4LaneShort.fbx"
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_Curve_2Lane.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_Curve_2Lane.fbx"
       },
       "semantic": "road_module",
-      "role": "carriageway-4lane",
+      "role": "carriageway-2lane",
       "style": "asphalt-us",
       "osmTags": [
-        "highway=secondary",
-        "highway=primary"
+        "highway=residential",
+        "highway=tertiary"
       ],
       "internalTags": [],
       "referenceOnly": true,
       "sizeMeters": {
-        "x": 18,
+        "x": 12,
         "y": 0.15,
-        "z": 18
+        "z": 12
       },
       "bbox": {
         "min": [
@@ -7284,13 +7228,13 @@
           0
         ],
         "max": [
-          18,
+          12,
           0,
-          18
+          12
         ]
       },
       "groundOffsetY": 0.15,
-      "triangles": 634,
+      "triangles": 505,
       "lods": [
         "LOD0"
       ],
@@ -7354,6 +7298,62 @@
         "MI_Trim_MetalConcrete"
       ],
       "textures": [
+        "T_MetalConcrete_Normal.png",
+        "T_MetalConcrete_BaseColor.png",
+        "T_MetalConcrete_ORM.png"
+      ],
+      "source": "Quaternius — Downtown City MegaKit (free)",
+      "license": "CC0-1.0",
+      "flags": []
+    },
+    {
+      "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
+      "path": "assets/library/quaternius-downtown-city-megakit/gltf/Street_Curve_4LaneShort.gltf",
+      "engineExports": {
+        "unity": "assets/library/quaternius-downtown-city-megakit/fbx/unity/Street_Curve_4LaneShort.fbx",
+        "unreal": "assets/library/quaternius-downtown-city-megakit/fbx/unreal/Street_Curve_4LaneShort.fbx"
+      },
+      "semantic": "road_module",
+      "role": "carriageway-4lane",
+      "style": "asphalt-us",
+      "osmTags": [
+        "highway=secondary",
+        "highway=primary"
+      ],
+      "internalTags": [],
+      "referenceOnly": true,
+      "sizeMeters": {
+        "x": 18,
+        "y": 0.15,
+        "z": 18
+      },
+      "bbox": {
+        "min": [
+          0,
+          -0.15,
+          0
+        ],
+        "max": [
+          18,
+          0,
+          18
+        ]
+      },
+      "groundOffsetY": 0.15,
+      "triangles": 634,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MI_Asphalt",
+        "MI_StreetDecals",
+        "MI_Trim_MetalConcrete"
+      ],
+      "textures": [
+        "T_Concrete_Normal.png",
+        "T_Concrete_Asphalt_BaseColor.png",
+        "T_Concrete_ORM.png",
+        "T_Street_Decals.png",
         "T_MetalConcrete_Normal.png",
         "T_MetalConcrete_BaseColor.png",
         "T_MetalConcrete_ORM.png"
@@ -7995,6 +7995,366 @@
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
       "flags": []
+    },
+    {
+      "id": "sketchfab-curated/bench_picnic_table_low_poly_fe35ac",
+      "path": "assets/library/sketchfab-curated/glb/bench_picnic_table_low_poly_fe35ac.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "park",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.572,
+        "y": 0.773,
+        "z": 1.604
+      },
+      "bbox": {
+        "min": [
+          -0.786,
+          0,
+          -0.802
+        ],
+        "max": [
+          0.786,
+          0.773,
+          0.802
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 224,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Picnic_Table"
+      ],
+      "textures": [],
+      "source": "Sketchfab (Derek Flanagan)",
+      "license": "CC-BY (attribution)",
+      "attribution": "\"Picnic Table - Low Poly\" by Derek Flanagan — CC-BY (attribution)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-fe35acda3a5245da8459d1a062e28190",
+      "flags": []
+    },
+    {
+      "id": "sketchfab-curated/bus_stop_bus_stop_shelter_bca23b",
+      "path": "assets/library/sketchfab-curated/glb/bus_stop_bus_stop_shelter_bca23b.glb",
+      "semantic": "street_furniture",
+      "role": "bus-stop",
+      "style": "modern",
+      "osmTags": [
+        "highway=bus_stop"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.411,
+        "y": 3.227,
+        "z": 3.645
+      },
+      "bbox": {
+        "min": [
+          -0.836,
+          -0.014,
+          -1.624
+        ],
+        "max": [
+          1.575,
+          3.213,
+          2.021
+        ]
+      },
+      "groundOffsetY": 0.014,
+      "triangles": 606,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "MAT_BusStop"
+      ],
+      "textures": [],
+      "source": "Sketchfab (R3indeer)",
+      "license": "CC-BY (attribution)",
+      "attribution": "\"Bus Stop Shelter\" by R3indeer — CC-BY (attribution)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-bca23ba2d6794c4aab20c9a3d6e01b6a",
+      "flags": []
+    },
+    {
+      "id": "sketchfab-curated/fence_old_fence_3a98ea",
+      "path": "assets/library/sketchfab-curated/glb/fence_old_fence_3a98ea.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "metal",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 461.342,
+        "y": 143.672,
+        "z": 94.592
+      },
+      "bbox": {
+        "min": [
+          -230.671,
+          -4.118,
+          -47.296
+        ],
+        "max": [
+          230.671,
+          139.554,
+          47.296
+        ]
+      },
+      "groundOffsetY": 4.118,
+      "triangles": 528,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Scene_-_Root"
+      ],
+      "textures": [],
+      "source": "Sketchfab (Yury Misiyuk)",
+      "license": "CC-BY (attribution)",
+      "attribution": "\"Old fence\" by Yury Misiyuk — CC-BY (attribution)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-3a98eabc0aa9475db5fcf7fab235751b",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "sketchfab-curated/hydrant_psx_low_poly_fire_hydrant_1d2b13",
+      "path": "assets/library/sketchfab-curated/glb/hydrant_psx_low_poly_fire_hydrant_1d2b13.glb",
+      "semantic": "street_furniture",
+      "role": "hydrant",
+      "style": "us",
+      "osmTags": [
+        "emergency=fire_hydrant"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.403,
+        "y": 0.794,
+        "z": 0.396
+      },
+      "bbox": {
+        "min": [
+          -0.209,
+          0,
+          -0.18
+        ],
+        "max": [
+          0.194,
+          0.794,
+          0.216
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 157,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Material.005"
+      ],
+      "textures": [],
+      "source": "Sketchfab (korkskrew2000)",
+      "license": "CC-BY-SA (attribution, share-alike)",
+      "attribution": "\"PSX Low-poly Fire Hydrant\" by korkskrew2000 — CC-BY-SA (attribution, share-alike)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-1d2b139c1d1948918bf55d361d1132aa",
+      "flags": []
+    },
+    {
+      "id": "sketchfab-curated/streetlight_street_light_2d44b3",
+      "path": "assets/library/sketchfab-curated/glb/streetlight_street_light_2d44b3.glb",
+      "semantic": "street_furniture",
+      "role": "streetlight",
+      "style": "modern",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 198.527,
+        "y": 388.801,
+        "z": 50.804
+      },
+      "bbox": {
+        "min": [
+          -25.424,
+          -0.015,
+          -25.402
+        ],
+        "max": [
+          173.103,
+          388.786,
+          25.402
+        ]
+      },
+      "groundOffsetY": 0.015,
+      "triangles": 608,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "blinn1"
+      ],
+      "textures": [],
+      "source": "Sketchfab (KloWorks)",
+      "license": "CC-BY (attribution)",
+      "attribution": "\"Street Light\" by KloWorks — CC-BY (attribution)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-2d44b333f56c4faaab1bd2007868cc37",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "sketchfab-curated/traffic_light_traffic_light_793e07",
+      "path": "assets/library/sketchfab-curated/glb/traffic_light_traffic_light_793e07.glb",
+      "semantic": "street_furniture",
+      "role": "traffic-light",
+      "style": "us",
+      "osmTags": [
+        "highway=traffic_signals"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 53.2,
+        "y": 300,
+        "z": 53.2
+      },
+      "bbox": {
+        "min": [
+          1.889,
+          0,
+          1.565
+        ],
+        "max": [
+          55.089,
+          300,
+          54.765
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 702,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Casing",
+        "Green_off",
+        "Orange_off",
+        "Pedestrian_casing",
+        "Pedestrian_green_off",
+        "Pedestrian_green_on",
+        "Pedestrian_red_off",
+        "Post",
+        "Red_on"
+      ],
+      "textures": [],
+      "source": "Sketchfab (1-3D.com)",
+      "license": "CC-BY-SA (attribution, share-alike)",
+      "attribution": "\"Traffic light\" by 1-3D.com — CC-BY-SA (attribution, share-alike)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-793e078faa02407bb6ece323048852c4",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "sketchfab-curated/trash_can_trash_can_minecraft_831dd4",
+      "path": "assets/library/sketchfab-curated/glb/trash_can_trash_can_minecraft_831dd4.glb",
+      "semantic": "street_furniture",
+      "role": "trash-can",
+      "style": "city",
+      "osmTags": [
+        "amenity=waste_basket"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1,
+        "y": 1.375,
+        "z": 1
+      },
+      "bbox": {
+        "min": [
+          0,
+          0,
+          0
+        ],
+        "max": [
+          1,
+          1.375,
+          1
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 38,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "material_0"
+      ],
+      "textures": [],
+      "source": "Sketchfab (sedona1029)",
+      "license": "CC-BY (attribution)",
+      "attribution": "\"Trash Can [Minecraft]\" by sedona1029 — CC-BY (attribution)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-831dd489b8044ba8bb77f0ca253dcfde",
+      "flags": []
+    },
+    {
+      "id": "sketchfab-curated/tree_pine_tree_proto_series_free_08014e",
+      "path": "assets/library/sketchfab-curated/glb/tree_pine_tree_proto_series_free_08014e.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "deciduous",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 527.529,
+        "y": 1086.177,
+        "z": 526.35
+      },
+      "bbox": {
+        "min": [
+          -233.546,
+          -106.582,
+          -285.113
+        ],
+        "max": [
+          293.983,
+          979.595,
+          241.237
+        ]
+      },
+      "groundOffsetY": 106.582,
+      "triangles": 876,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "pine_tree_red_mat"
+      ],
+      "textures": [],
+      "source": "Sketchfab (BitGem)",
+      "license": "CC-BY (attribution)",
+      "attribution": "\"Pine Tree - Proto Series - Free\" by BitGem — CC-BY (attribution)",
+      "sourceUrl": "https://sketchfab.com/3d-models/none-08014e92a59244c992884091218230b8",
+      "flags": [
+        "oversized"
+      ]
     }
   ],
   "pools": {
@@ -8029,6 +8389,10 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Bottom",
           "weight": 1
         },
@@ -8041,19 +8405,15 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center_Half",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
+          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
+          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
           "weight": 1
         },
         {
@@ -8073,11 +8433,7 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
+          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
           "weight": 1
         },
         {
@@ -8085,7 +8441,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
+          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Brick_Inset",
           "weight": 1
         },
         {
@@ -8109,12 +8469,12 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
           "weight": 0.5
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
+          "weight": 1
         },
         {
           "id": "quaternius-downtown-city-megakit/Brick_Plain_4",
@@ -8122,10 +8482,6 @@
         },
         {
           "id": "quaternius-downtown-city-megakit/Brick_RedWhite_DoubleWindow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
           "weight": 1
         },
         {
@@ -8141,6 +8497,10 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Brick_Window_CurvedDouble",
           "weight": 1
         },
@@ -8149,11 +8509,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
+          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
+          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
           "weight": 1
         },
         {
@@ -8209,6 +8569,10 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Bottom",
           "weight": 1
         },
@@ -8221,19 +8585,15 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center_Half",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
+          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
+          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
           "weight": 1
         },
         {
@@ -8253,11 +8613,7 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
+          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
           "weight": 1
         },
         {
@@ -8265,7 +8621,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
+          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Brick_Inset",
           "weight": 1
         },
         {
@@ -8289,12 +8649,12 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
           "weight": 0.5
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
+          "weight": 1
         },
         {
           "id": "quaternius-downtown-city-megakit/Brick_Plain_4",
@@ -8302,10 +8662,6 @@
         },
         {
           "id": "quaternius-downtown-city-megakit/Brick_RedWhite_DoubleWindow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
           "weight": 1
         },
         {
@@ -8321,6 +8677,10 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Brick_Window_CurvedDouble",
           "weight": 1
         },
@@ -8329,11 +8689,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
+          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
+          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
           "weight": 1
         },
         {
@@ -8485,11 +8845,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
+          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
+          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
           "weight": 1
         },
         {
@@ -8509,11 +8869,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_Window",
+          "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
+          "id": "quaternius-downtown-city-megakit/Metal_Window",
           "weight": 1
         }
       ]
@@ -8569,11 +8929,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
+          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
+          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
           "weight": 1
         },
         {
@@ -8593,11 +8953,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_Window",
+          "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
+          "id": "quaternius-downtown-city-megakit/Metal_Window",
           "weight": 1
         }
       ]
@@ -8629,18 +8989,6 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Door_1",
           "weight": 1
         },
@@ -8650,6 +8998,18 @@
         },
         {
           "id": "quaternius-downtown-city-megakit/Door_3",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
           "weight": 1
         },
         {
@@ -8673,10 +9033,6 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_Center",
           "weight": 1
         },
@@ -8689,6 +9045,10 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Roof_2x2",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Roof_4x4",
           "weight": 1
         },
@@ -8697,15 +9057,15 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_1",
           "weight": 1
         },
         {
           "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_2",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
           "weight": 1
         },
         {
@@ -8781,18 +9141,6 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Door_1",
           "weight": 1
         },
@@ -8802,6 +9150,18 @@
         },
         {
           "id": "quaternius-downtown-city-megakit/Door_3",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
           "weight": 1
         },
         {
@@ -8825,10 +9185,6 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_Center",
           "weight": 1
         },
@@ -8841,6 +9197,10 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Roof_2x2",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Roof_4x4",
           "weight": 1
         },
@@ -8849,15 +9209,15 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_1",
           "weight": 1
         },
         {
           "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_2",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
           "weight": 1
         },
         {
@@ -8993,15 +9353,15 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort_DoubleYellow",
           "weight": 1
         },
         {
           "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort_Stripe",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort",
           "weight": 1
         },
         {
@@ -9025,11 +9385,11 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
+          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
+          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
           "weight": 1
         }
       ]
@@ -9041,11 +9401,11 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
+          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
+          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
           "weight": 1
         }
       ]
@@ -9137,22 +9497,6 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
           "weight": 1
         },
@@ -9166,6 +9510,22 @@
         },
         {
           "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
           "weight": 1
         }
       ]
@@ -9177,22 +9537,6 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
           "weight": 1
         },
@@ -9207,6 +9551,22 @@
         {
           "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
           "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
+          "weight": 1
+        },
+        {
+          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
+          "weight": 1
         }
       ]
     },
@@ -9217,15 +9577,11 @@
       "referenceOnly": true,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m_Stripe",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
           "weight": 1
         },
         {
@@ -9233,15 +9589,19 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Sidewalk_NoCurb_3m",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m",
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m",
           "weight": 1
         }
       ]
@@ -9253,15 +9613,11 @@
       "referenceOnly": true,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m_Stripe",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
           "weight": 1
         },
         {
@@ -9269,15 +9625,19 @@
           "weight": 1
         },
         {
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
+          "weight": 1
+        },
+        {
           "id": "quaternius-downtown-city-megakit/Sidewalk_NoCurb_3m",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m",
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
+          "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m",
           "weight": 1
         }
       ]
@@ -9289,11 +9649,11 @@
       "referenceOnly": true,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Street_2Lane",
+          "id": "quaternius-downtown-city-megakit/Street_2Lane_noSidewalk",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_2Lane_noSidewalk",
+          "id": "quaternius-downtown-city-megakit/Street_2Lane",
           "weight": 1
         },
         {
@@ -9301,11 +9661,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane_Curb",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane_Curb",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
           "weight": 1
         }
       ]
@@ -9317,11 +9677,11 @@
       "referenceOnly": true,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Street_2Lane",
+          "id": "quaternius-downtown-city-megakit/Street_2Lane_noSidewalk",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_2Lane_noSidewalk",
+          "id": "quaternius-downtown-city-megakit/Street_2Lane",
           "weight": 1
         },
         {
@@ -9329,11 +9689,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane_Curb",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane_Curb",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
           "weight": 1
         }
       ]
@@ -9345,11 +9705,11 @@
       "referenceOnly": true,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Street_4Lane",
+          "id": "quaternius-downtown-city-megakit/Street_4Lane_noSidewalk",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_4Lane_noSidewalk",
+          "id": "quaternius-downtown-city-megakit/Street_4Lane",
           "weight": 1
         },
         {
@@ -9357,11 +9717,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_4Lane_Short_Curb",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_4Lane_Short_Curb",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
           "weight": 1
         }
       ]
@@ -9373,11 +9733,11 @@
       "referenceOnly": true,
       "entries": [
         {
-          "id": "quaternius-downtown-city-megakit/Street_4Lane",
+          "id": "quaternius-downtown-city-megakit/Street_4Lane_noSidewalk",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_4Lane_noSidewalk",
+          "id": "quaternius-downtown-city-megakit/Street_4Lane",
           "weight": 1
         },
         {
@@ -9385,11 +9745,11 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_4Lane_Short_Curb",
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Street_Curve_4Lane_Short_Curb",
+          "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
           "weight": 1
         }
       ]
@@ -9423,6 +9783,106 @@
         {
           "id": "quaternius-downtown-city-megakit/Street_Asphalt_9x9",
           "weight": 1
+        }
+      ]
+    },
+    "amenity=bench|park": {
+      "osmTag": "amenity=bench",
+      "style": "park",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/bench_picnic_table_low_poly_fe35ac",
+          "weight": 1
+        }
+      ]
+    },
+    "highway=bus_stop|modern": {
+      "osmTag": "highway=bus_stop",
+      "style": "modern",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/bus_stop_bus_stop_shelter_bca23b",
+          "weight": 1
+        }
+      ]
+    },
+    "barrier=fence|metal": {
+      "osmTag": "barrier=fence",
+      "style": "metal",
+      "semantic": "barrier",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/fence_old_fence_3a98ea",
+          "weight": 1,
+          "normalizeScale": true
+        }
+      ]
+    },
+    "emergency=fire_hydrant|us": {
+      "osmTag": "emergency=fire_hydrant",
+      "style": "us",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/hydrant_psx_low_poly_fire_hydrant_1d2b13",
+          "weight": 1
+        }
+      ]
+    },
+    "highway=street_lamp|modern": {
+      "osmTag": "highway=street_lamp",
+      "style": "modern",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/streetlight_street_light_2d44b3",
+          "weight": 1,
+          "normalizeScale": true
+        }
+      ]
+    },
+    "highway=traffic_signals|us": {
+      "osmTag": "highway=traffic_signals",
+      "style": "us",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/traffic_light_traffic_light_793e07",
+          "weight": 1,
+          "normalizeScale": true
+        }
+      ]
+    },
+    "amenity=waste_basket|city": {
+      "osmTag": "amenity=waste_basket",
+      "style": "city",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/trash_can_trash_can_minecraft_831dd4",
+          "weight": 1
+        }
+      ]
+    },
+    "natural=tree|deciduous": {
+      "osmTag": "natural=tree",
+      "style": "deciduous",
+      "semantic": "vegetation",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "sketchfab-curated/tree_pine_tree_proto_series_free_08014e",
+          "weight": 1,
+          "normalizeScale": true
         }
       ]
     }

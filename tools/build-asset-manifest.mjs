@@ -100,9 +100,11 @@ function refineModule(name) {
   return { style, role, osm: ['building:part=yes', `building:material=${material}`] }
 }
 
-// review thresholds per semantic type
-const MAX_DIM_M = { building: 200, building_module: 50, road_module: 100, sidewalk_module: 50, road_decal: 60, street_furniture: 10, rooftop_prop: 10 }
-const MAX_TRIS  = { building: 100000, building_module: 20000, road_module: 30000, sidewalk_module: 20000, road_decal: 2000, street_furniture: 10000, rooftop_prop: 10000 }
+// review thresholds per semantic type (asset-authoring units; placement
+// re-normalizes scale, so these are sanity heuristics — "is this one prop or a
+// whole scene / too heavy for a dense instanced city?")
+const MAX_DIM_M = { building: 200, building_module: 50, road_module: 100, sidewalk_module: 50, road_decal: 60, street_furniture: 14, rooftop_prop: 10, vegetation: 45, barrier: 60, landmark_prop: 40, vehicle: 20 }
+const MAX_TRIS  = { building: 100000, building_module: 20000, road_module: 30000, sidewalk_module: 20000, road_decal: 2000, street_furniture: 12000, rooftop_prop: 10000, vegetation: 8000, barrier: 8000, landmark_prop: 45000, vehicle: 60000 }
 
 // ---------------------------------------------------------------------------
 // glTF parsing — bbox via node-transformed POSITION accessor min/max,
@@ -133,8 +135,26 @@ function applyMat4(m, [x, y, z]) {
   ]
 }
 
+// Read the glTF JSON — text .gltf directly, or the JSON chunk of a binary .glb.
+function readGltfJson(path) {
+  const buf = readFileSync(path)
+  // GLB magic: 0x46546C67 ("glTF") little-endian at byte 0
+  if (buf.length >= 12 && buf.readUInt32LE(0) === 0x46546c67) {
+    let offset = 12 // header: magic(4) + version(4) + length(4)
+    while (offset + 8 <= buf.length) {
+      const chunkLen = buf.readUInt32LE(offset)
+      const chunkType = buf.readUInt32LE(offset + 4)
+      const body = buf.subarray(offset + 8, offset + 8 + chunkLen)
+      if (chunkType === 0x4e4f534a) return JSON.parse(body.toString('utf8')) // "JSON"
+      offset += 8 + chunkLen
+    }
+    throw new Error(`no JSON chunk in GLB: ${path}`)
+  }
+  return JSON.parse(buf.toString('utf8'))
+}
+
 function analyzeGltf(path) {
-  const g = JSON.parse(readFileSync(path, 'utf8'))
+  const g = readGltfJson(path)
   const bboxMin = [Infinity, Infinity, Infinity]
   const bboxMax = [-Infinity, -Infinity, -Infinity]
   let tris = 0
@@ -189,24 +209,43 @@ const assets = []
 const reviewFlags = []
 
 for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).isDirectory())) {
-  const gltfDir = join(LIB_DIR, pack, 'gltf')
-  let files = []
-  try { files = readdirSync(gltfDir).filter(f => f.endsWith('.gltf') || f.endsWith('.glb')) } catch { continue }
-  const licenseText = (() => { try { return readFileSync(join(LIB_DIR, pack, 'LICENSE.txt'), 'utf8') } catch { return '' } })()
-  const license = /CC0 1\.0/i.test(licenseText) ? 'CC0-1.0' : 'see LICENSE.txt'
-  const source = /quaternius/i.test(licenseText + pack) ? 'Quaternius — Downtown City MegaKit (free)' : pack
+  // Models may live in gltf/ (text .gltf, Quaternius) or glb/ (binary .glb,
+  // Sketchfab-fetched). Both are scanned.
+  const modelDirs = ['gltf', 'glb']
+  const files = []
+  for (const dir of modelDirs) {
+    try {
+      for (const f of readdirSync(join(LIB_DIR, pack, dir)))
+        if (/\.(gltf|glb)$/i.test(f)) files.push({ dir, file: f })
+    } catch { /* dir absent */ }
+  }
+  if (!files.length) continue
 
-  for (const file of files.sort()) {
+  const licenseText = (() => { try { return readFileSync(join(LIB_DIR, pack, 'LICENSE.txt'), 'utf8') } catch { return '' } })()
+  const packLicense = /CC0 1\.0/i.test(licenseText) ? 'CC0-1.0' : 'see LICENSE.txt'
+  const packSource = /quaternius/i.test(licenseText + pack) ? 'Quaternius — Downtown City MegaKit (free)' : pack
+  // Explicit per-file labels (Sketchfab-fetched assets have arbitrary filenames
+  // the keyword lexicon can't read; the fetch tool records the known label).
+  const labels = (() => { try { return JSON.parse(readFileSync(join(LIB_DIR, pack, 'labels.json'), 'utf8')) } catch { return {} } })()
+
+  for (const { dir, file } of files.sort((a, b) => a.file.localeCompare(b.file))) {
     const name = basename(file).replace(/\.(gltf|glb)$/i, '')
-    const geo = analyzeGltf(join(gltfDir, file))
-    const rule = LEXICON.find(r => r.re.test(name))
+    const geo = analyzeGltf(join(LIB_DIR, pack, dir, file))
+    const label = labels[file] || labels[name]
+
     let cls
-    if (!rule) {
-      cls = { semantic: 'unclassified', role: 'unknown', style: 'unknown', osm: [] }
-    } else if (rule.dynamicModule) {
-      cls = { semantic: rule.semantic, ...refineModule(name) }
+    if (label) {
+      // explicit label from a curated fetch — authoritative
+      cls = {
+        semantic: label.semantic, role: label.role, style: label.style,
+        osm: label.osmTags ?? [], internal: label.internalTags ?? [],
+        sizeClass: label.sizeClass, referenceOnly: label.referenceOnly ?? false,
+      }
     } else {
-      cls = { semantic: rule.semantic, role: rule.role, style: rule.style, osm: rule.osm, internal: rule.internal, sizeClass: rule.sizeClass, referenceOnly: rule.referenceOnly }
+      const rule = LEXICON.find(r => r.re.test(name))
+      if (!rule) cls = { semantic: 'unclassified', role: 'unknown', style: 'unknown', osm: [] }
+      else if (rule.dynamicModule) cls = { semantic: rule.semantic, ...refineModule(name) }
+      else cls = { semantic: rule.semantic, role: rule.role, style: rule.style, osm: rule.osm, internal: rule.internal, sizeClass: rule.sizeClass, referenceOnly: rule.referenceOnly }
     }
 
     const size = geo.bboxMin ? geo.bboxMax.map((v, i) => +(v - geo.bboxMin[i]).toFixed(3)) : null
@@ -218,11 +257,11 @@ for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).i
 
     const asset = {
       id: `${pack}/${name}`,
-      path: `assets/library/${pack}/gltf/${file}`,
-      engineExports: {
+      path: `assets/library/${pack}/${dir}/${file}`,
+      engineExports: dir === 'gltf' && !label ? {
         unity: `assets/library/${pack}/fbx/unity/${name}.fbx`,
         unreal: `assets/library/${pack}/fbx/unreal/${name}.fbx`,
-      },
+      } : undefined,
       semantic: cls.semantic,
       role: cls.role,
       style: cls.style,
@@ -237,8 +276,10 @@ for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).i
       lods: geo.lods,
       materials: geo.materials,
       textures: geo.textures,
-      source,
-      license,
+      source: label?.source || packSource,
+      license: label?.license || packLicense,
+      attribution: label?.attribution,
+      sourceUrl: label?.sourceUrl,
       flags,
     }
     assets.push(asset)
@@ -259,25 +300,32 @@ const BUILDING_TAG_WEIGHTS = {
   'building=retail':      { large: 0.25, medium: 1, small: 1.5 },
   'building=residential': { large: 0.25, medium: 0.75, small: 1.5 },
 }
+// Pool-excluding flags are genuine disqualifiers. `oversized` is advisory:
+// downloaded assets often use non-metric authoring units (cm/mm), but every
+// placement path normalizes scale to the feature's real dimensions, so an
+// out-of-scale single prop is still usable — it just always gets normalized.
+const POOL_EXCLUDING = ['unclassified', 'no-geometry', 'high-poly']
+const isPoolable = (a) => !a.flags.some(f => POOL_EXCLUDING.includes(f))
+
 const pools = {}
 for (const a of assets) {
-  if (a.flags.length) continue // review-flagged assets never enter pools
+  if (!isPoolable(a)) continue
   for (const tag of [...a.osmTags, ...a.internalTags]) {
     const key = `${tag}|${a.style}`
     let weight = /noWear/i.test(a.id) ? 0.5 : 1
     if (a.semantic === 'building' && BUILDING_TAG_WEIGHTS[tag]) weight *= BUILDING_TAG_WEIGHTS[tag][a.sizeClass] ?? 1
     ;(pools[key] ??= { osmTag: tag, style: a.style, semantic: a.semantic, referenceOnly: a.referenceOnly, entries: [] })
-      .entries.push({ id: a.id, weight: +weight.toFixed(3) })
+      .entries.push({ id: a.id, weight: +weight.toFixed(3), normalizeScale: a.flags.includes('oversized') || undefined })
   }
 }
 
 const manifest = {
   schemaVersion: 1,
   generated: 'run: node tools/build-asset-manifest.mjs',
-  pickContract: "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY",
+  pickContract: "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   counts: {
     assets: assets.length,
-    pooled: assets.filter(a => !a.flags.length && (a.osmTags.length || a.internalTags.length)).length,
+    pooled: assets.filter(a => isPoolable(a) && (a.osmTags.length || a.internalTags.length)).length,
     flaggedForReview: reviewFlags.length,
     pools: Object.keys(pools).length,
   },
