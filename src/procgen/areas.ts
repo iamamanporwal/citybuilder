@@ -56,20 +56,14 @@ export interface TerrainBuild {
 }
 
 /**
- * Ground plane with water bodies carved out as real holes.
- * Water rings are clipped to the ground rect, validated (simple, non-trivial
- * area) and carved largest-first; a ring whose bbox overlaps an already carved
- * hole is painted instead (earcut cannot triangulate intersecting holes).
+ * Classify water rings against the ground rect: rings that carve real holes
+ * vs. rings that fall back to painted overlays. Shared by buildTerrain and the
+ * physics collider builder (water sensor volumes) so both agree exactly.
  */
-export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBuild {
+export function waterRings(waterAreas: AreaFeature[], bounds: Rect): { carved: Vec2[][]; painted: Vec2[][] } {
   interface Candidate { ring: Vec2[]; area: number }
   const candidates: Candidate[] = []
-  let painted = 0
-  const paintGeoms: THREE.BufferGeometry[] = []
-  const paint = (ring: Vec2[]) => {
-    paintGeoms.push(flatRingGeometry(ring, WATER_PAINT_Y))
-    painted++
-  }
+  const painted: Vec2[][] = []
 
   for (const a of waterAreas) {
     if (!a.render || a.kind !== 'water' || a.ring.length < 3) continue
@@ -77,7 +71,7 @@ export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBu
     if (clipped.length < 3) continue
     if (!ringIsSimple(clipped)) {
       // folded ribbon (hairpin river) — same-material overlay is safe to paint
-      paint(clipped)
+      painted.push(clipped)
       continue
     }
     const area = ringAreaM2(clipped)
@@ -93,9 +87,22 @@ export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBu
       const hb = ringBBox(h.ring)
       return bb.minX < hb.maxX && hb.minX < bb.maxX && bb.minZ < hb.maxZ && hb.minZ < bb.maxZ
     })
-    if (clash) paint(c.ring)
+    if (clash) painted.push(c.ring)
     else holes.push(c)
   }
+  return { carved: holes.map((h) => h.ring), painted }
+}
+
+/**
+ * Ground plane with water bodies carved out as real holes.
+ * Water rings are clipped to the ground rect, validated (simple, non-trivial
+ * area) and carved largest-first; a ring whose bbox overlaps an already carved
+ * hole is painted instead (earcut cannot triangulate intersecting holes).
+ */
+export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBuild {
+  const { carved, painted } = waterRings(waterAreas, bounds)
+  const holes = carved.map((ring) => ({ ring }))
+  const paintGeoms = painted.map((ring) => flatRingGeometry(ring, WATER_PAINT_Y))
 
   // ---- ground: rect shape minus carved holes (shape space: (x, -z))
   const groundShape = new THREE.Shape([
@@ -138,7 +145,7 @@ export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBu
       water.add(m)
     }
   }
-  return { ground, water, carvedCount: holes.length, paintedCount: painted }
+  return { ground, water, carvedCount: holes.length, paintedCount: painted.length }
 }
 
 /** True when point p lies over carved or painted water of these areas. */
@@ -155,7 +162,7 @@ function ringBBox(ring: Vec2[]): Rect {
   return { minX, maxX, minZ, maxZ }
 }
 
-function flatRingGeometry(ring: Vec2[], y: number): THREE.BufferGeometry {
+export function flatRingGeometry(ring: Vec2[], y: number): THREE.BufferGeometry {
   const pts = ring.map((p) => new THREE.Vector2(p.x, -p.z))
   if (THREE.ShapeUtils.isClockWise(pts)) pts.reverse()
   const geo = new THREE.ShapeGeometry(new THREE.Shape(pts))

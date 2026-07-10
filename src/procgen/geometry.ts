@@ -179,6 +179,46 @@ export function smoothPolyline(pts: Vec2[], spacing = 4): Vec2[] {
   return curve.getSpacedPoints(n).map((v) => ({ x: v.x, z: v.z }))
 }
 
+export function polylineLength(pts: Vec2[]): number {
+  let l = 0
+  for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)
+  return l
+}
+
+export function pointAlong(pts: Vec2[], dist: number): { p: Vec2; dir: Vec2 } {
+  let acc = 0
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)
+    if (acc + seg >= dist && seg > 0) {
+      const t = (dist - acc) / seg
+      return {
+        p: { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, z: pts[i - 1].z + (pts[i].z - pts[i - 1].z) * t },
+        dir: { x: (pts[i].x - pts[i - 1].x) / seg, z: (pts[i].z - pts[i - 1].z) / seg },
+      }
+    }
+    acc += seg
+  }
+  const n = pts.length
+  const dx = pts[n - 1].x - pts[n - 2].x
+  const dz = pts[n - 1].z - pts[n - 2].z
+  const l = Math.hypot(dx, dz) || 1
+  return { p: pts[n - 1], dir: { x: dx / l, z: dz / l } }
+}
+
+/** Cut a polyline shorter by trimStart/trimEnd meters (returns null if too short). */
+export function trimPolyline(pts: Vec2[], trimStart: number, trimEnd: number): Vec2[] | null {
+  const total = polylineLength(pts)
+  if (total <= trimStart + trimEnd + 0.5) return null
+  const start = pointAlong(pts, trimStart)
+  const end = pointAlong(pts, total - trimEnd)
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++)
+    cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z))
+  const mid = pts.filter((_, i) => cum[i] > trimStart && cum[i] < total - trimEnd)
+  const out = [start.p, ...mid, end.p]
+  return out.filter((p, i) => i === 0 || Math.hypot(p.x - out[i - 1].x, p.z - out[i - 1].z) > 0.05)
+}
+
 /** Signed shoelace area (m²) of a ring in the XZ plane. Positive = counterclockwise in (x, -z). */
 export function ringAreaM2(ring: Vec2[]): number {
   let a = 0

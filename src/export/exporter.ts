@@ -2,15 +2,18 @@ import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { useEditor } from '../state/store'
 import {
-  buildingFeatures,
   buildingResolutions,
+  cityGraph,
   getVariant,
   roadResolutions,
   roadSegments,
   sceneContext,
 } from '../scene/registry'
-import { footprintCentroid } from '../procgen/buildings'
 import { buildTextureManifest } from '../materials/packaging'
+import { buildCollidersFromRegistry } from '../physics/registryColliders'
+import { colliderLint } from '../physics/colliderLint'
+import { colliderGroup } from './colliderGlb'
+import { buildRoadSemantics } from './semantics'
 
 // Export (PRD §14, MVP scope): visual GLB + separate lightweight collision GLB
 // + the semantic road/provenance data the game runtime consumes.
@@ -42,8 +45,16 @@ import { flickerLint, roadConsistencyLint, waterLint } from '../resolver/lints'
 export async function exportCity(): Promise<void> {
   const s = useEditor.getState()
 
+  // build the collider set BEFORE the gate so lint and GLB share one set
+  const colliderSet = buildCollidersFromRegistry()
+
   // export gate: re-run geometry linters on the current (possibly edited) scene
-  const gate = [...flickerLint(), ...roadConsistencyLint(), ...waterLint()]
+  const gate = [
+    ...flickerLint(),
+    ...roadConsistencyLint(),
+    ...waterLint(),
+    ...(colliderSet && cityGraph ? colliderLint(cityGraph, colliderSet) : []),
+  ]
   s.setLintReport([...gate, ...s.lintReport.filter((w) => !gate.some((g) => g.message === w.message))])
   const gateWarnings = gate.filter((w) => w.severity === 'warn')
   s.showToast(
@@ -68,45 +79,16 @@ export async function exportCity(): Promise<void> {
     visual.add(clone)
   }
 
-  // ---- collision layer: roads + ground as-is, buildings as bounding boxes
-  const collision = new THREE.Group()
-  collision.name = 'citybuilder_collision'
-  const collisionMat = new THREE.MeshBasicMaterial({ color: '#888888' })
-  for (const id of s.objectOrder) {
-    const obj = s.objects[id]
-    if (!obj || obj.deleted || !obj.visible) continue
-    if (obj.type === 'road' || obj.type === 'ground' || obj.type === 'sidewalks') {
-      const three = getVariant(obj.id, obj.asset)
-      if (!three) continue
-      const clone = three.clone(true)
-      clone.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).material = collisionMat
-      })
-      clone.name = `col_${obj.id}`
-      collision.add(clone)
-    } else if (obj.type === 'building') {
-      const b = buildingFeatures.get(obj.id)
-      if (!b) continue
-      const c = footprintCentroid(b.footprint)
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
-      for (const p of b.footprint) {
-        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
-        minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z)
-      }
-      const box = new THREE.Mesh(
-        new THREE.BoxGeometry(maxX - minX, b.heightM, maxZ - minZ),
-        collisionMat,
-      )
-      box.position.set(c.x, b.heightM / 2, c.z)
-      box.name = `col_${obj.id}`
-      collision.add(box)
-    }
-  }
+  // ---- collision layer: generated from semantic data (physics/colliders.ts),
+  //      named nodes with glTF extras carrying collider + material metadata
+  const collision = colliderSet ? colliderGroup(colliderSet) : new THREE.Group()
+  if (!colliderSet) collision.name = 'citybuilder_colliders'
 
   // ---- semantics: the data that drives traffic AI / gameplay at runtime,
   //      plus the resolver's decision record for every object
   const semantics = {
     generator: 'CityBuilder MVP',
+    semanticsVersion: 2, // BREAKING vs v1: road centerlines are now [x, y, z] (y = true elevation in meters)
     city: s.cityName,
     attribution: s.attribution,
     exportedAt: new Date().toISOString(),
@@ -122,24 +104,7 @@ export async function exportCity(): Promise<void> {
           adapterLog: sceneContext.provenance,
         }
       : null,
-    roads: [...roadSegments.values()].map((r) => {
-      const res = roadResolutions.get(r.id)
-      return {
-        id: r.id,
-        name: r.name,
-        class: r.roadClass,
-        width_m: r.widthM,
-        lanes: r.lanes,
-        oneway: r.oneway,
-        bridge: r.bridge,
-        tunnel: r.tunnel,
-        layer: r.layer,
-        surface: res?.surface,
-        marking: res?.marking,
-        confidence: res?.confidence,
-        centerline: r.points.map((p) => [Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100]),
-      }
-    }),
+    roads: buildRoadSemantics([...roadSegments.values()], roadResolutions),
     objects: s.objectOrder
       .map((id) => s.objects[id])
       .filter((o) => o && !o.deleted && o.type === 'building')

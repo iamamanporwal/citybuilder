@@ -175,10 +175,22 @@ function signGeometry(shape: string): THREE.BufferGeometry {
   return parts.length > 1 ? mergeGeometries(parts) : parts[0]
 }
 
-interface Placement {
+export interface Placement {
   p: Vec2
   rotY: number
 }
+
+export interface FurniturePlacements {
+  lamps: Placement[]
+  benches: Placement[]
+  bins: Placement[]
+  signs: Placement[]
+}
+
+// Side channel for the physics collider builder: generated furniture positions
+// exist only inside buildFurniture, and userData would leak into the visual
+// GLB via GLTFExporter's extras serialization — a module ref avoids that.
+export const furniturePlacements: { current: FurniturePlacements | null } = { current: null }
 
 /** Generated + OSM street furniture, instanced per kind. */
 export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Group {
@@ -288,6 +300,7 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
   addInstanced(signGeometry(ctx.region.signShape), signMat, signs, `Signs (${signs.length})`)
   group.userData.objectId = 'furn_all'
   group.userData.counts = { lamps: lamps.length, benches: benches.length, bins: bins.length, signs: signs.length }
+  furniturePlacements.current = { lamps, benches, bins, signs }
   return group
 }
 

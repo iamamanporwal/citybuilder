@@ -5,7 +5,8 @@ import { hash01 } from '../resolver/resolve'
 import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/library'
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { mergeGeometries, offsetPolyline, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, wallGeometry } from './geometry'
+import { mergeGeometries, offsetPolyline, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { analyzeRoadNodes, cumulative, elevationProfile, nodeKey, NON_DRIVABLE, rampSpecFor } from './roadNetwork'
 import { DecalPlanner } from './decalPlan'
 
 // Deterministic procedural road system (PRD §8). Roads are generated from data,
@@ -21,8 +22,6 @@ const Y_DECAL = 0.08
 const Y_DISC = 0.11
 const Y_MARK = 0.16
 const Y_CROSSWALK = 0.175
-const BRIDGE_LAYER_H = 6.5
-const MAX_RAMP_GRADE = 0.06 // 6% — driving-grade approach ramps
 
 export interface RoadBuildResult {
   roadMeshes: Map<string, THREE.Mesh>
@@ -34,59 +33,6 @@ export interface RoadBuildResult {
   bridges: THREE.Group | null
   portals: THREE.Group | null
 }
-
-const NON_DRIVABLE = new Set(['pedestrian', 'footway', 'cycleway'])
-
-function polylineLength(pts: Vec2[]): number {
-  let l = 0
-  for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)
-  return l
-}
-
-function cumulative(pts: Vec2[]): number[] {
-  const out = [0]
-  for (let i = 1; i < pts.length; i++)
-    out.push(out[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z))
-  return out
-}
-
-function pointAlong(pts: Vec2[], dist: number): { p: Vec2; dir: Vec2 } {
-  let acc = 0
-  for (let i = 1; i < pts.length; i++) {
-    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)
-    if (acc + seg >= dist && seg > 0) {
-      const t = (dist - acc) / seg
-      return {
-        p: { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, z: pts[i - 1].z + (pts[i].z - pts[i - 1].z) * t },
-        dir: { x: (pts[i].x - pts[i - 1].x) / seg, z: (pts[i].z - pts[i - 1].z) / seg },
-      }
-    }
-    acc += seg
-  }
-  const n = pts.length
-  const dx = pts[n - 1].x - pts[n - 2].x
-  const dz = pts[n - 1].z - pts[n - 2].z
-  const l = Math.hypot(dx, dz) || 1
-  return { p: pts[n - 1], dir: { x: dx / l, z: dz / l } }
-}
-
-/** Cut a polyline shorter by trimStart/trimEnd meters (returns null if too short). */
-function trimPolyline(pts: Vec2[], trimStart: number, trimEnd: number): Vec2[] | null {
-  const total = polylineLength(pts)
-  if (total <= trimStart + trimEnd + 0.5) return null
-  const start = pointAlong(pts, trimStart)
-  const end = pointAlong(pts, total - trimEnd)
-  const cum = cumulative(pts)
-  const mid = pts.filter((_, i) => cum[i] > trimStart && cum[i] < total - trimEnd)
-  const out = [start.p, ...mid, end.p]
-  return out.filter((p, i) => i === 0 || Math.hypot(p.x - out[i - 1].x, p.z - out[i - 1].z) > 0.05)
-}
-
-function nodeKey(p: Vec2): string {
-  return `${Math.round(p.x * 2)},${Math.round(p.z * 2)}`
-}
-
-const ease = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, t)))
 
 function pushQuad(
   positions: number[],
@@ -139,23 +85,7 @@ export function buildRoads(
   resolutions: Map<string, RoadResolution>,
 ): RoadBuildResult {
   // ---- junction detection (drivable classes only)
-  const nodeUse = new Map<string, { count: number; maxWidth: number; p: Vec2; hasSurface: boolean; bridgeElev: number }>()
-  for (const r of graph.roads) {
-    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel) continue
-    const segElev = r.bridge ? Math.max(r.layer, 1) * BRIDGE_LAYER_H : 0
-    for (const end of [r.points[0], r.points[r.points.length - 1]]) {
-      const k = nodeKey(end)
-      const e = nodeUse.get(k)
-      if (e) {
-        e.count++
-        e.maxWidth = Math.max(e.maxWidth, r.widthM)
-        e.hasSurface = e.hasSurface || !r.bridge
-        e.bridgeElev = Math.max(e.bridgeElev, segElev)
-      } else {
-        nodeUse.set(k, { count: 1, maxWidth: r.widthM, p: end, hasSurface: !r.bridge, bridgeElev: segElev })
-      }
-    }
-  }
+  const nodeUse = analyzeRoadNodes(graph.roads)
   const isJunction = (p: Vec2) => (nodeUse.get(nodeKey(p))?.count ?? 0) >= 2
   const junctionRadius = (p: Vec2) => (nodeUse.get(nodeKey(p))?.maxWidth ?? 8) * 0.55
 
@@ -211,22 +141,10 @@ export function buildRoads(
     const right = offsetPolyline(surfacePts, -half)
 
     // ---- elevation profile (bridges ramp from grade to layer height, grade-limited)
-    const fullElev = r.bridge ? Math.max(r.layer, 1) * BRIDGE_LAYER_H : 0
+    const cum = cumulative(pts)
+    const spec = rampSpecFor(r, cum[cum.length - 1], nodeUse)
     let profile: number[] | number = Y_ROAD
-    if (r.bridge && fullElev > 0) {
-      const cum = cumulative(pts)
-      const L = cum[cum.length - 1]
-      const rampLen = Math.min(Math.max(fullElev / MAX_RAMP_GRADE, 40), Math.max(L * 0.45, 20))
-      const endElev = [pts[0], pts[pts.length - 1]].map((p) => {
-        const node = nodeUse.get(nodeKey(p))
-        return node && node.hasSurface ? 0 : fullElev
-      })
-      profile = cum.map((d) => {
-        const up = endElev[0] + (fullElev - endElev[0]) * ease(d / rampLen)
-        const down = endElev[1] + (fullElev - endElev[1]) * ease((L - d) / rampLen)
-        return Math.min(up, down) + Y_ROAD
-      })
-    }
+    if (spec) profile = elevationProfile(spec, cum).map((e) => e + Y_ROAD)
 
     const surface = ribbonGeometry(left, right, profile)
     const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, hash01(r.id + ':uv')))
@@ -242,7 +160,6 @@ export function buildRoads(
       const railTop = deck.map((y) => y + 1.05)
       bridgeGeoms.push(wallGeometry(left, fasciaBottom, railTop))
       bridgeGeoms.push(wallGeometry(right, railTop, fasciaBottom))
-      const cum = cumulative(pts)
       const L = cum[cum.length - 1]
       for (let d = 14; d < L - 10; d += 22) {
         const { p } = pointAlong(pts, d)

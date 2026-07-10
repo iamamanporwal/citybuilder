@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Sky } from '@react-three/drei'
 import { Bloom, BrightnessContrast, EffectComposer, SMAA, Vignette } from '@react-three/postprocessing'
@@ -6,6 +6,9 @@ import { useEditor } from '../state/store'
 import { CameraRig } from './CameraRig'
 import { SceneContent } from './SceneContent'
 import { DEPTH_CONFIG } from './depthConfig'
+
+// physics drive preview: code-split so the rapier wasm loads on first use only
+const DriveSim = lazy(() => import('./driving/DriveSim'))
 
 /**
  * EDITOR-ONLY look-dev preview. The authoring tool ships clean unlit PBR
@@ -63,6 +66,7 @@ function Lighting() {
 
 export function Viewport() {
   const clearSelection = useEditor((s) => s.clearSelection)
+  const mode = useEditor((s) => s.cameraMode)
   return (
     <Canvas
       shadows
@@ -83,6 +87,11 @@ export function Viewport() {
       <Lighting />
       <SceneContent />
       <CameraRig />
+      {mode === 'drive' && (
+        <Suspense fallback={null}>
+          <DriveSim />
+        </Suspense>
+      )}
       <FxPreview />
     </Canvas>
   )

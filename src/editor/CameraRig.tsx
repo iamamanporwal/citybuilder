@@ -3,45 +3,12 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { MapControls } from '@react-three/drei'
 import { useEditor } from '../state/store'
-import { useDriveHud } from '../state/driveHud'
-import { drivableRoads, frameBus } from './bus'
+import { frameBus, lastOrbitTarget } from './bus'
+import { pressed } from './input'
 
-// ---- global key state (shared by fly + drive) ----
-const pressed = new Set<string>()
-function isTyping(e: KeyboardEvent) {
-  const t = e.target as HTMLElement
-  return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable
-}
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', (e) => {
-    if (!isTyping(e)) pressed.add(e.code)
-  })
-  window.addEventListener('keyup', (e) => pressed.delete(e.code))
-  window.addEventListener('blur', () => pressed.clear())
-}
-
-function nearestRoadPoint(x: number, z: number) {
-  let best = { d: Infinity, x: 0, z: 0, hx: 0, hz: 1 }
-  for (const r of drivableRoads) {
-    for (let i = 0; i < r.pts.length - 1; i++) {
-      const a = r.pts[i]
-      const b = r.pts[i + 1]
-      const abx = b.x - a.x
-      const abz = b.z - a.z
-      const len2 = abx * abx + abz * abz || 1
-      let t = ((x - a.x) * abx + (z - a.z) * abz) / len2
-      t = Math.max(0, Math.min(1, t))
-      const px = a.x + abx * t
-      const pz = a.z + abz * t
-      const d = (x - px) * (x - px) + (z - pz) * (z - pz)
-      if (d < best.d) {
-        const l = Math.sqrt(len2)
-        best = { d, x: px, z: pz, hx: abx / l, hz: abz / l }
-      }
-    }
-  }
-  return best
-}
+// Drive mode is a real physics sim now — see editor/driving/DriveSim.tsx.
+// This rig owns orbit + fly only and publishes the orbit target so the drive
+// sim can spawn the car where the user was looking.
 
 export function CameraRig() {
   const mode = useEditor((s) => s.cameraMode)
@@ -49,7 +16,6 @@ export function CameraRig() {
   const { camera, gl } = useThree()
   const controls = useRef<any>(null)
   const look = useRef({ yaw: 0, pitch: -0.4, active: false })
-  const car = useRef({ x: 0, z: 0, hx: 0, hz: 1, speed: 0 })
   const prevMode = useRef<string>('orbit')
 
   // pointer-drag look for fly mode
@@ -86,12 +52,6 @@ export function CameraRig() {
       look.current.yaw = e.y
       look.current.pitch = e.x
     }
-    if (mode === 'drive' && prevMode.current !== 'drive') {
-      const target = controls.current?.target ?? new THREE.Vector3()
-      const spawn = nearestRoadPoint(target.x, target.z)
-      car.current = { x: spawn.x, z: spawn.z, hx: spawn.hx, hz: spawn.hz, speed: 0 }
-    }
-    if (mode !== 'drive') useDriveHud.getState().setSpeed(0)
     prevMode.current = mode
   }, [mode, camera])
 
@@ -114,6 +74,7 @@ export function CameraRig() {
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05)
+    if (controls.current?.target) lastOrbitTarget.copy(controls.current.target)
     if (mode === 'fly') {
       camera.rotation.order = 'YXZ'
       camera.rotation.set(look.current.pitch, look.current.yaw, 0)
@@ -133,33 +94,6 @@ export function CameraRig() {
         camera.position.add(v)
         camera.position.y = Math.max(camera.position.y, 1.2)
       }
-    } else if (mode === 'drive') {
-      const c = car.current
-      const accel = pressed.has('KeyW') || pressed.has('ArrowUp') ? 9 : 0
-      const brake = pressed.has('KeyS') || pressed.has('ArrowDown') ? 14 : 0
-      c.speed += (accel - brake * Math.sign(c.speed || 1)) * dt
-      // drag + rolling resistance
-      c.speed -= c.speed * 0.35 * dt
-      c.speed = Math.max(-8, Math.min(26, c.speed))
-      if (Math.abs(c.speed) < 0.05 && !accel && !brake) c.speed = 0
-
-      let steer = 0
-      if (pressed.has('KeyA') || pressed.has('ArrowLeft')) steer += 1
-      if (pressed.has('KeyD') || pressed.has('ArrowRight')) steer -= 1
-      if (steer !== 0 && Math.abs(c.speed) > 0.2) {
-        const steerRate = steer * 1.9 * dt * Math.sign(c.speed)
-        const damp = 1 / (1 + Math.abs(c.speed) * 0.045)
-        const a = steerRate * damp * Math.min(Math.abs(c.speed) / 4, 1)
-        const nhx = c.hx * Math.cos(a) - c.hz * Math.sin(a)
-        const nhz = c.hx * Math.sin(a) + c.hz * Math.cos(a)
-        c.hx = nhx
-        c.hz = nhz
-      }
-      c.x += c.hx * c.speed * dt
-      c.z += c.hz * c.speed * dt
-      camera.position.set(c.x, 1.5, c.z)
-      camera.lookAt(c.x + c.hx * 10, 1.35, c.z + c.hz * 10)
-      useDriveHud.getState().setSpeed(Math.round(Math.abs(c.speed) * 3.6))
     }
   })
 
