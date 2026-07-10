@@ -41,6 +41,7 @@ export const LAYER_CONVENTION: [string, number][] = [
   ['park', 0.032],
   ['sand', 0.037],
   ['forest floor', 0.042],
+  ['path surface', 0.046], // footway/cycleway/pedestrian — no junction nodes, so they cross carriageways untrimmed; the layer gap is what prevents the fight
   ['road surface', 0.05],
   ['wear decals', 0.08],
   ['junction surface', 0.11],

@@ -47,6 +47,18 @@ export function offsetPolyline(pts: Vec2[], offset: number): Vec2[] {
     }
     out.push({ x: p.x + nx * offset * scale, z: p.z + nz * offset * scale })
   }
+  // collapse fold-overs: where |offset| exceeds the local curvature radius the
+  // offset polyline reverses direction and the ribbon folds onto itself —
+  // exactly coplanar self-overlap that z-fights and wrecks vertex normals.
+  // A reversed offset segment (opposing its reference segment) is collapsed to
+  // a zero-length step, which meshes as degenerate, invisible triangles.
+  for (let i = 1; i < n; i++) {
+    const rx = pts[i].x - pts[i - 1].x
+    const rz = pts[i].z - pts[i - 1].z
+    const ox = out[i].x - out[i - 1].x
+    const oz = out[i].z - out[i - 1].z
+    if (rx * ox + rz * oz < 0) out[i] = { ...out[i - 1] }
+  }
   return out
 }
 
@@ -74,14 +86,43 @@ export function ribbonGeometry(left: Vec2[], right: Vec2[], y: number | number[]
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
   g.setIndex(indices)
-  g.computeVertexNormals()
+  if (typeof y === 'number') {
+    // constant-height ribbon: exact up normals. computeVertexNormals averages
+    // over collapsed/degenerate strips and shades folds dark; the true normal
+    // of a flat ribbon is known analytically.
+    const normals = new Float32Array(n * 2 * 3)
+    for (let i = 1; i < normals.length; i += 3) normals[i] = 1
+    g.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
+  } else {
+    g.computeVertexNormals()
+  }
+  return g
+}
+
+/**
+ * World-planar XZ UVs in meters. Overlapping coplanar surfaces that share a
+ * material then sample identical texels at identical world points, so whichever
+ * triangle wins the depth tie paints the same color — overdraw is idempotent
+ * and z-fighting cannot show. Used for surfaces whose members may overlap at
+ * one layer height (junction discs, sidewalk tops at corners/parallel arms).
+ */
+export function planarUvXZ(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const p = g.getAttribute('position')
+  const uv = new Float32Array(p.count * 2)
+  for (let i = 0; i < p.count; i++) {
+    uv[i * 2] = p.getX(i)
+    uv[i * 2 + 1] = -p.getZ(i)
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
   return g
 }
 
 /** Raised slab ribbon (top face at height h + vertical skirts down to 0 on both edges). */
 export function raisedRibbonGeometry(left: Vec2[], right: Vec2[], h: number): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = []
-  parts.push(ribbonGeometry(left, right, h))
+  // top face gets world-planar UVs: sidewalk slabs from different arms overlap
+  // at corners and along dual carriageways at the same curb height
+  parts.push(planarUvXZ(ribbonGeometry(left, right, h)))
   parts.push(wallGeometry(left, h, 0))
   parts.push(wallGeometry(right, 0, h)) // reversed winding via height order
   return mergeGeometries(parts)

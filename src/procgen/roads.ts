@@ -5,7 +5,7 @@ import { hash01 } from '../resolver/resolve'
 import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/library'
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { mergeGeometries, offsetPolyline, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
 import { analyzeRoadNodes, cumulative, elevationProfile, nodeKey, NON_DRIVABLE, rampSpecFor } from './roadNetwork'
 import { DecalPlanner } from './decalPlan'
 
@@ -16,7 +16,8 @@ import { DecalPlanner } from './decalPlan'
 // vertical layer convention (see editor/depthConfig.ts LAYER_CONVENTION —
 // linter-enforced, and proven against the depth-buffer quantum):
 // terrain 0 < water .012 < grass .022 < park .032 < sand .037 < forest .042
-// < road .05 < decals .08 < junction discs .11 < markings .16 < crosswalks .175 < sidewalk .22
+// < path .046 < road .05 < decals .08 < junction discs .11 < markings .16 < crosswalks .175 < sidewalk .22
+const Y_PATH = 0.046 // footway/cycleway/pedestrian: no junction nodes, cross carriageways untrimmed
 const Y_ROAD = 0.05
 const Y_DECAL = 0.08
 const Y_DISC = 0.11
@@ -141,13 +142,20 @@ export function buildRoads(
     const right = offsetPolyline(surfacePts, -half)
 
     // ---- elevation profile (bridges ramp from grade to layer height, grade-limited)
+    // Paths (footway/cycleway/pedestrian) never register junction nodes, so
+    // they cross carriageways and each other untrimmed. They render one layer
+    // below the road surface, and with world-planar UVs + a shared material so
+    // path-over-path overlap (plaza polylines) paints identical texels.
+    const isPath = NON_DRIVABLE.has(r.roadClass)
+    const yBase = isPath ? Y_PATH : Y_ROAD
     const cum = cumulative(pts)
     const spec = rampSpecFor(r, cum[cum.length - 1], nodeUse)
-    let profile: number[] | number = Y_ROAD
-    if (spec) profile = elevationProfile(spec, cum).map((e) => e + Y_ROAD)
+    let profile: number[] | number = yBase
+    if (spec) profile = elevationProfile(spec, cum).map((e) => e + yBase)
 
     const surface = ribbonGeometry(left, right, profile)
-    const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, hash01(r.id + ':uv')))
+    if (isPath) planarUvXZ(surface)
+    const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ':uv')))
     mesh.name = r.name ?? `${r.roadClass} road`
     mesh.userData.objectId = r.id
     mesh.receiveShadow = true
@@ -266,19 +274,40 @@ export function buildRoads(
   }
 
   // ---- intersection surfaces + manholes
+  // Junction discs share one Y layer and often overlap — OSM dual carriageways
+  // put several junction nodes within a few meters. Two rules keep that from
+  // z-fighting (exact coplanarity is unfixable by depth precision):
+  //  1. a disc fully contained in an already-kept disc is dropped (pure overdraw);
+  //  2. remaining discs get world-planar UVs, so overlapping discs sample
+  //     identical texels — whichever triangle wins the depth tie paints the
+  //     same pixel, and the overlap region reads as one continuous surface.
   const discGeoms: THREE.BufferGeometry[] = []
-  for (const [k, info] of nodeUse) {
-    if (info.count < 2) continue
-    const rad = info.maxWidth * 0.58
-    const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
-    const g = new THREE.CircleGeometry(rad, seg)
-    g.rotateX(-Math.PI / 2)
-    g.translate(info.p.x, info.bridgeElev + Y_DISC, info.p.z)
-    discGeoms.push(nonIndexedToIndexed(g))
+  const junctionNodes = [...nodeUse.entries()]
+    .filter(([, info]) => info.count >= 2)
+    .map(([k, info]) => ({ k, info, rad: info.maxWidth * 0.58 }))
+    .sort((a, b) => b.rad - a.rad || (a.k < b.k ? -1 : 1))
+  const keptDiscs: { x: number; z: number; rad: number; elev: number }[] = []
+  for (const { k, info, rad } of junctionNodes) {
+    const contained = keptDiscs.some(
+      (o) => o.elev === info.bridgeElev && Math.hypot(o.x - info.p.x, o.z - info.p.z) + rad <= o.rad + 1e-6,
+    )
+    if (!contained) {
+      keptDiscs.push({ x: info.p.x, z: info.p.z, rad, elev: info.bridgeElev })
+      const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
+      const g = new THREE.CircleGeometry(rad, seg)
+      g.rotateX(-Math.PI / 2)
+      g.translate(info.p.x, info.bridgeElev + Y_DISC, info.p.z)
+      discGeoms.push(planarUvXZ(nonIndexedToIndexed(g)))
+    }
     if (info.maxWidth >= 6 && info.bridgeElev === 0 && hash01(k + ':mh') > 0.45) {
       const off = (hash01(k + ':mo') - 0.5) * rad
-      const q = decalQuads.manhole
-      pushQuad(q.pos, q.idx, { x: info.p.x + off, z: info.p.z + off * 0.6 }, { x: 1, z: 0 }, 0.45, { x: 0, z: 1 }, 0.45, Y_DISC + 0.015, q.uv)
+      const c = { x: info.p.x + off, z: info.p.z + off * 0.6 }
+      // manholes share the decal non-overlap budget: junction nodes a few
+      // meters apart otherwise stamp exactly coplanar overlapping quads
+      if (decalPlanner.tryPlace(c, 0.45)) {
+        const q = decalQuads.manhole
+        pushQuad(q.pos, q.idx, c, { x: 1, z: 0 }, 0.45, { x: 0, z: 1 }, 0.45, Y_DISC + 0.015, q.uv)
+      }
     }
   }
 

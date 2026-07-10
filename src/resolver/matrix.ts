@@ -181,8 +181,12 @@ export interface RoadRule {
 export const ROAD_RULES: RoadRule[] = [
   { id: 'surface-cobble-tag', when: { surfaceTag: ['cobblestone', 'sett', 'paving_stones'] }, pool: [{ value: 'cobble', weight: 1 }], decalDensity: 0.5 },
   { id: 'surface-gravel-tag', when: { surfaceTag: ['gravel', 'dirt', 'unpaved', 'ground'] }, pool: [{ value: 'gravel', weight: 1 }], decalDensity: 0 },
-  { id: 'pedestrian-eu', when: { classIn: ['pedestrian', 'living_street'], region: ['eu-west', 'eu-central', 'eu-south', 'uk'] }, pool: [{ value: 'cobble', weight: 3 }, { value: 'pavers', weight: 2 }], decalDensity: 0.4 },
-  { id: 'pedestrian-any', when: { classIn: ['pedestrian', 'living_street', 'footway', 'cycleway'] }, pool: [{ value: 'pavers', weight: 3 }, { value: 'asphalt-new', weight: 1 }], decalDensity: 0.2 },
+  // Path pools are single-surface on purpose: paths never register junction
+  // nodes, so plaza/greenway polylines overlap coplanarly — overlapping paths
+  // must resolve to the SAME material for the overlap to render idempotently
+  // (see procgen/roads.ts). Regional packs still differentiate (EU cobble).
+  { id: 'pedestrian-eu', when: { classIn: ['pedestrian', 'living_street'], region: ['eu-west', 'eu-central', 'eu-south', 'uk'] }, pool: [{ value: 'cobble', weight: 1 }], decalDensity: 0.4 },
+  { id: 'pedestrian-any', when: { classIn: ['pedestrian', 'living_street', 'footway', 'cycleway'] }, pool: [{ value: 'pavers', weight: 1 }], decalDensity: 0.2 },
   { id: 'major-roads', when: { classIn: ['motorway', 'trunk', 'primary'] }, pool: [{ value: 'asphalt-new', weight: 3 }, { value: 'asphalt-worn', weight: 1 }], decalDensity: 0.8 },
   { id: 'minor-roads', when: {}, pool: [{ value: 'asphalt-worn', weight: 3 }, { value: 'asphalt-new', weight: 2 }, { value: 'asphalt-patched', weight: 2 }], decalDensity: 1.4 },
 ]
