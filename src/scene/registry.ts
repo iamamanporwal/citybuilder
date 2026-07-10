@@ -3,13 +3,13 @@ import type { AssetInfo, BuildingFeature, CityGraph, RoadSegment, SceneObject } 
 import type { BuildingResolution, ResolvedContext, RoadResolution } from '../resolver/types'
 import { resolveBuilding, resolveRoad } from '../resolver/resolve'
 import { buildRoads } from '../procgen/roads'
-import { buildEnhancedBuilding, buildProceduralBuilding, footprintCentroid } from '../procgen/buildings'
+import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCentroid } from '../procgen/buildings'
 import { buildAreas, buildTerrain } from '../procgen/areas'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
-import { cloneTemplate, getTemplate } from './libraryTemplates'
+import { buildingSceneFor, cloneTemplate, getTemplate } from './libraryTemplates'
 
 // Three.js objects live outside React state. The store holds serializable
 // SceneObject records; this registry maps object id -> mesh variants.
@@ -192,7 +192,10 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
       cacheKeyBase: `${fp}|${b.heightM.toFixed(1)}`,
       build: () => buildEnhancedBuilding(b, res),
     })
-    const mesh = buildProceduralBuilding(b, res)
+    // library GLB fitted to the footprint for low/mid-rise stock, else procedural
+    const libScene = buildingSceneFor(b)
+    const mesh = libScene ? fitToSlot(libScene, b) : buildProceduralBuilding(b, res)
+    if (libScene) { mesh.name = b.name ?? 'Building'; mesh.userData.objectId = b.id }
     const c = footprintCentroid(b.footprint)
     add(
       {
@@ -215,6 +218,7 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
             : undefined,
           facade: res.facade,
           roof: res.roof,
+          model: libScene ? 'library 3D asset' : undefined,
         },
       },
       mesh,

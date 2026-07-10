@@ -52,6 +52,22 @@ export function poolsForTag(osmTag: string): { key: string; pool: Pool }[] {
     .map(([key, pool]) => ({ key, pool }))
 }
 
+/** Every distinct, placeable (non-reference) library asset of a semantic type. */
+export function pooledAssetsOfSemantic(semantic: string): LibraryAsset[] {
+  const seen = new Set<string>()
+  const out: LibraryAsset[] = []
+  for (const pool of Object.values(pools)) {
+    if (pool.semantic !== semantic || pool.referenceOnly) continue
+    for (const e of pool.entries) {
+      if (seen.has(e.id)) continue
+      seen.add(e.id)
+      const a = assetsById.get(e.id)
+      if (a) out.push(a)
+    }
+  }
+  return out
+}
+
 /**
  * Deterministically pick a library asset for a feature.
  * Same featureId → same asset; style narrows to a single pool when given

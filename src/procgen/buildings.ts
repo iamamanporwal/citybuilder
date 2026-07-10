@@ -155,9 +155,11 @@ export function fitToSlot(model: THREE.Object3D, b: BuildingFeature): THREE.Grou
   inner.scale.setScalar(scale)
   wrapper.add(inner)
 
-  // re-ground precisely after scaling
+  // re-ground precisely after scaling, then sink the base below grade by the
+  // same amount as procedural buildings so no bottom face is coplanar with the
+  // terrain (avoids z-fighting — see the flicker invariants).
   const after = new THREE.Box3().setFromObject(wrapper)
-  wrapper.position.set(c.x, -after.min.y, c.z)
+  wrapper.position.set(c.x, -after.min.y - BASE_SINK, c.z)
   wrapper.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true

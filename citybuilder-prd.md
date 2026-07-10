@@ -271,7 +271,11 @@ The asset library is not limited to bundled packs — it plugs into **Sketchfab'
 - **Individually-selectable kinds** — traffic signals, bus stops — clone the template per feature in `buildScene`.
 - Any kind without a pooled GLB (or on a load error) falls back to the procedural generator per-kind — the scene never breaks.
 
-A **Library assets** toolbar toggle rebuilds the current scene in place (`rebuildWithLibraryAssets`, reusing the cached City Graph + context) so procedural and library looks can be compared instantly; it defaults on. Library GLBs are served in dev from the repo at `/assetlib/**` by a Vite middleware (kept out of `/public` to avoid duplicating the pack); a static production build must publish `assets/library` alongside `dist`. Only self-contained `.glb` assets auto-place today (Sketchfab-fetched set); packing the Quaternius `.gltf`+`.bin` buildings to GLB (via gltf-transform) is the follow-up that brings library *buildings* into the auto-placement path.
+**Buildings** auto-place too: `buildingSceneFor(b)` picks a pooled building model per footprint (`pickAssetFor`), and `fitToSlot` scales it uniformly to the footprint, centers it on the centroid, and sinks its base below grade (same `BASE_SINK` as procedural, so no bottom face is coplanar with the terrain — verified: the flicker linter stays clean). Library buildings are gated to low/mid-rise (`heightM ≤ 45`): fitToSlot scales uniformly, so dropping a short model into a tall-tower slot would squash it — towers keep their procedural mass, low/mid-rise gets real models, giving a believable mix.
+
+Both text `.gltf` (Quaternius, with sibling `.bin`/textures) and self-contained `.glb` (Sketchfab) load directly: `GLTFLoader` resolves relative resources against the `.gltf` URL, which the `/assetlib/**` dev middleware serves — so no offline GLB-packing step is needed. Library files are served from the repo at `/assetlib/**` (kept out of `/public` to avoid duplicating ~250 MB); a static production build must publish `assets/library` alongside `dist`.
+
+A **Library assets** toolbar toggle rebuilds the current scene in place (`rebuildWithLibraryAssets`, reusing the cached City Graph + context) so procedural and library looks can be compared instantly; it defaults on. Any feature with no pooled asset (or a load error) falls back to procedural per-kind — the scene never breaks.
 
 ---
 

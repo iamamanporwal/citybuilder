@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { PointFeature } from '../types'
-import { libraryAsset, pickAssetFor, type LibraryAsset } from '../resolver/assetPools'
+import type { BuildingFeature, PointFeature } from '../types'
+import { libraryAsset, pickAssetFor, pooledAssetsOfSemantic, type LibraryAsset } from '../resolver/assetPools'
 
 // Bridges the asset library into the procedural 2D→3D build. Library GLBs are
 // pre-loaded (async) into per-kind templates BEFORE buildScene runs, then the
@@ -52,10 +52,27 @@ export interface AssetTemplate {
 }
 
 const templates = new Map<PropKind, AssetTemplate>()
+// raw building GLB scenes (assetId → scene), cloned + fit-to-slot per footprint
+const buildingScenes = new Map<string, THREE.Object3D>()
 let loadFlag = false
+
+// Library buildings only stand in for low/mid-rise stock: fitToSlot scales
+// uniformly to the footprint, so a short brick model dropped into a tall tower
+// slot would look squashed. Above this height we keep the procedural mass.
+const MAX_LIBRARY_BUILDING_H = 45
 
 export function getTemplate(kind: PropKind): AssetTemplate | undefined {
   return loadFlag ? templates.get(kind) : undefined
+}
+
+/** A cloned library building scene for this footprint, or null (→ procedural). */
+export function buildingSceneFor(b: BuildingFeature): THREE.Object3D | null {
+  if (!loadFlag || !buildingScenes.size) return null
+  if (b.heightM > MAX_LIBRARY_BUILDING_H) return null
+  const tag = `building=${b.tags.building && b.tags.building !== 'yes' ? b.tags.building : 'yes'}`
+  const picked = pickAssetFor(tag, b.id) ?? pickAssetFor('building=yes', b.id)
+  const scene = picked && buildingScenes.get(picked.id)
+  return scene ? scene.clone(true) : null
 }
 
 export function librarySummary(): { kind: string; name: string; license: string }[] {
@@ -64,6 +81,7 @@ export function librarySummary(): { kind: string; name: string; license: string 
 
 export function clearLibraryTemplates() {
   templates.clear()
+  buildingScenes.clear()
 }
 
 function assetUrl(a: LibraryAsset): string {
@@ -111,8 +129,11 @@ async function loadOne(kind: PropKind, loader: GLTFLoader): Promise<void> {
   const tag = KIND_TAG[kind]
   // deterministic single representative asset per kind (so instancing groups cleanly)
   const picked = pickAssetFor(tag, `libtemplate:${kind}`)
-  if (!picked || !/\.glb$/i.test(picked.path)) return // only self-contained GLBs auto-place today
+  if (!picked) return
   const asset = libraryAsset(picked.id)!
+  // GLTFLoader resolves .bin/textures relative to the .gltf URL, which the
+  // /assetlib dev middleware serves — so both self-contained .glb and
+  // multi-file .gltf load.
   const gltf = await loader.loadAsync(assetUrl(asset))
   const parts = flatten(gltf.scene)
   if (!parts.length) return
@@ -127,6 +148,25 @@ async function loadOne(kind: PropKind, loader: GLTFLoader): Promise<void> {
   })
 }
 
+// Load every placeable building GLB once (kept raw — fitToSlot handles scaling
+// per footprint at build time).
+async function loadBuildings(loader: GLTFLoader): Promise<void> {
+  await Promise.all(
+    pooledAssetsOfSemantic('building').map(async (asset) => {
+      try {
+        const gltf = await loader.loadAsync(assetUrl(asset))
+        gltf.scene.traverse((o) => {
+          const m = o as THREE.Mesh
+          if (m.isMesh) { m.castShadow = true; m.receiveShadow = true }
+        })
+        buildingScenes.set(asset.id, gltf.scene)
+      } catch (e) {
+        console.warn(`[library] building ${asset.id} load failed:`, (e as Error).message)
+      }
+    }),
+  )
+}
+
 /**
  * Pre-load library templates for the given point kinds. Best-effort: a kind
  * with no pooled GLB, or a load failure, is simply skipped (procedural
@@ -139,13 +179,14 @@ export async function loadLibraryTemplates(kinds: Iterable<PropKind>, enabled: b
   if (!enabled) return
   const loader = new GLTFLoader()
   const unique = [...new Set(kinds)]
-  await Promise.all(
-    unique.map((k) =>
+  await Promise.all([
+    ...unique.map((k) =>
       loadOne(k, loader).catch((e) => {
         console.warn(`[library] ${k} template load failed, using procedural:`, (e as Error).message)
       }),
     ),
-  )
+    loadBuildings(loader),
+  ])
 }
 
 /** Instance a template's parts across placements. Returns meshes to add to a group. */
