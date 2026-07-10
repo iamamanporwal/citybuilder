@@ -1,5 +1,6 @@
 import { useEditor } from '../state/store'
 import { exportCity } from '../export/exporter'
+import { rebuildWithLibraryAssets } from '../app/buildCity'
 
 export function Toolbar() {
   const cameraMode = useEditor((s) => s.cameraMode)
@@ -7,6 +8,7 @@ export function Toolbar() {
   const snapping = useEditor((s) => s.snapping)
   const sunTime = useEditor((s) => s.sunTime)
   const fxPreview = useEditor((s) => s.fxPreview)
+  const useLibraryAssets = useEditor((s) => s.useLibraryAssets)
   const canUndo = useEditor((s) => s.undoStack.length > 0)
   const canRedo = useEditor((s) => s.redoStack.length > 0)
   const s = useEditor.getState
@@ -98,6 +100,13 @@ export function Toolbar() {
           title="Editor-only look-dev preview (bloom, grade, vignette). Approximates the game engine's post stack — NEVER exported; the output stays clean unlit PBR."
         >
           ✨ FX preview
+        </button>
+        <button
+          className={useLibraryAssets ? 'active' : ''}
+          onClick={() => rebuildWithLibraryAssets(!useLibraryAssets)}
+          title="Place real 3D models from the asset library (trees, street lamps, signals, benches…) instead of procedural placeholders. Rebuilds the scene in place."
+        >
+          🧩 Library assets
         </button>
       </div>
 

@@ -48,6 +48,7 @@ interface EditorState {
   gizmoDragging: boolean
   sunTime: number
   fxPreview: boolean
+  useLibraryAssets: boolean
   contextInfo: ContextInfo | null
   lintReport: LintWarning[]
   helpOpen: boolean
@@ -63,6 +64,7 @@ interface EditorState {
   setBuilding: (message: string) => void
   setLoadError: (e: string) => void
   setFxPreview: (v: boolean) => void
+  setUseLibraryAssets: (v: boolean) => void
   setLintReport: (w: LintWarning[]) => void
   select: (ids: string[], additive?: boolean) => void
   clearSelection: () => void
@@ -128,6 +130,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   gizmoDragging: false,
   sunTime: 14,
   fxPreview: false,
+  useLibraryAssets: true,
   contextInfo: null,
   lintReport: [],
   helpOpen: false,
@@ -178,6 +181,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setLoadError: (e) => set({ loadError: e, appPhase: 'picker' }),
   setFxPreview: (v) => set({ fxPreview: v }),
+  setUseLibraryAssets: (v) => set({ useLibraryAssets: v }),
   setLintReport: (w) => set({ lintReport: w }),
 
   select: (ids, additive = false) => {

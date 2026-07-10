@@ -4,6 +4,7 @@ import type { ResolvedContext, TreeSpecies } from '../resolver/types'
 import { hash01, propRulesFor, resolveTree } from '../resolver/resolve'
 import { mats } from './materials'
 import { mergeGeometries } from './geometry'
+import { getTemplate, instanceTemplate } from '../scene/libraryTemplates'
 
 // Street furniture & vegetation. Everything is seeded by object id — varied but
 // deterministic. Densities are zoning-aware via the Context Resolver.
@@ -64,6 +65,24 @@ export function buildTrees(trees: PointFeature[], ctx: ResolvedContext): THREE.G
   group.name = `Street trees (${trees.length})`
   group.userData.objectId = 'veg_trees'
   if (!trees.length) return group
+
+  // Library GLB tree, if one is pooled + loaded: instance it across every tree
+  // with the resolver's per-tree scale and a seeded yaw. Falls through to the
+  // procedural multi-species pools otherwise.
+  const tmpl = getTemplate('tree')
+  if (tmpl) {
+    const placements = trees
+      .filter((t) => ctx.landCoverAt(t.position) !== 'water')
+      .map((t) => ({
+        x: t.position.x,
+        z: t.position.z,
+        rotY: hash01(t.id) * Math.PI * 2,
+        scale: resolveTree(t.id, ctx).scale,
+      }))
+    if (placements.length) group.add(...instanceTemplate(tmpl, placements, 'veg_trees'))
+    group.userData.librarySource = tmpl.name
+    return group
+  }
 
   const geos = speciesGeometry()
   const bySpecies = new Map<TreeSpecies, { t: PointFeature; scale: number; tint: number }[]>()
@@ -294,9 +313,29 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
     group.add(im)
   }
 
-  addInstanced(lampGeometry(ctx.region.lampStyle), poleMat, lamps, `Streetlights (${lamps.length})`)
-  addInstanced(benchGeometry(), woodMat, benches, `Benches (${benches.length})`)
-  addInstanced(binGeometry(), binMat, bins, `Bins (${bins.length})`)
+  // Library GLB per kind if pooled + loaded (instanced at the same placements);
+  // otherwise the procedural geometry. Signs stay procedural (no asset yet).
+  const addKind = (
+    kind: 'street_lamp' | 'bench' | 'waste_basket',
+    geo: THREE.BufferGeometry,
+    mat: THREE.Material,
+    list: Placement[],
+    name: string,
+  ) => {
+    if (!list.length) return
+    const tmpl = getTemplate(kind)
+    if (tmpl) {
+      const im = instanceTemplate(tmpl, list.map((e) => ({ x: e.p.x, z: e.p.z, rotY: e.rotY })), 'furn_all')
+      im.forEach((mesh, i) => { mesh.name = i === 0 ? name : `${name} #${i}` })
+      group.add(...im)
+    } else {
+      addInstanced(geo, mat, list, name)
+    }
+  }
+
+  addKind('street_lamp', lampGeometry(ctx.region.lampStyle), poleMat, lamps, `Streetlights (${lamps.length})`)
+  addKind('bench', benchGeometry(), woodMat, benches, `Benches (${benches.length})`)
+  addKind('waste_basket', binGeometry(), binMat, bins, `Bins (${bins.length})`)
   addInstanced(signGeometry(ctx.region.signShape), signMat, signs, `Signs (${signs.length})`)
   group.userData.objectId = 'furn_all'
   group.userData.counts = { lamps: lamps.length, benches: benches.length, bins: bins.length, signs: signs.length }

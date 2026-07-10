@@ -89,6 +89,8 @@ node tools/sketchfab-fetch.mjs           # download the vetted drivable-street s
 
 The scanner measures real geometry (bounding box in meters, triangle count), classifies each asset to OSM tags, groups them into weighted `(tag × style)` pools picked by `hash(feature_id)` — varied but deterministic — and flags anything unclassifiable, oversized, or over its polygon budget. Bundling the Sketchfab set took coverage from **10/24 → 18/24** pipeline tags (see [assets/coverage-report.md](assets/coverage-report.md)). Only permissive licenses (CC0 / CC-BY / CC-BY-SA) are surfaced; attribution is recorded in each pack's `NOTICE.md`, the manifest, and scene exports.
 
+**Automatic placement (live):** the 2D→3D build places library models directly — real trees, street lamps, traffic signals, benches, bins, and bus stops appear in the scene instead of procedural placeholders, instanced for performance and normalized to real-world size. A **Library assets** toolbar toggle rebuilds the scene in place to compare procedural vs. library looks. Any feature without a matching library asset falls back to procedural, so nothing breaks.
+
 **In the editor**, select a building or replaceable prop and choose **Search Sketchfab library** in the Replace panel: a live, license-filtered, poly-budgeted search returns a thumbnail grid; picking one downloads the model, fits it to the slot, and swaps it in with its license as provenance. The token stays server-side (Vite dev proxy); a static production build needs an equivalent backend proxy, and the feature disables itself gracefully if the proxy is absent.
 
 ---

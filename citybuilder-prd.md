@@ -265,7 +265,13 @@ The asset library is not limited to bundled packs — it plugs into **Sketchfab'
 
 **Licensing.** Only CC0 / CC-BY / CC-BY-SA models are surfaced or fetched. CC-BY / CC-BY-SA attribution is recorded in `NOTICE.md`, stamped into the asset manifest, and carried into every scene export's per-object provenance.
 
-**Bulk auto-placement (planned).** Pooled library/Sketchfab assets are selectable deterministically today via `pickAssetFor(osmTag, featureId)` (the resolver decision layer) and placeable on demand through the Replace flow. Automatic build-time placement of pooled props (loading GLB instances for every street-lamp / tree / signal during `buildScene`) is the next step — it needs async GLB instancing and canonical per-role sizing, and will land behind a toggle so the deterministic procedural scene stays the default.
+**Build-time auto-placement *(implemented in MVP)*.** The 2D→3D build now places library GLBs directly, not just on demand. Before `buildScene` runs, `loadLibraryTemplates()` (`src/scene/libraryTemplates.ts`) resolves one representative pooled asset per point kind present (`pickAssetFor(kindTag, kind)`), loads its GLB, and normalizes it to a canonical real-world height per role (a non-metric 1000× tree or a metric picnic table both land at believable street scale), centered on X/Z with its base at y=0. The synchronous prop builders then consume those templates:
+
+- **Instanced kinds** — trees, street lamps, benches, bins — reuse their existing seeded placement math (`buildTrees` / `buildFurniture`) but swap the procedural geometry for `InstancedMesh`es built from the template parts (one per GLB mesh/material), so thousands of real models render cheaply.
+- **Individually-selectable kinds** — traffic signals, bus stops — clone the template per feature in `buildScene`.
+- Any kind without a pooled GLB (or on a load error) falls back to the procedural generator per-kind — the scene never breaks.
+
+A **Library assets** toolbar toggle rebuilds the current scene in place (`rebuildWithLibraryAssets`, reusing the cached City Graph + context) so procedural and library looks can be compared instantly; it defaults on. Library GLBs are served in dev from the repo at `/assetlib/**` by a Vite middleware (kept out of `/public` to avoid duplicating the pack); a static production build must publish `assets/library` alongside `dist`. Only self-contained `.glb` assets auto-place today (Sketchfab-fetched set); packing the Quaternius `.gltf`+`.bin` buildings to GLB (via gltf-transform) is the follow-up that brings library *buildings* into the auto-placement path.
 
 ---
 

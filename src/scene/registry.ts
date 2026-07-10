@@ -9,6 +9,7 @@ import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
+import { cloneTemplate, getTemplate } from './libraryTemplates'
 
 // Three.js objects live outside React state. The store holds serializable
 // SceneObject records; this registry maps object id -> mesh variants.
@@ -230,7 +231,10 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   for (const p of graph.points) {
     const builder = PROP_BUILDERS[p.kind]
     if (!builder) continue
-    const g = builder(p)
+    // library GLB for this kind if pooled + loaded, else the procedural builder
+    const tmpl = getTemplate(p.kind)
+    const g = tmpl ? cloneTemplate(tmpl) : builder(p)
+    g.name = tmpl ? tmpl.name : g.name
     g.position.set(p.position.x, 0, p.position.z)
     const label =
       p.kind === 'traffic_signal' ? 'Traffic signal'

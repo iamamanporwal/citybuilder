@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { createReadStream, existsSync, statSync } from 'node:fs'
+import { extname, join, normalize } from 'node:path'
 
 // Sketchfab integration keeps the API token server-side (PRD §7D):
 //  - /api/sketchfab/*      → api.sketchfab.com/v3/*  with the token injected
@@ -40,12 +42,42 @@ function sketchfabDownload(): Plugin {
   }
 }
 
+// Serve the repo asset library (assets/library/**) at /assetlib/** so the
+// runtime scene builder can load library GLBs by URL. Kept out of /public to
+// avoid duplicating ~250 MB; served directly from the repo in dev. A static
+// production build must publish assets/library alongside dist (documented).
+function assetLibrary(): Plugin {
+  const MIME: Record<string, string> = {
+    '.glb': 'model/gltf-binary',
+    '.gltf': 'model/gltf+json',
+    '.bin': 'application/octet-stream',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.hdr': 'image/vnd.radiance',
+  }
+  const ROOT = join(process.cwd(), 'assets', 'library')
+  return {
+    name: 'asset-library',
+    configureServer(server) {
+      server.middlewares.use('/assetlib', (req, res, next) => {
+        const rel = normalize(decodeURIComponent((req.url || '').split('?')[0])).replace(/^(\.\.[/\\])+/, '')
+        const file = join(ROOT, rel)
+        if (!file.startsWith(ROOT) || !existsSync(file) || !statSync(file).isFile()) return next()
+        res.setHeader('content-type', MIME[extname(file).toLowerCase()] || 'application/octet-stream')
+        res.setHeader('cache-control', 'no-cache')
+        createReadStream(file).pipe(res)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const token = env.SKETCHFAB_API_TOKEN || ''
 
   return {
-    plugins: [react(), sketchfabDownload()],
+    plugins: [react(), sketchfabDownload(), assetLibrary()],
     build: {
       chunkSizeWarningLimit: 2000,
     },

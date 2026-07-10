@@ -3,6 +3,9 @@ import { ingestOverpass } from '../ingest/overpass'
 import { resolveContext } from '../resolver/adapters'
 import { lintScene } from '../resolver/varietyLint'
 import { flickerLint, roadConsistencyLint, waterLint } from '../resolver/lints'
+import { loadLibraryTemplates } from '../scene/libraryTemplates'
+import { cityGraph, sceneContext } from '../scene/registry'
+import type { CityGraph } from '../types'
 import {
   cacheCity,
   fetchOsmArea,
@@ -30,11 +33,37 @@ async function generateScene(raw: any, name: string) {
   }
   // Context Resolver: region pack, climate, species pools, land-cover/zoning samplers
   const ctx = await resolveContext(graph.bboxLatLng, graph.areas, (m) => s.setBuilding(m))
+  // Pre-load library GLB templates for the point kinds present, so the
+  // synchronous scene build can place real 3D assets instead of procedural
+  // placeholders (falls back per-kind if an asset is missing).
+  s.setBuilding('Loading 3D asset library…')
+  await loadLibraryTemplates(kindsPresent(graph), useEditor.getState().useLibraryAssets)
   s.setBuilding('Generating roads, buildings & props…')
   await new Promise((r) => setTimeout(r, 60))
   s.initScene(graph, ctx)
   useEditor.getState().setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
   firstRunHelp()
+}
+
+function kindsPresent(graph: CityGraph) {
+  return new Set(graph.points.map((p) => p.kind))
+}
+
+/**
+ * Toggle library assets on/off and rebuild the current scene in place (reuses
+ * the cached City Graph + resolved context — no refetch). Called by the
+ * toolbar toggle.
+ */
+export async function rebuildWithLibraryAssets(enabled: boolean): Promise<void> {
+  const s = useEditor.getState()
+  s.setUseLibraryAssets(enabled)
+  if (!cityGraph || !sceneContext) return
+  const graph = cityGraph
+  const ctx = sceneContext
+  await loadLibraryTemplates(kindsPresent(graph), enabled)
+  s.initScene(graph, ctx)
+  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.showToast(enabled ? 'Library 3D assets placed' : 'Reverted to procedural props')
 }
 
 export async function buildCityFromArea(bbox: BBox, name: string, opts: FetchOptions): Promise<void> {
