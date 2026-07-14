@@ -33,21 +33,21 @@ export function Toolbar() {
         <button
           className={cameraMode === 'orbit' ? 'active' : ''}
           onClick={() => s().setCameraMode('orbit')}
-          title="Orbit / pan overview camera"
+          title="Orbit camera — left-drag to rotate, right-drag to pan, scroll/pinch to zoom. Use the cube (bottom-right) to snap to top/front/side."
         >
           🧭 Orbit
         </button>
         <button
           className={cameraMode === 'fly' ? 'active' : ''}
           onClick={() => s().setCameraMode('fly')}
-          title="Fly camera — WASD to move, drag to look, Shift = fast, Esc to exit"
+          title="Fly camera — WASD to move, Q/E down/up, drag to look, Shift = fast, Esc to exit"
         >
           ✈️ Fly
         </button>
         <button
           className={cameraMode === 'drive' ? 'active' : ''}
           onClick={() => s().setCameraMode('drive')}
-          title="Drive preview at eye level — W/S throttle, A/D steer, Esc to exit (shortcut: D)"
+          title="Drive preview at eye level — W/S throttle, A = left / D = right, Esc to exit (shortcut: D)"
         >
           🚗 Drive
         </button>
@@ -104,7 +104,7 @@ export function Toolbar() {
         <button
           className={useLibraryAssets ? 'active' : ''}
           onClick={() => rebuildWithLibraryAssets(!useLibraryAssets)}
-          title="Place real 3D models from the asset library (trees, street lamps, signals, benches…) instead of procedural placeholders. Rebuilds the scene in place."
+          title="Local asset library (OFF by default). When on, low/mid-rise buildings and street props are filled from bundled 3D models instead of the recognizer's procedural facades. Rebuilds the scene in place."
         >
           🧩 Library assets
         </button>

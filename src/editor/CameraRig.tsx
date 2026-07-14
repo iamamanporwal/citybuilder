@@ -78,7 +78,7 @@ export function CameraRig() {
     if (mode === 'fly') {
       camera.rotation.order = 'YXZ'
       camera.rotation.set(look.current.pitch, look.current.yaw, 0)
-      const speed = pressed.has('ShiftLeft') || pressed.has('ShiftRight') ? 120 : 35
+      const speed = pressed.has('ShiftLeft') || pressed.has('ShiftRight') ? 160 : 55
       const fwd = new THREE.Vector3()
       camera.getWorldDirection(fwd)
       const right = new THREE.Vector3().crossVectors(fwd, camera.up).normalize()
@@ -102,6 +102,21 @@ export function CameraRig() {
       ref={controls}
       enabled={mode === 'orbit' && !gizmoDragging}
       makeDefault
+      // Mac-friendly, design-tool convention: left-drag orbits, right-drag pans,
+      // scroll / two-finger pinch zooms (to cursor). Smooth damping throughout.
+      enableDamping
+      dampingFactor={0.12}
+      zoomToCursor
+      rotateSpeed={0.6}
+      panSpeed={0.9}
+      zoomSpeed={0.9}
+      screenSpacePanning={false}
+      mouseButtons={{
+        LEFT: THREE.MOUSE.ROTATE,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.PAN,
+      }}
+      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       maxPolarAngle={Math.PI * 0.49}
       minDistance={8}
       maxDistance={2500}

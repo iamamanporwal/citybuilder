@@ -1,6 +1,6 @@
-import { lazy, Suspense, useMemo } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { Sky } from '@react-three/drei'
+import { lazy, Suspense, useEffect, useMemo } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { GizmoHelper, GizmoViewport, Sky } from '@react-three/drei'
 import { Bloom, BrightnessContrast, EffectComposer, SMAA, Vignette } from '@react-three/postprocessing'
 import { useEditor } from '../state/store'
 import { CameraRig } from './CameraRig'
@@ -29,8 +29,25 @@ function FxPreview() {
   )
 }
 
+// Drive mode renders an eye-level view down long streets (deep frustum, many
+// buildings). Drop the render resolution there to keep 60fps; orbit/fly stay at
+// full retina. Slightly softer while driving, big fill-rate win.
+function DprController() {
+  const mode = useEditor((s) => s.cameraMode)
+  const setDpr = useThree((s) => s.setDpr)
+  useEffect(() => {
+    const max = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 2
+    setDpr(mode === 'drive' ? Math.min(max, 1.25) : max)
+  }, [mode, setDpr])
+  return null
+}
+
 function Lighting() {
+  const mode = useEditor((s) => s.cameraMode)
   const sunTime = useEditor((s) => s.sunTime)
+  // half-res shadow map while driving halves the shadow pass; keyed so the
+  // change actually recreates the shadow map.
+  const shadowRes = mode === 'drive' ? 1024 : 2048
   const sun = useMemo(() => {
     const a = ((sunTime - 6) / 12) * Math.PI // 6:00 -> sunrise, 18:00 -> sunset
     const elev = Math.sin(a)
@@ -47,10 +64,11 @@ function Lighting() {
       <hemisphereLight args={['#c6d8ea', '#57584e', sun.ambient]} />
       <ambientLight intensity={0.18} />
       <directionalLight
+        key={shadowRes}
         position={sun.pos}
         intensity={sun.intensity}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[shadowRes, shadowRes]}
         shadow-camera-left={-650}
         shadow-camera-right={650}
         shadow-camera-top={650}
@@ -84,9 +102,20 @@ export function Viewport() {
       }}
       dpr={[1, 2]}
     >
+      <DprController />
       <Lighting />
       <SceneContent />
       <CameraRig />
+      {/* navigation cube (orbit only — it drives the orbit controls): click a
+          face/axis to snap to top/front/side, or drag it to spin the view */}
+      {mode === 'orbit' && (
+        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+          <GizmoViewport
+            axisColors={['#e0533d', '#7bb662', '#4a90d9']}
+            labelColor="#12151a"
+          />
+        </GizmoHelper>
+      )}
       {mode === 'drive' && (
         <Suspense fallback={null}>
           <DriveSim />

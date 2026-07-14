@@ -10,9 +10,14 @@ import { useDriveHud } from '../../state/driveHud'
 // Physics car for the drive preview: dynamic cuboid chassis + Rapier's
 // DynamicRayCastVehicleController (raycast wheels — no wheel colliders or
 // joints to tune). Rear-wheel drive, speed-sensitive steering, chase camera.
+//
+// Physics is deliberately ARCADE/minimal: pitch and roll are locked on the
+// chassis (enabledRotations = yaw only) so the car can never flip or roll over
+// under braking, cornering or collisions. Linear damping keeps stops smooth.
 
 const CHASSIS_HALF: [number, number, number] = [0.9, 0.55, 2.2]
 const WHEEL_RADIUS = 0.35
+const WHEEL_WIDTH = 0.28
 const SUSPENSION_REST = 0.35
 // wheel connection points in chassis-local space (front pair first)
 const WHEELS: [number, number, number][] = [
@@ -21,10 +26,17 @@ const WHEELS: [number, number, number][] = [
   [-0.85, -0.3, -1.5],
   [0.85, -0.3, -1.5],
 ]
+// visual wheel centers (sit a touch wider + lower than the ray connection pts)
+const VIS_WHEELS: [number, number, number][] = [
+  [-0.92, -0.42, 1.5],
+  [0.92, -0.42, 1.5],
+  [-0.92, -0.42, -1.5],
+  [0.92, -0.42, -1.5],
+]
 const FRONT = [0, 1]
 const REAR = [2, 3]
 const ENGINE_FORCE = 4500 // per rear wheel
-const BRAKE_FORCE = 3500 // per wheel
+const BRAKE_FORCE = 2200 // per wheel — gentle so stops don't pitch the body
 const REVERSE_FORCE = 2500
 const MAX_STEER = 0.55 // rad, tapered with speed
 
@@ -33,6 +45,14 @@ export function Car() {
   const { camera } = useThree()
   const chassis = useRef<RapierRigidBody>(null)
   const vc = useRef<DynamicRayCastVehicleController | null>(null)
+
+  // live values published by the physics step, consumed by the render frame
+  // to animate the visible wheels (spin + front-wheel steering).
+  const steerRef = useRef(0)
+  const speedRef = useRef(0)
+  const spinRef = useRef(0)
+  const outerWheels = useRef<(THREE.Group | null)[]>([])
+  const spinWheels = useRef<(THREE.Group | null)[]>([])
 
   const spawn = useMemo(() => {
     const s = nearestRoadPoint(lastOrbitTarget.x, lastOrbitTarget.z)
@@ -49,7 +69,7 @@ export function Car() {
       controller.addWheel({ x, y, z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, SUSPENSION_REST, WHEEL_RADIUS)
     }
     for (let i = 0; i < WHEELS.length; i++) {
-      controller.setWheelSuspensionStiffness(i, 24)
+      controller.setWheelSuspensionStiffness(i, 18)
       controller.setWheelFrictionSlip(i, 1.8)
       controller.setWheelMaxSuspensionForce(i, 24000)
     }
@@ -78,6 +98,7 @@ export function Car() {
     const forward = pressed.has('KeyW') || pressed.has('ArrowUp')
     const back = pressed.has('KeyS') || pressed.has('ArrowDown')
     let steer = 0
+    // A / ← steers left (positive angle → +X → left with forward=+Z), D / → right
     if (pressed.has('KeyA') || pressed.has('ArrowLeft')) steer += 1
     if (pressed.has('KeyD') || pressed.has('ArrowRight')) steer -= 1
 
@@ -96,7 +117,10 @@ export function Car() {
 
     // vehicle controllers are not auto-stepped; rays only hit static city colliders
     controller.updateVehicle(w.timestep)
-    useDriveHud.getState().setSpeed(Math.round(Math.abs(controller.currentVehicleSpeed()) * 3.6))
+    const v = controller.currentVehicleSpeed()
+    steerRef.current = steerAngle
+    speedRef.current = v
+    useDriveHud.getState().setSpeed(Math.round(Math.abs(v) * 3.6))
   })
 
   const camTarget = useMemo(() => new THREE.Vector3(), [])
@@ -115,6 +139,18 @@ export function Car() {
     camera.position.lerp(camPos, 1 - Math.exp(-6 * Math.min(dt, 0.05)))
     camTarget.set(t.x + fwd.x * 6, t.y + 1, t.z + fwd.z * 6)
     camera.lookAt(camTarget)
+
+    // animate visible wheels: roll all four, steer the front pair
+    spinRef.current -= (speedRef.current * Math.min(dt, 0.05)) / WHEEL_RADIUS
+    const spin = spinRef.current
+    for (let i = 0; i < spinWheels.current.length; i++) {
+      const g = spinWheels.current[i]
+      if (g) g.rotation.x = spin
+    }
+    for (const i of FRONT) {
+      const g = outerWheels.current[i]
+      if (g) g.rotation.y = steerRef.current
+    }
   })
 
   return (
@@ -124,17 +160,94 @@ export function Car() {
       ccd
       position={[spawn.x, 2, spawn.z]}
       rotation={[0, spawn.yaw, 0]}
+      // arcade physics: lock pitch & roll so the car can never flip
+      enabledRotations={[false, true, false]}
+      linearDamping={0.4}
+      angularDamping={0.6}
     >
       <CuboidCollider args={CHASSIS_HALF} mass={1200} />
-      <mesh castShadow>
-        <boxGeometry args={[CHASSIS_HALF[0] * 2, CHASSIS_HALF[1] * 2, CHASSIS_HALF[2] * 2]} />
-        <meshStandardMaterial color="#c33f2e" roughness={0.4} metalness={0.3} />
-      </mesh>
-      <mesh position={[0, 0.7, -0.3]} castShadow>
-        <boxGeometry args={[1.5, 0.55, 2.1]} />
-        <meshStandardMaterial color="#2b2f33" roughness={0.3} metalness={0.2} />
-      </mesh>
+      <CarBody outerWheels={outerWheels} spinWheels={spinWheels} />
     </RigidBody>
+  )
+}
+
+// Procedural car body: recognizable silhouette (lower body + cabin + slanted
+// windshield + wheel arches), four visible wheels, and light accents. Purely
+// visual — no colliders — so physics is untouched.
+function CarBody({
+  outerWheels,
+  spinWheels,
+}: {
+  outerWheels: React.MutableRefObject<(THREE.Group | null)[]>
+  spinWheels: React.MutableRefObject<(THREE.Group | null)[]>
+}) {
+  const bodyPaint = useMemo(
+    () => <meshStandardMaterial color="#c8442f" roughness={0.35} metalness={0.35} />,
+    [],
+  )
+  return (
+    <group>
+      {/* lower body / sills */}
+      <mesh castShadow position={[0, -0.12, 0]}>
+        <boxGeometry args={[1.72, 0.62, 4.3]} />
+        {bodyPaint}
+      </mesh>
+      {/* hood + rear deck (slightly narrower upper body) */}
+      <mesh castShadow position={[0, 0.24, 0.35]}>
+        <boxGeometry args={[1.66, 0.34, 3.3]} />
+        {bodyPaint}
+      </mesh>
+      {/* cabin */}
+      <mesh castShadow position={[0, 0.62, -0.35]}>
+        <boxGeometry args={[1.5, 0.6, 1.9]} />
+        <meshStandardMaterial color="#20242a" roughness={0.5} metalness={0.15} />
+      </mesh>
+      {/* windshield (slanted glass) */}
+      <mesh position={[0, 0.62, 0.72]} rotation={[-0.62, 0, 0]}>
+        <boxGeometry args={[1.42, 0.62, 0.06]} />
+        <meshStandardMaterial color="#9fd3e6" roughness={0.08} metalness={0.1} transparent opacity={0.65} />
+      </mesh>
+      {/* rear glass */}
+      <mesh position={[0, 0.64, -1.28]} rotation={[0.7, 0, 0]}>
+        <boxGeometry args={[1.4, 0.5, 0.06]} />
+        <meshStandardMaterial color="#9fd3e6" roughness={0.08} metalness={0.1} transparent opacity={0.65} />
+      </mesh>
+      {/* headlights (front = +z) */}
+      <mesh position={[0.6, 0.02, 2.16]}>
+        <boxGeometry args={[0.34, 0.16, 0.06]} />
+        <meshStandardMaterial color="#fffdf0" emissive="#fff3c0" emissiveIntensity={0.8} />
+      </mesh>
+      <mesh position={[-0.6, 0.02, 2.16]}>
+        <boxGeometry args={[0.34, 0.16, 0.06]} />
+        <meshStandardMaterial color="#fffdf0" emissive="#fff3c0" emissiveIntensity={0.8} />
+      </mesh>
+      {/* taillights (rear = -z) */}
+      <mesh position={[0.62, 0.06, -2.16]}>
+        <boxGeometry args={[0.3, 0.16, 0.06]} />
+        <meshStandardMaterial color="#7a0e0e" emissive="#ff2a2a" emissiveIntensity={0.6} />
+      </mesh>
+      <mesh position={[-0.62, 0.06, -2.16]}>
+        <boxGeometry args={[0.3, 0.16, 0.06]} />
+        <meshStandardMaterial color="#7a0e0e" emissive="#ff2a2a" emissiveIntensity={0.6} />
+      </mesh>
+
+      {VIS_WHEELS.map((p, i) => (
+        <group key={i} position={p} ref={(g) => (outerWheels.current[i] = g)}>
+          <group ref={(g) => (spinWheels.current[i] = g)}>
+            {/* tyre — cylinder axis rotated onto X (the axle) */}
+            <mesh castShadow rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 22]} />
+              <meshStandardMaterial color="#16181b" roughness={0.85} metalness={0.1} />
+            </mesh>
+            {/* hub cap for a visible spin reference */}
+            <mesh position={[p[0] < 0 ? -WHEEL_WIDTH / 2 - 0.01 : WHEEL_WIDTH / 2 + 0.01, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[WHEEL_RADIUS * 0.5, WHEEL_RADIUS * 0.5, 0.02, 16]} />
+              <meshStandardMaterial color="#c9ced3" roughness={0.3} metalness={0.7} />
+            </mesh>
+          </group>
+        </group>
+      ))}
+    </group>
   )
 }
 

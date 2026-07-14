@@ -8,11 +8,15 @@ import {
   sketchfabAvailable,
   type SketchfabModel,
 } from '../gateway/sketchfab'
+import { buildingPlans } from '../scene/registry'
 
 // Seed the Sketchfab query from what the object is, so the first search is
 // already relevant. Poly budget is per object type — a dense city needs cheap
 // street furniture but tolerates richer hero props.
 function defaultQuery(obj: SceneObject): string {
+  // Buildings: use the recognizer's descriptor-derived query (style + type).
+  const plan = buildingPlans.get(obj.id)
+  if (plan) return plan.sketchfabQuery
   const byType: Partial<Record<ObjectType, string>> = {
     building: 'building',
     'traffic-signal': 'traffic light',
@@ -88,6 +92,17 @@ export function ReplacePanel({ obj }: { obj: SceneObject }) {
     }
   }
 
+  const plan = buildingPlans.get(obj.id)
+
+  // One-click "do the recognizer's recommended thing": generate from the
+  // reference photo when one exists, else seed a Sketchfab search with the
+  // descriptor query. Both are conditioned on the same recognizer prompt.
+  const autoFill = () => {
+    if (job || !plan) return
+    if (plan.recommendedUpgrade === 'photo-generate') runGeneration(obj.id, 'trellis-local')
+    else openSketchfab()
+  }
+
   const choose = (id: string) => {
     if (job) return
     switch (id) {
@@ -116,6 +131,35 @@ export function ReplacePanel({ obj }: { obj: SceneObject }) {
 
   return (
     <div className="replace-panel">
+      {plan && panel === 'menu' && (
+        <div className="recognizer-block">
+          <div className="section-title">🔎 Building Recognizer</div>
+          <div className="rec-desc">
+            <span className="rec-style">{plan.descriptor.style.replace(/-/g, ' ')}</span>
+            <span className={`conf conf-${plan.confidence >= 0.7 ? 'high' : plan.confidence >= 0.5 ? 'mid' : 'low'}`}>
+              {Math.round(plan.confidence * 100)}%
+            </span>
+          </div>
+          <div className="rec-facts">
+            {plan.descriptor.material} · {plan.descriptor.roofForm} roof · {plan.descriptor.floors} floors · {plan.descriptor.era}
+            {plan.descriptor.features.length ? ` · ${plan.descriptor.features.join(', ')}` : ''}
+          </div>
+          <div className="rec-prompt">“{plan.descriptor.prompt}”</div>
+          <button className="wide primary" disabled={!!job} onClick={autoFill}>
+            {plan.recommendedUpgrade === 'photo-generate'
+              ? '✨ Auto-fill: generate from reference photo'
+              : '✨ Auto-fill: find a match on Sketchfab'}
+          </button>
+          <div className="section-hint">
+            {plan.descriptor.source === 'vlm'
+              ? 'Descriptor from a vision-language model.'
+              : plan.recommendedUpgrade === 'photo-generate'
+                ? 'Descriptor from structured priors — a reference photo is available to upgrade via a VLM/generation.'
+                : 'Descriptor synthesized from OSM + region priors (no photo). Configure a VLM endpoint for image-grounded recognition.'}
+          </div>
+        </div>
+      )}
+
       <div className="section-title">Replace this object</div>
       <div className="section-hint">
         The slot (position, footprint, height) stays fixed — any source is fitted into it.

@@ -4,6 +4,7 @@ import { resolveContext } from '../resolver/adapters'
 import { lintScene } from '../resolver/varietyLint'
 import { flickerLint, roadConsistencyLint, waterLint } from '../resolver/lints'
 import { loadLibraryTemplates } from '../scene/libraryTemplates'
+import { prefetchRecognizerData } from '../recognizer/prepass'
 import { cityGraph, sceneContext } from '../scene/registry'
 import type { CityGraph } from '../types'
 import {
@@ -33,6 +34,9 @@ async function generateScene(raw: any, name: string) {
   }
   // Context Resolver: region pack, climate, species pools, land-cover/zoning samplers
   const ctx = await resolveContext(graph.bboxLatLng, graph.areas, (m) => s.setBuilding(m))
+  // Building Recognizer prepass: fetch Wikidata architectural style + reference
+  // photos for wikidata-linked landmarks so the synchronous build can read them.
+  await prefetchRecognizerData(graph.buildings, (m) => s.setBuilding(m))
   // Pre-load library GLB templates for the point kinds present, so the
   // synchronous scene build can place real 3D assets instead of procedural
   // placeholders (falls back per-kind if an asset is missing).

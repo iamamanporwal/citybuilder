@@ -30,7 +30,8 @@ export function HelpOverlay() {
             <h2>Shortcuts</h2>
             <table>
               <tbody>
-                <tr><td><kbd>D</kbd></td><td>Drive preview</td></tr>
+                <tr><td><kbd>Left-drag</kbd></td><td>Orbit · <kbd>Right-drag</kbd> pan · scroll zoom</td></tr>
+                <tr><td><kbd>D</kbd></td><td>Drive — <kbd>W</kbd>/<kbd>S</kbd> go · <kbd>A</kbd>/<kbd>D</kbd> steer</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>Exit drive/fly · deselect</td></tr>
                 <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Move / Rotate / Scale</td></tr>
                 <tr><td><kbd>V</kbd></td><td>Toggle snapping</td></tr>

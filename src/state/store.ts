@@ -130,7 +130,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   gizmoDragging: false,
   sunTime: 14,
   fxPreview: false,
-  useLibraryAssets: true,
+  // Local asset library is OFF by default — the Building Recognizer drives
+  // appearance. The toggle (and every library function) stays intact so it can
+  // be re-enabled and improved later (PRD §7F). See also isLibraryEnabled().
+  useLibraryAssets: false,
   contextInfo: null,
   lintReport: [],
   helpOpen: false,

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { BuildingFeature, Vec2 } from '../types'
 import type { BuildingResolution } from '../resolver/types'
+import type { RoofForm } from '../recognizer/types'
 import { hash01 } from '../resolver/resolve'
 import { facadeMaterial, roofMaterial } from '../materials/library'
 import { mats } from './materials'
@@ -47,8 +48,100 @@ function extrudeFootprint(
 // buildings sink below grade so the base is never coplanar with the terrain
 const BASE_SINK = 0.4
 
-/** Tier-2/1 procedural placeholder: extruded footprint + resolver-driven PBR materials. */
-export function buildProceduralBuilding(b: BuildingFeature, res: BuildingResolution): THREE.Mesh {
+// Pitched roofs are the tent forms (all fan to an apex over the centroid); dome
+// is a scaled hemisphere. Everything else (flat, tall towers) gets no cap.
+const TENT_FORMS = new Set<RoofForm>(['gabled', 'hipped', 'pyramidal', 'mansard', 'skillion'])
+
+// Roof caps use a double-sided variant of the shared roof material so the cap
+// renders correctly regardless of footprint winding (the tent fan can wind
+// either way). Only four RoofSets exist, so the cache stays tiny.
+const doubleSidedRoofCache = new Map<THREE.Material, THREE.Material>()
+function capMaterial(res: BuildingResolution): THREE.Material {
+  const base = roofMaterial(res.roof)
+  let ds = doubleSidedRoofCache.get(base)
+  if (!ds) {
+    ds = base.clone()
+    ds.side = THREE.DoubleSide
+    doubleSidedRoofCache.set(base, ds)
+  }
+  return ds
+}
+
+function footprintExtent(fp: Vec2[]): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const p of fp) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z)
+  }
+  return { minX, maxX, minZ, maxZ }
+}
+
+/**
+ * A pitched/domed roof cap for a low/mid-rise building, in the mesh-local frame
+ * (relative to the footprint centroid c, base at world y=topY). Returns null for
+ * flat roofs. The cap fully covers the flat extrusion top, so no coplanar face
+ * is exposed (see the flicker invariants) — the shared top edge is a line, not a
+ * plane. Kept off tall masses by the caller (roofForm is 'flat' above ~25 m).
+ */
+export function buildRoofCap(
+  fp: Vec2[],
+  c: Vec2,
+  form: RoofForm,
+  topY: number,
+  res: BuildingResolution,
+): THREE.Mesh | null {
+  if (form === 'flat') return null
+  const ext = footprintExtent(fp)
+  const rx = (ext.maxX - ext.minX) / 2
+  const rz = (ext.maxZ - ext.minZ) / 2
+  const minExtent = Math.min(rx, rz) * 2
+  if (minExtent < 2) return null // too small to read as a roof
+
+  if (form === 'dome') {
+    const domeH = Math.min(minExtent * 0.5, 8)
+    const geo = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2)
+    geo.scale(rx, domeH, rz)
+    geo.translate((ext.minX + ext.maxX) / 2 - c.x, topY, (ext.minZ + ext.maxZ) / 2 - c.z)
+    const mesh = new THREE.Mesh(geo, roofMaterial(res.roof))
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    return mesh
+  }
+
+  if (!TENT_FORMS.has(form)) return null
+  // skillion is a single slope; the rest fan symmetrically to a centroid apex.
+  const pitch = Math.max(1.2, Math.min(minExtent * (form === 'skillion' ? 0.22 : 0.35), 6))
+  const apex = new THREE.Vector3(0, topY + pitch, 0)
+  const positions: number[] = []
+  const n = fp.length
+  for (let i = 0; i < n; i++) {
+    const a = fp[i]
+    const bb = fp[(i + 1) % n]
+    positions.push(
+      a.x - c.x, topY, a.z - c.z,
+      bb.x - c.x, topY, bb.z - c.z,
+      apex.x, apex.y, apex.z,
+    )
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geo.computeVertexNormals()
+  const mesh = new THREE.Mesh(geo, capMaterial(res))
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  return mesh
+}
+
+/**
+ * Tier-2/1 procedural placeholder: extruded footprint + recognizer/resolver PBR
+ * materials, plus an optional pitched/domed roof cap when the recognizer's
+ * descriptor calls for one (low/mid-rise only).
+ */
+export function buildProceduralBuilding(
+  b: BuildingFeature,
+  res: BuildingResolution,
+  roofForm: RoofForm = 'flat',
+): THREE.Object3D {
   const c = footprintCentroid(b.footprint)
   const geo = extrudeFootprint(b.footprint, c, b.heightM + BASE_SINK, -BASE_SINK, 1, false)
   const mesh = new THREE.Mesh(geo, [
@@ -60,7 +153,17 @@ export function buildProceduralBuilding(b: BuildingFeature, res: BuildingResolut
   mesh.userData.objectId = b.id
   mesh.castShadow = true
   mesh.receiveShadow = true
-  return mesh
+
+  const cap = buildRoofCap(b.footprint, c, roofForm, b.heightM, res)
+  if (!cap) return mesh
+
+  const group = new THREE.Group()
+  group.name = mesh.name
+  group.userData.objectId = b.id
+  group.position.set(c.x, 0, c.z)
+  mesh.position.set(0, 0, 0) // re-parent: group now carries the world position
+  group.add(mesh, cap)
+  return group
 }
 
 /**

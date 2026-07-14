@@ -59,7 +59,13 @@ let loadFlag = false
 // Library buildings only stand in for low/mid-rise stock: fitToSlot scales
 // uniformly to the footprint, so a short brick model dropped into a tall tower
 // slot would look squashed. Above this height we keep the procedural mass.
-const MAX_LIBRARY_BUILDING_H = 45
+// (Kept in sync with the recognizer's LIBRARY_HEIGHT_CEIL.)
+export const MAX_LIBRARY_BUILDING_H = 45
+
+/** Whether the local asset library is currently enabled (feature flag; OFF by default). */
+export function isLibraryEnabled(): boolean {
+  return loadFlag
+}
 
 export function getTemplate(kind: PropKind): AssetTemplate | undefined {
   return loadFlag ? templates.get(kind) : undefined

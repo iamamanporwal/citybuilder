@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { AssetInfo, BuildingFeature, CityGraph, RoadSegment, SceneObject } from '../types'
 import type { BuildingResolution, ResolvedContext, RoadResolution } from '../resolver/types'
-import { resolveBuilding, resolveRoad } from '../resolver/resolve'
+import { resolveRoad } from '../resolver/resolve'
 import { buildRoads } from '../procgen/roads'
 import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCentroid } from '../procgen/buildings'
 import { buildAreas, buildTerrain } from '../procgen/areas'
@@ -9,7 +9,9 @@ import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
-import { buildingSceneFor, cloneTemplate, getTemplate } from './libraryTemplates'
+import { buildingSceneFor, cloneTemplate, getTemplate, isLibraryEnabled } from './libraryTemplates'
+import { clearRecognizerCache, recognizeBuilding } from '../recognizer/recognizer'
+import type { AppearancePlan } from '../recognizer/types'
 
 // Three.js objects live outside React state. The store holds serializable
 // SceneObject records; this registry maps object id -> mesh variants.
@@ -19,6 +21,8 @@ export const buildingFeatures = new Map<string, BuildingFeature>()
 export const roadSegments = new Map<string, RoadSegment>()
 // per-object Context Resolver output (inspector provenance + semantic export)
 export const buildingResolutions = new Map<string, BuildingResolution>()
+// per-building recognizer appearance plan (descriptor + fallback-chain decision)
+export const buildingPlans = new Map<string, AppearancePlan>()
 export const roadResolutions = new Map<string, RoadResolution>()
 export let sceneContext: ResolvedContext | null = null
 // the ingested City Graph for the current scene (lints audit it post-build)
@@ -26,8 +30,18 @@ export let cityGraph: CityGraph | null = null
 // generation cache: cacheKey -> variant key that holds the result (PRD §11.2)
 export const generationCache = new Map<string, THREE.Object3D>()
 // objects with a generation slot (buildings + wikidata-linked props). The
-// gateway consults this instead of hardcoding "buildings only".
-export const replaceables = new Map<string, { cacheKeyBase: string; build: () => THREE.Object3D }>()
+// gateway consults this instead of hardcoding "buildings only". Buildings also
+// carry the recognizer's prompt/descriptor so a real Trellis/Meshy call (and
+// the simulation) can be driven by the recognized appearance.
+export const replaceables = new Map<
+  string,
+  {
+    cacheKeyBase: string
+    build: () => THREE.Object3D
+    prompt?: string
+    descriptor?: import('../recognizer/types').BuildingDescriptor
+  }
+>()
 
 export function variantKey(asset: AssetInfo): string {
   return `${asset.state}:${asset.provider ?? 'none'}:${asset.cacheKey ?? ''}`
@@ -69,6 +83,8 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   buildingFeatures.clear()
   roadSegments.clear()
   buildingResolutions.clear()
+  buildingPlans.clear()
+  clearRecognizerCache()
   roadResolutions.clear()
   replaceables.clear()
   sceneContext = ctx
@@ -182,19 +198,34 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     )
   }
 
-  // ---- buildings (the upgradeable 95%) — facade/roof sets from the resolver
+  // ---- buildings (the upgradeable 95%) — the Building Recognizer decides how
+  // each one looks and which source fills its slot (PRD §7F). The descriptor
+  // drives the procedural facade + roof form; the local asset library is one
+  // branch of the fallback chain, behind the (default-OFF) feature flag.
+  const libraryEnabled = isLibraryEnabled()
   for (const b of graph.buildings) {
     buildingFeatures.set(b.id, b)
-    const res = resolveBuilding(b, ctx)
-    buildingResolutions.set(b.id, res)
+    const plan = recognizeBuilding(b, ctx, { libraryEnabled })
+    buildingPlans.set(b.id, plan)
+    // buildingResolutions holds the recognizer's final resolution so lints,
+    // the inspector provenance and semantics export all reflect its decision.
+    buildingResolutions.set(b.id, plan.resolution)
     const fp = b.footprint.map((p) => `${p.x.toFixed(1)},${p.z.toFixed(1)}`).join(';')
     replaceables.set(b.id, {
-      cacheKeyBase: `${fp}|${b.heightM.toFixed(1)}`,
-      build: () => buildEnhancedBuilding(b, res),
+      // descriptor style folded into the cache base: two visually-different
+      // recognitions of the same footprint cache as distinct generations.
+      cacheKeyBase: `${fp}|${b.heightM.toFixed(1)}|${plan.descriptor.style}`,
+      prompt: plan.generationPrompt,
+      descriptor: plan.descriptor,
+      build: () => buildEnhancedBuilding(b, plan.resolution),
     })
-    // library GLB fitted to the footprint for low/mid-rise stock, else procedural
-    const libScene = buildingSceneFor(b)
-    const mesh = libScene ? fitToSlot(libScene, b) : buildProceduralBuilding(b, res)
+    // fallback chain, build-time branch: a library GLB fitted to the footprint
+    // (only when the flag is on AND the plan chose it), else the descriptor-
+    // driven procedural mass with its roof-form cap.
+    const libScene = plan.buildPath === 'library-match' ? buildingSceneFor(b) : null
+    const mesh = libScene
+      ? fitToSlot(libScene, b)
+      : buildProceduralBuilding(b, plan.resolution, plan.roofForm)
     if (libScene) { mesh.name = b.name ?? 'Building'; mesh.userData.objectId = b.id }
     const c = footprintCentroid(b.footprint)
     add(
@@ -216,9 +247,11 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
           address: b.tags['addr:housenumber']
             ? `${b.tags['addr:housenumber']} ${b.tags['addr:street'] ?? ''}`.trim()
             : undefined,
-          facade: res.facade,
-          roof: res.roof,
-          model: libScene ? 'library 3D asset' : undefined,
+          style: plan.descriptor.style,
+          facade: plan.facade,
+          roof: plan.roof,
+          'roof form': plan.roofForm !== 'flat' ? plan.roofForm : undefined,
+          model: libScene ? 'library 3D asset' : 'recognizer facade',
         },
       },
       mesh,

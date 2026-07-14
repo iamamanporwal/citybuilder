@@ -45,17 +45,21 @@ export const mats = {
   pedestrian: new THREE.MeshStandardMaterial({ color: '#8a8078', roughness: 1 }),
   sidewalk: new THREE.MeshStandardMaterial({ color: '#9a9a94', roughness: 1 }),
   curb: new THREE.MeshStandardMaterial({ color: '#7d7d78', roughness: 0.9 }),
-  markingWhite: new THREE.MeshBasicMaterial({ color: '#e8e8e0' }),
-  markingYellow: new THREE.MeshBasicMaterial({ color: '#d8b93a' }),
+  // Markings are paint on asphalt, not light sources — lit PBR so they react to
+  // the game's day/night sun instead of exporting as KHR_materials_unlit.
+  markingWhite: new THREE.MeshStandardMaterial({ color: '#e8e8e0', roughness: 0.8 }),
+  markingYellow: new THREE.MeshStandardMaterial({ color: '#d8b93a', roughness: 0.8 }),
   roofDark: new THREE.MeshStandardMaterial({ color: '#4a4640', roughness: 0.95 }),
   roofEnhanced: new THREE.MeshStandardMaterial({ color: '#5a564e', roughness: 0.85 }),
   treeTrunk: new THREE.MeshStandardMaterial({ color: '#5d4a32', roughness: 1 }),
   treeCanopy: new THREE.MeshStandardMaterial({ color: '#4d7038', roughness: 1 }),
   signalPole: new THREE.MeshStandardMaterial({ color: '#2e3238', roughness: 0.6, metalness: 0.6 }),
   signalHead: new THREE.MeshStandardMaterial({ color: '#1c1e22', roughness: 0.7 }),
-  signalRed: new THREE.MeshBasicMaterial({ color: '#e04434' }),
-  signalAmber: new THREE.MeshBasicMaterial({ color: '#e0a020' }),
-  signalGreen: new THREE.MeshBasicMaterial({ color: '#38c060' }),
+  // Signal bulbs glow via emissive (survives day/night + picks up the engine's
+  // bloom) rather than MeshBasicMaterial, which would export as unlit fullbright.
+  signalRed: new THREE.MeshStandardMaterial({ color: '#3a0f0c', emissive: '#e04434', emissiveIntensity: 1 }),
+  signalAmber: new THREE.MeshStandardMaterial({ color: '#3a2a08', emissive: '#e0a020', emissiveIntensity: 1 }),
+  signalGreen: new THREE.MeshStandardMaterial({ color: '#0c3a1a', emissive: '#38c060', emissiveIntensity: 1 }),
 }
 
 // palette of wall tints for generic buildings (applied over facade texture)

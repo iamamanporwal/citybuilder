@@ -12,8 +12,10 @@ import {
 import { buildTextureManifest } from '../materials/packaging'
 import { buildCollidersFromRegistry } from '../physics/registryColliders'
 import { colliderLint } from '../physics/colliderLint'
-import { colliderGroup } from './colliderGlb'
+import { colliderGroupMerged } from './colliderGlb'
 import { buildRoadSemantics } from './semantics'
+import { optimizeSceneForExport } from './optimizeScene'
+import { buildMinimapGroup, deriveSpawn } from './spawn'
 
 // Export (PRD §14, MVP scope): visual GLB + separate lightweight collision GLB
 // + the semantic road/provenance data the game runtime consumes.
@@ -64,8 +66,8 @@ export async function exportCity(): Promise<void> {
   )
 
   // ---- visual scene
-  const visual = new THREE.Group()
-  visual.name = 'citybuilder_scene'
+  const rawVisual = new THREE.Group()
+  rawVisual.name = 'citybuilder_scene'
   for (const id of s.objectOrder) {
     const obj = s.objects[id]
     if (!obj || obj.deleted || !obj.visible) continue
@@ -76,16 +78,27 @@ export async function exportCity(): Promise<void> {
     clone.rotation.fromArray(obj.transform.rotation as [number, number, number])
     clone.scale.fromArray(obj.transform.scale)
     clone.name = `${obj.type}__${obj.id}`
-    visual.add(clone)
+    rawVisual.add(clone)
   }
+  // dedup materials + batch-merge geometry so the game gets a few dozen draw
+  // calls / materials instead of thousands (game engine review §2)
+  const { group: visual, stats: optStats } = optimizeSceneForExport(rawVisual)
 
   // ---- collision layer: generated from semantic data (physics/colliders.ts),
-  //      named nodes with glTF extras carrying collider + material metadata
-  const collision = colliderSet ? colliderGroup(colliderSet) : new THREE.Group()
+  //      pre-merged into a handful of nodes grouped by physics behaviour so the
+  //      game loads one merged collider per group (review §3), extras preserved
+  const collision = colliderSet ? colliderGroupMerged(colliderSet) : new THREE.Group()
   if (!colliderSet) collision.name = 'citybuilder_colliders'
 
   // ---- semantics: the data that drives traffic AI / gameplay at runtime,
   //      plus the resolver's decision record for every object
+  const roadSem = buildRoadSemantics([...roadSegments.values()], roadResolutions)
+
+  // ---- auto spawn + minimap derived from the road semantics (review §4)
+  const bounds = colliderSet?.bounds ?? boundsFromRoads(roadSem)
+  const spawn = deriveSpawn(roadSem, bounds)
+  const minimap = buildMinimapGroup(roadSem)
+
   const semantics = {
     generator: 'CityBuilder MVP',
     semanticsVersion: 2, // BREAKING vs v1: road centerlines are now [x, y, z] (y = true elevation in meters)
@@ -104,7 +117,7 @@ export async function exportCity(): Promise<void> {
           adapterLog: sceneContext.provenance,
         }
       : null,
-    roads: buildRoadSemantics([...roadSegments.values()], roadResolutions),
+    roads: roadSem,
     objects: s.objectOrder
       .map((id) => s.objects[id])
       .filter((o) => o && !o.deleted && o.type === 'building')
@@ -129,17 +142,51 @@ export async function exportCity(): Promise<void> {
   try {
     await exportGlb(visual, 'city_scene.glb')
     await exportGlb(collision, 'city_collision.glb')
+    await exportGlb(minimap, 'citymap_minimap.glb')
     download(
       new Blob([JSON.stringify(semantics, null, 2)], { type: 'application/json' }),
       'city_semantics.json',
+    )
+    download(
+      new Blob([JSON.stringify(spawnFile(spawn), null, 2)], { type: 'application/json' }),
+      'citymap_spawn.json',
     )
     // KTX2/Basis packaging manifest for the bake service (texel density, codecs, budgets)
     download(
       new Blob([JSON.stringify(buildTextureManifest(), null, 2)], { type: 'application/json' }),
       'textures_manifest.json',
     )
-    useEditor.getState().showToast('Export complete: scene GLB, collision GLB, semantics + texture manifest')
+    useEditor
+      .getState()
+      .showToast(
+        `Export complete: 6 files. Materials ${optStats.materialsBefore}→${optStats.materialsAfter}, ` +
+          `meshes ${optStats.meshesBefore}→${optStats.meshesAfter}, collider nodes ${collision.children.length}. ` +
+          `Run "npm run bake" to Draco+KTX2 compress.`,
+      )
   } catch (e) {
     useEditor.getState().showToast(`Export failed: ${e}`)
+  }
+}
+
+function boundsFromRoads(roads: ReturnType<typeof buildRoadSemantics>) {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const r of roads) {
+    for (const p of r.centerline) {
+      minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0])
+      minZ = Math.min(minZ, p[2]); maxZ = Math.max(maxZ, p[2])
+    }
+  }
+  if (!isFinite(minX)) return { minX: -500, maxX: 500, minZ: -500, maxZ: 500 }
+  return { minX, maxX, minZ, maxZ }
+}
+
+function spawnFile(spawn: ReturnType<typeof deriveSpawn>) {
+  const s = useEditor.getState()
+  return {
+    generator: 'CityBuilder MVP',
+    spawnVersion: 1,
+    city: s.cityName,
+    spawn,
+    note: spawn ? undefined : 'No drivable road found for auto-spawn; place manually.',
   }
 }

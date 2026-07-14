@@ -141,6 +141,16 @@ button.approve { background: var(--ok) !important; color: #fff; }
 .ref-links a:hover { text-decoration: underline; }
 .ref-coords { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
+/* ---------- building recognizer ---------- */
+.recognizer-block {
+  border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2);
+  padding: 9px 10px; margin-bottom: 12px;
+}
+.rec-desc { display: flex; justify-content: space-between; align-items: center; margin: 2px 0 4px; }
+.rec-style { font-weight: 700; font-size: 13px; text-transform: capitalize; }
+.rec-facts { font-size: 11.5px; color: var(--muted); line-height: 1.4; margin-bottom: 6px; }
+.rec-prompt { font-size: 11.5px; font-style: italic; color: var(--text); opacity: 0.85; margin-bottom: 8px; line-height: 1.4; }
+
 /* ---------- replace panel ---------- */
 .provider {
   display: block; width: 100%; text-align: left; background: var(--panel-2);

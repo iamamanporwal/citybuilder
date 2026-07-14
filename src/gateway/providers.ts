@@ -101,13 +101,17 @@ export async function runGeneration(objectId: string, provider: ProviderId): Pro
     return
   }
 
+  // The recognizer's descriptor prompt is what a real Trellis/Meshy image-to-3D
+  // call is conditioned on (photo + this prompt). Surfaced here so the seam is
+  // visible in the simulation and ready for a real endpoint.
+  const promptMsg = slot.prompt ? `Generating from: “${slot.prompt}”…` : 'Generating mesh from reference…'
   store.setJob(
     {
       objectId,
       provider,
       status: 'running',
       progress: 0,
-      message: 'Generating mesh from reference…',
+      message: promptMsg,
       startedAt: performance.now(),
     },
     objectId,
@@ -126,7 +130,7 @@ export async function runGeneration(objectId: string, provider: ProviderId): Pro
             ...s.jobs[objectId],
             progress: p,
             message:
-              p < 0.4 ? 'Generating mesh from reference…' : p < 0.8 ? 'Texturing & LODs…' : 'Fitting to slot…',
+              p < 0.4 ? promptMsg : p < 0.8 ? 'Texturing & LODs…' : 'Fitting to slot…',
           },
           objectId,
         )
