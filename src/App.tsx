@@ -7,6 +7,7 @@ import { Inspector } from './ui/Inspector'
 import { StatusBar } from './ui/StatusBar'
 import { HelpOverlay } from './ui/HelpOverlay'
 import { AreaPicker } from './ui/AreaPicker'
+import { LoadingScreen } from './ui/LoadingScreen'
 import { frameObjects } from './editor/actions'
 
 function useGlobalShortcuts() {
@@ -83,21 +84,10 @@ function DriveHudOverlay() {
 export default function App() {
   useGlobalShortcuts()
   const appPhase = useEditor((s) => s.appPhase)
-  const buildMessage = useEditor((s) => s.buildMessage)
 
   if (appPhase === 'picker') return <AreaPicker />
 
-  if (appPhase === 'building') {
-    return (
-      <div className="loading">
-        <div className="load-card">
-          <div className="spinner big" />
-          <h2>Building your city…</h2>
-          <p className="muted">{buildMessage}</p>
-        </div>
-      </div>
-    )
-  }
+  if (appPhase === 'building') return <LoadingScreen />
 
   return (
     <div className="app">

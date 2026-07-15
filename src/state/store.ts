@@ -10,6 +10,8 @@ import type {
   Transform,
 } from '../types'
 import { buildScene } from '../scene/registry'
+import { setCorridorElevationEnabled } from '../procgen/corridor'
+import { clampRoadScale } from '../procgen/roadScale'
 import type { ResolvedContext } from '../resolver/types'
 import type { LintWarning } from '../resolver/varietyLint'
 
@@ -42,6 +44,7 @@ interface EditorState {
   objects: Record<string, SceneObject>
   objectOrder: string[]
   selection: string[]
+  selectedInstance: { objectId: string; index: number; meshUuid: string } | null // per-item pick inside an instanced group
   cameraMode: CameraMode
   gizmoMode: GizmoMode
   snapping: boolean
@@ -49,6 +52,8 @@ interface EditorState {
   sunTime: number
   fxPreview: boolean
   useLibraryAssets: boolean
+  useCorridorElevation: boolean
+  roadScale: number
   contextInfo: ContextInfo | null
   lintReport: LintWarning[]
   helpOpen: boolean
@@ -65,8 +70,11 @@ interface EditorState {
   setLoadError: (e: string) => void
   setFxPreview: (v: boolean) => void
   setUseLibraryAssets: (v: boolean) => void
+  setUseCorridorElevation: (v: boolean) => void
+  setRoadScale: (v: number) => void
   setLintReport: (w: LintWarning[]) => void
   select: (ids: string[], additive?: boolean) => void
+  setSelectedInstance: (v: { objectId: string; index: number; meshUuid: string } | null) => void
   clearSelection: () => void
   setCameraMode: (m: CameraMode) => void
   setGizmoMode: (m: GizmoMode) => void
@@ -124,6 +132,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   objects: {},
   objectOrder: [],
   selection: [],
+  selectedInstance: null,
   cameraMode: 'orbit',
   gizmoMode: 'translate',
   snapping: true,
@@ -134,6 +143,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   // appearance. The toggle (and every library function) stays intact so it can
   // be re-enabled and improved later (PRD §7F). See also isLibraryEnabled().
   useLibraryAssets: false,
+  // Network elevation solve (Road Corridor Redesign §6a) — ON by default (E3).
+  // Kept in sync with the config module flag (procgen/corridor/config.ts), which
+  // also defaults on; the toolbar toggle flips both for instant A/B.
+  useCorridorElevation: true,
+  // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.
+  roadScale: 1,
   contextInfo: null,
   lintReport: [],
   helpOpen: false,
@@ -170,6 +185,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       objects,
       objectOrder: order,
       selection: [],
+      selectedInstance: null,
       undoStack: [],
       redoStack: [],
       jobs: {},
@@ -185,6 +201,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   setLoadError: (e) => set({ loadError: e, appPhase: 'picker' }),
   setFxPreview: (v) => set({ fxPreview: v }),
   setUseLibraryAssets: (v) => set({ useLibraryAssets: v }),
+  setUseCorridorElevation: (v) => {
+    setCorridorElevationEnabled(v)
+    set({ useCorridorElevation: v })
+  },
+  setRoadScale: (v) => set({ roadScale: clampRoadScale(v) }),
   setLintReport: (w) => set({ lintReport: w }),
 
   select: (ids, additive = false) => {
@@ -200,7 +221,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       set({ selection: ids })
     }
   },
-  clearSelection: () => set({ selection: [] }),
+  setSelectedInstance: (v) => set({ selectedInstance: v }),
+  clearSelection: () => set({ selection: [], selectedInstance: null }),
 
   setCameraMode: (m) => set({ cameraMode: m }),
   setGizmoMode: (m) => set({ gizmoMode: m }),
@@ -263,6 +285,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((s) => ({
       ...applyCommand(s, cmd, false),
       selection: [],
+      selectedInstance: null,
       undoStack: [...s.undoStack, cmd].slice(-100),
       redoStack: [],
     }))

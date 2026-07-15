@@ -13,7 +13,11 @@
 
 export const DEPTH_CONFIG = {
   near: 1,
-  far: 4500,
+  // Deeper frustum for large cities. Capped at ~5000: beyond this the
+  // logarithmic-depth quantum at the far plane exceeds the layer-stack gaps
+  // (flickerLint proves this with 1.5x headroom), so land layers would z-fight.
+  // ~5 km² frames fully from above; larger areas are viewed by panning/orbiting.
+  far: 5000,
   logarithmicDepthBuffer: true,
   depthBits: 24,
 } as const

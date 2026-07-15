@@ -41,7 +41,7 @@ export function auditWater(graph: CityGraph): LintWarning[] {
     let x = 0, z = 0
     for (const p of b.footprint) { x += p.x; z += p.z }
     const c = { x: x / b.footprint.length, z: z / b.footprint.length }
-    if (water.some((w) => pointInRing(c, w.ring))) {
+    if (water.some((w) => pointInRing(c, w.ring) && !(w.holes ?? []).some((h) => pointInRing(c, h)))) {
       flooded++
       if (!example) example = b.name ?? b.id
     }

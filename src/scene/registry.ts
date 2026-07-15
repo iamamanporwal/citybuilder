@@ -198,6 +198,26 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     )
   }
 
+  // ---- landmark bridges (Golden Gate & co): recognizable suspension structures,
+  // selectable and Sketchfab-replaceable (unlike the merged generic bridge blob)
+  for (const lb of roadResult.landmarkBridges) {
+    lb.group.traverse((o) => (o.userData.objectId = lb.id))
+    replaceables.set(lb.id, {
+      cacheKeyBase: `landmark|${lb.id}`,
+      build: () => lb.group.clone(),
+    })
+    add(
+      {
+        id: lb.id, type: 'bridge-structure', name: lb.name, tier: 'landmark', locked: false,
+        transform: { position: [0, 0, 0], ...IDENTITY },
+        asset: { ...PROC_ASSET },
+        realworld: { lat: lb.centerLat, lng: lb.centerLng, ...mapUrls(lb.centerLat, lb.centerLng), wikidata: lb.wikidata, name: lb.name },
+        meta: { landmark: true, structure: 'suspension', 'replace search': lb.sketchfabQuery },
+      },
+      lb.group,
+    )
+  }
+
   // ---- buildings (the upgradeable 95%) — the Building Recognizer decides how
   // each one looks and which source fills its slot (PRD §7F). The descriptor
   // drives the procedural facade + roof form; the local asset library is one

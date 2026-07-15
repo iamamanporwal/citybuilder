@@ -205,6 +205,7 @@ export async function resolveContext(
   const provenance: string[] = []
 
   onStatus?.('Resolving region & climate…')
+  const worldCoverP = probeWorldCover() // independent — overlap it with region/climate/trees
   const region = await resolveRegion(lat, lng)
   provenance.push(region.note)
 
@@ -217,7 +218,7 @@ export async function resolveContext(
   const trees = await resolveTreePool(bbox, climate.zone)
   provenance.push(trees.note)
 
-  const worldCoverUp = await probeWorldCover()
+  const worldCoverUp = await worldCoverP
   const landCoverSource = 'osm-derived' as const
   provenance.push(
     worldCoverUp

@@ -8,8 +8,8 @@ import { buildCityFromArea, buildFromCache, buildSampleCity } from '../app/build
 // Full-screen location picker: search a place, drag/resize the selection
 // rectangle, and build a 3D city from exactly that area.
 
-const MAX_AREA_KM2 = 4
-const WARN_AREA_KM2 = 2.5
+const MAX_AREA_KM2 = 12 // large areas now fetch via tiled Overpass queries
+const WARN_AREA_KM2 = 6 // above this, fetch + build take noticeably longer
 const KM_PER_DEG_LAT = 110.574
 
 interface SearchResult {

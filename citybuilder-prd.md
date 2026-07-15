@@ -1,8 +1,10 @@
 # CityBuilder — Product Requirements Document
 
-**Status:** Draft v0.1
+**Status:** Draft v0.2 — MVP (P0) implemented client-side; server-side pipeline still vision
 **Owner:** (you)
-**Last updated:** July 2026
+**Last updated:** 14 July 2026
+
+> **How to read this doc.** Sections tagged *(implemented in MVP)* describe code that exists and is tested today (§7A–§7F, §14A). Everything else is the target architecture. §19 is the authoritative **PRD-vs-codebase gap map** — read it to know exactly what is real versus aspirational before planning work.
 
 ---
 
@@ -387,7 +389,7 @@ A real 3D scene editor, in the browser. Required capabilities:
 
 ### 10.1 Viewport & camera
 - Orbit camera for overview; **WASD/fly camera** for mid-level navigation.
-- **Drive preview mode** — one key drops the camera to ~1.5 m eye level with simple car-like movement, so the user validates the city *from the road* (directly serves the #1 requirement). Not the full game — a validation camera.
+- **Drive preview mode** *(implemented in MVP)* — one key spawns a physics car (Rapier `DynamicRayCastVehicleController`, raycast wheels) at the nearest road point and drops the camera to a chase view, so the user validates the city *from the road* (directly serves the #1 requirement). Deliberately **arcade**: chassis pitch and roll are locked (`enabledRotations` = yaw only) so the car can never flip on braking, cornering, or collisions; braking is gentled and damping tuned so stops don't pitch the body. The car is a procedural silhouette (lower body + cabin + slanted windshield + four wheels that **roll with speed and steer up front**). Not the full game — a validation camera on a real collider.
 - Grid, ground plane, adjustable sun/time-of-day for lighting checks.
 
 ### 10.2 Selection & transforms
@@ -531,7 +533,29 @@ Optimization is **built into the pipeline**, not a manual cleanup pass. The city
 - **Semantics ship to the game** — export the **lane graph, speed limits, and signal data** alongside the geometry, so the same data that built the city drives its **traffic AI and gameplay** at runtime.
 - **Budget gate** — a per-tile budget (verts, draw calls, texture memory) is validated automatically at export; over-budget tiles are flagged or auto-simplified.
 
-**Export deliverable:** a 3D Tiles quadtree of compressed GLB + KTX2 textures + a separate collision layer + the semantic lane/rules data + a license/provenance report.
+**Export deliverable (target):** a 3D Tiles quadtree of compressed GLB + KTX2 textures + a separate collision layer + the semantic lane/rules data + a license/provenance report.
+
+**Export deliverable (MVP today, §14A):** a flat (un-tiled) **6-file set** — `city_scene.glb` (draw-call-optimized visual), `city_collision.glb` (pre-merged trimesh colliders), `citymap_minimap.glb` (roads-only top-down mesh), `city_semantics.json` (lane graph + per-object provenance), `citymap_spawn.json` (auto drivable spawn), `textures_manifest.json` (KTX2 packaging spec). A separate `npm run bake` step Draco-compresses the GLBs; KTX2 texture encode is still deferred to the bake service.
+
+---
+
+## 14A. Game-engine export hardening *(implemented in MVP)*
+
+The car-game engine team consumed a real CityBuilder export and returned six concrete signals (`game-engine-output-review.md`); the response (`game-export-fix-plan.md`) is implemented and tested (`src/__tests__/exportOptimize.test.ts`). This section documents what the export actually does today. Everything stays content-only (clean PBR geometry + textures); gameplay identity lives in `city_semantics.json`, so the visual GLB can be flattened freely.
+
+**1 — Draw-call optimizer (`src/export/optimizeScene.ts`).** The live editor mints a fresh material per building (per-tint + per-instance UV jitter) and per road segment — thousands of one-off materials/meshes (a real export hit ~2,217 materials). Right before export, a throwaway clone is optimized in two passes: **(a) material dedup** by visual signature (type · color · emissive · roughness · metalness · transparency · side · texture identity + repeat), dropping only the cosmetic per-instance UV *offset*, collapsing thousands → dozens; **(b) geometry batch-merge** — every geometry sharing a material merges into one mesh (glass/decals kept separate so transparency still sorts). Multi-material meshes are passed through with baked world transforms. Never drops geometry (falls back to unmerged on a merge failure). The export toast reports before→after counts.
+
+**2 — Pre-merged collider GLB (`colliderGroupMerged` in `src/export/colliderGlb.ts`).** Instead of one node per collider (thousands the engine had to merge on the main thread → freeze risk), colliders are pre-merged into **a handful of trimesh nodes grouped by physics behaviour** (sensor-vs-solid · class · drivable · surface tag · friction · restitution). Box/cylinder primitives are baked to geometry and folded in; per-node `extras` (friction/sensor/drivable/class/surfaceTag) are preserved so the existing Rapier/Jolt loader still reads them — it just gets ~10 nodes, not ~5,000. `formatVersion` bumps **1 → 2** with a `merged: true` flag (coordinated breaking change).
+
+**3 — Auto spawn + minimap (`src/export/spawn.ts`).** Derived from the road semantics we already export, so a new map needs zero code edits: **`citymap_spawn.json`** picks the widest drivable non-bridge road nearest the map centre with room to accelerate and emits `position [x,y,z]` + `heading_rad` down its centerline; **`citymap_minimap.glb`** is a tiny roads-only flat mesh, ribbons colored + merged by road class, for the top-down map.
+
+**4 — No `KHR_materials_unlit` (`src/procgen/materials.ts`).** Lane markings and traffic-signal bulbs were `MeshBasicMaterial`, which `GLTFExporter` emits as `KHR_materials_unlit` — fullbright, ignoring the engine's day/night. Markings are now lit `MeshStandardMaterial`; signal bulbs are `MeshStandardMaterial` with `emissive` (still glow, now bloom-reactive). Result: **zero unlit materials** in the export, still clean PBR with no baked light.
+
+**5 — Draco bake step (`tools/bake-glb.mjs`, `npm run bake`).** The browser's `GLTFExporter` can't emit Draco or KTX2 (native encoders). A Node post-export step using **`@gltf-transform`** runs `weld → dedup → prune → join` then Draco-compresses geometry (`join` is skipped on the collider so per-node physics extras survive); registers `ALL_EXTENSIONS` so `KHR_texture_transform`/unlit round-trip cleanly. Typical 4–8× smaller. **KTX2/Basis texture encode** (via `toktx` + `textures_manifest.json`) remains the downstream bake-service step.
+
+**6 — Semantics v2 + environment.** `city_semantics.json` bumps to `semanticsVersion: 2` — road centerlines are now `[x, y, z]` with `y` = true elevation in meters (breaking vs v1). The toolchain is pinned to **Node ≥ 22.12** (`package.json` `engines` + `.nvmrc`) because Vite 8's dev server crashes on Node 20 serving large GLBs.
+
+**Still deferred (bake service):** 3D-Tiles quadtree tiling/streaming, native KTX2/Basis encode, per-object auto-LOD chains, per-tile budget auto-simplification, and texture atlasing beyond material dedup. See §19.
 
 ---
 
@@ -548,15 +572,15 @@ Optimization is **built into the pipeline**, not a manual cleanup pass. The city
 
 ## 16. Phased roadmap
 
-### P0 — Prove the core loop (MVP)
-- Ingest one well-mapped city (via Overture + OSM adapters).
-- Procedural roads to driving-grade + generic building placeholders + terrain, as separated tagged objects.
-- Web editor: viewport, selection, transform gizmos, hierarchy, undo/redo, locked roads.
-- **Drive preview mode.**
-- Click-to-replace with **two providers**: keep-procedural + **self-hosted Trellis from reference image**, fit-to-slot, cached.
-- Reference photo + map link per building.
-- Basic export: glTF tiles + collision.
-- **Success criterion:** load a city, drive it, upgrade 10 landmarks cheaply, export, and drive the export in a minimal web player.
+### P0 — Prove the core loop (MVP) — ✅ *substantially implemented client-side*
+- ✅ Ingest a well-mapped city — but via **OSM/Overpass live fetch + a Leaflet area picker** (Nominatim search + draggable ≤4 km² rectangle), not the Overture GeoParquet adapter. A prefetched Lower Manhattan sample ships in `public/data/`.
+- ✅ Procedural roads (smoothed centerlines, curbs, sidewalks, intersections, bridges), generic buildings, terrain, water, props — all separated tagged objects, driven by the Context Resolver (§7A).
+- ✅ Web editor: viewport, selection, transform gizmos, hierarchy, inspector, undo/redo, locked roads, first-run help overlay.
+- ✅ **Drive preview mode** — Rapier physics car (§10.1).
+- ⚠️ Click-to-replace with keep-procedural + generate + Sketchfab-search + upload, fit-to-slot, cached — but **AI generation is *simulated*** (`runGeneration()` returns a deterministic procedural variant; the job queue / progress / cache / review UI is real and ready for a live endpoint). See §19.
+- ✅ Reference photo (Wikidata P18) + map/Street-View link per building; Building Recognizer descriptors (§7F).
+- ✅ Export: 6-file GLB/JSON set + Draco bake (§14A) — **flat, not 3D-Tiles-tiled**.
+- **Success criterion status:** load a city, drive it, replace landmarks (procedural/library/upload; AI simulated), export, verified end-to-end headlessly (`.claude/skills/verify`; ~90 tests across 9 files). Not yet met: *cheap real AI upgrade* and *tiled streaming*.
 
 ### P1 — Make it good and cheap at scale
 - Add providers: **Meshy/Rodin (paid, opt-in)** and **Sketchfab library**; **upload custom**.
@@ -612,3 +636,40 @@ Optimization is **built into the pipeline**, not a manual cleanup pass. The city
 - **KTX2 / Basis** — GPU-native compressed texture format for the web.
 - **ENU frame** — local east-north-up meter coordinate system for the play space.
 - **3D Tiles** — OGC standard for streaming large 3D scenes; our tile/export format.
+
+---
+
+## 19. Implementation status — PRD vs codebase *(authoritative gap map)*
+
+This section is the single source of truth for **what is real in the codebase today versus what this PRD describes as the target**. The MVP is a **fully client-side app** (Vite + React 18 + React-Three-Fiber + three 0.169 + zustand + Rapier; no backend server). Everything the PRD frames as a server-side service (§12) is currently done in-browser or not yet built.
+
+### 19.1 What is built and real (in the codebase)
+
+- **Ingestion:** live **OSM/Overpass** fetch with a Leaflet **area picker** (Nominatim search, draggable ≤4 km² rectangle, mirror fallback, localStorage cache) + a prefetched sample city. `src/ingest/`.
+- **Procedural engine (in-browser TypeScript, not Houdini):** roads with smoothed Catmull-Rom centerlines, curbs, sidewalks, intersections, bridges/tunnels from OSM `layer`; generic building extrusion; water (lakes/rivers/coastline-assembled sea); terrain; props. `src/procgen/`.
+- **Context Resolver + content matrix** (§7A), **material/texture system** (§7B), **robustness linters** (§7C) — all real, versioned, tested.
+- **Asset library pipeline** (§7D/§7E): manifest scanner, weighted deterministic pools, Quaternius MegaKit, Sketchfab **curation/fetch tools + in-editor search-replace** (via Vite dev proxy). *Library assets default OFF* (§7F).
+- **Building Recognizer** (§7F): structured-prior descriptor fallback chain, Wikidata P149/P18 prepass, descriptor-driven procedural facades/roofs.
+- **Editor:** viewport, selection, transform gizmos, hierarchy, inspector, undo/redo, locked roads, help overlay, FX-preview toggle. `src/editor/`, `src/ui/`.
+- **Drive preview:** Rapier physics car, arcade-locked (§10.1).
+- **Physics colliders:** descriptor pipeline + collider lint + GLB export with per-node `extras`. `src/physics/`.
+- **Export:** the 6-file set + draw-call optimizer + pre-merged colliders + auto spawn/minimap + Draco bake (§14A).
+- **Tests:** ~90 cases across 9 files gating the invariants above (`npm test`).
+
+### 19.2 Documented in the PRD but NOT in the codebase (the gap)
+
+| PRD section | Documented as | Reality in codebase |
+|---|---|---|
+| §9, §11, §16-P0 | **Self-hosted Trellis / Meshy / Rodin / Tripo / Hunyuan** AI generation from a reference image | **Simulated.** `runGeneration()` (`src/gateway/providers.ts`) fakes a GPU job with progress ticks and returns a deterministic "enhanced" procedural variant. The job queue, progress, cache-by-slot-hash, and approve/reject review UI are real and endpoint-ready. **No real 3D-generation provider is wired.** |
+| §7F | **VLM** photo→descriptor recognition | Off. `describeWithVlm` exists but `VLM.available` is false until `VITE_VLM_ENDPOINT` is set; the deterministic `describeFromPriors` path runs instead. |
+| §12 | **Backend API / job service / auth**, server-side procedural engine | None. App is 100% client-side; the only server is the Vite dev proxy (Sketchfab token injection). A static production build has **no backend**, so Sketchfab degrades gracefully. |
+| §12, §13 | **Houdini + PDG** procedural core; **PostGIS / S3 / generation-cache server / tile store** | Not present. Procedural generation is browser TypeScript; caching is in-memory/localStorage; no databases or object store. |
+| §6.2 | **Overture Maps adapter** (GeoParquet via DuckDB), **premium "Jio" adapter**, terrain DEM (Copernicus/LiDAR), Mapillary imagery detection | Not implemented. Only OSM/Overpass is wired. Terrain/climate/species/land-cover use **heuristics or single live API probes** (Nominatim, GBIF), not the raster pipelines described. |
+| §10.4, §14 | **3D-Tiles quadtree tiling + streaming** in editor and export | Not implemented. The whole city loads at once; export is a **flat GLB set**, not tiled. This is the biggest scale gap. |
+| §7B, §14, §14A | **KTX2/Basis texture encode**, per-object **auto-LOD chains**, far-LOD impostors, per-tile **budget auto-simplification**, aggressive texture **atlasing** | Partially. `textures_manifest.json` *specifies* KTX2 and the bake step does **Draco geometry only**; KTX2 encode, LOD generation, and atlasing are deferred to a not-yet-built **bake service**. Material dedup (§14A) is the only atlasing-adjacent step. |
+| §8.3, §7C, §7F | **OpenDRIVE** (osm2opendrive/libOpenDRIVE) roads, server-side **trimesh boolean carving** of roads/water into terrain, **LoD2 / GlobalBuildingAtlas** massing, WorldCover raster, CLIP labeling, real Köppen raster | All documented as **bake-service milestones**; in-editor equivalents (the layer convention, OSM-extrusion massing, keyword lexicon) stand in today. |
+| §11.4 | **Cost posture** (cents per building on spot GPUs) | Moot until real generation is wired — currently $0 because nothing calls a paid/GPU API. |
+
+### 19.3 The one thing to wire next
+
+Per the owner's standing note ("let me know if you need API keys"): the highest-leverage gap is **real 3D generation**. The entire async job pipeline, caching, provenance, and review UI already exist around the simulated worker — replacing `runGeneration()` with a live self-hosted **Trellis** GPU endpoint (or a **Meshy** API key) is the single change that turns the "upgrade a landmark cheaply" promise real. Everything else in §19.2 is scale/fidelity hardening that the current client-side MVP proves out but does not yet ship.

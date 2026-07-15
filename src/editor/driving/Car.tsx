@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, RigidBody, useBeforePhysicsStep, useRapier, type RapierRigidBody } from '@react-three/rapier'
 import type { DynamicRayCastVehicleController } from '@dimforge/rapier3d-compat'
-import { lastOrbitTarget, nearestRoadPoint } from '../bus'
+import { focusState, focusTarget, lastOrbitTarget, nearestRoadPoint } from '../bus'
 import { pressed } from '../input'
 import { useDriveHud } from '../../state/driveHud'
 
@@ -55,7 +55,10 @@ export function Car() {
   const spinWheels = useRef<(THREE.Group | null)[]>([])
 
   const spawn = useMemo(() => {
-    const s = nearestRoadPoint(lastOrbitTarget.x, lastOrbitTarget.z)
+    // spawn on the road nearest the focused object (selection) if there is one,
+    // else where the user was looking in orbit
+    const f = focusState.has ? focusTarget : lastOrbitTarget
+    const s = nearestRoadPoint(f.x, f.z)
     return { x: s.x, z: s.z, yaw: Math.atan2(s.hx, s.hz) } // local +z is forward
   }, [])
 

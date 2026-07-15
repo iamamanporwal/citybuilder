@@ -195,6 +195,18 @@ function ContextPanel() {
   )
 }
 
+/** Note shown when a single item inside an instanced group (props/trees) is picked. */
+function InstanceNote({ objId }: { objId: string }) {
+  const inst = useEditor((s) => s.selectedInstance)
+  if (!inst || inst.objectId !== objId) return null
+  return (
+    <div className="section note">
+      📍 Item #{inst.index + 1} of this group is highlighted. These props render as one
+      instanced object for performance — click any item to highlight it individually.
+    </div>
+  )
+}
+
 const STATE_LABEL: Record<string, string> = {
   procedural: 'Procedural (data-driven placeholder)',
   generated: 'AI-generated',
@@ -223,16 +235,19 @@ export function Inspector() {
             </div>
           )}
         </div>
-        <ContextPanel />
         <div className="section quickstart">
           <div className="section-title">Get started</div>
           <ol>
-            <li><b>Click any building</b> in the 3D view to inspect it.</li>
-            <li>Use <b>Replace this object</b> to upgrade it with AI or your own model.</li>
+            <li><b>Click anything</b> — buildings, bridges, signals, props — in orbit or fly mode to inspect it.</li>
+            <li>Use <b>Replace</b> to swap in a Sketchfab or your own model.</li>
             <li>Press <b>D</b> to drive the city at eye level.</li>
-            <li><b>Export city</b> when it looks right from the road.</li>
+            <li><b>Export</b> when it looks right from the road.</li>
           </ol>
         </div>
+        <details className="adv-disclosure">
+          <summary>Build details &amp; diagnostics</summary>
+          <ContextPanel />
+        </details>
       </div>
     )
   }
@@ -265,6 +280,8 @@ export function Inspector() {
           {obj.locked ? ' · 🔒 locked' : ''}
         </div>
       </div>
+
+      <InstanceNote objId={obj.id} />
 
       <div className="section">
         <div className="section-title">Asset</div>

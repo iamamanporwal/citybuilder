@@ -10,6 +10,9 @@ import type {
   Vec2,
 } from '../types'
 import { clipRingToRect, offsetPolyline, pointInRing, ringAreaM2, ringIsSimple, type Rect } from '../procgen/geometry'
+import polygonClipping from 'polygon-clipping'
+
+type ClipRing = [number, number][]
 
 // Overpass/OSM adapter: maps raw OSM JSON into the internal City Graph schema.
 // Other adapters (Overture, premium HD-map) implement the same output contract.
@@ -131,24 +134,98 @@ function waterwayRing(pts: Vec2[], width: number): Vec2[] | null {
 }
 
 /**
- * Assemble a sea surface from natural=coastline ways.
+ * Assemble sea surfaces from natural=coastline ways.
  *
- * Ways are chained end-to-start (OSM coastline direction is consistent: land
- * left, water right). The longest chain is clipped to the scene rectangle and
- * closed along the rectangle boundary — NOT buffered by a fixed offset, which
- * folds into a self-intersecting ring on jagged shorelines. Two closures exist
- * (one per boundary walking direction); a candidate is accepted only if it is
- * a simple polygon and contains essentially zero building centroids (buildings
- * are land). Ties break toward the ring containing a probe point on the water
- * (right) side of the shoreline. If no candidate passes, NO sea is painted —
- * land is the default base and under-painting beats flooding a city.
+ * OSM coastline direction is consistent: LAND on the left of the way, WATER on
+ * the right. We reconstruct the LAND polygons — each open coastline run closed
+ * along the scene-rectangle boundary on its land side, plus any closed
+ * coastline loops (islands fully in view) — union them, and take the sea as
+ * `rect − land` via a robust polygon boolean. This handles every coastal case a
+ * single half-plane closure could not: straits (water between two facing
+ * shores, e.g. the Golden Gate), bays, archipelagos, and interior islands
+ * (emitted as holes so they stay land). Each resulting sea polygon must be
+ * simple, above the minimum area, and — the load-bearing safety guard — must
+ * cover essentially no building centroids (buildings are land). A basin that
+ * would flood buildings is dropped; if none survive, NO sea is painted. Land is
+ * the default base and under-painting beats flooding a city.
  */
+export interface SeaPolygon {
+  ring: Vec2[]
+  holes: Vec2[][]
+}
 export function assembleSea(
   chains: Vec2[][],
   buildingCentroids: Vec2[],
   rect: Rect,
-): { ring: Vec2[]; buildingsInside: number } | null {
+): { polys: SeaPolygon[]; buildingsInside: number } | null {
   if (!chains.length) return null
+  const merged = mergeCoastlineChains(chains)
+
+  // ---- reconstruct land polygons (island loops + land-side closures of runs)
+  const landPolys: Vec2[][] = []
+  for (const chain of merged) {
+    if (chain.length < 3) continue
+    const isLoop =
+      Math.hypot(chain[0].x - chain[chain.length - 1].x, chain[0].z - chain[chain.length - 1].z) < 2
+    if (isLoop) {
+      const loop = clipRingToRect(chain.slice(0, chain.length - 1), rect)
+      if (loop.length >= 3 && ringAreaM2(loop) > 1) landPolys.push(loop)
+      continue
+    }
+    for (const run of runsInsideRect(chain, rect)) {
+      const land = landClosure(run, rect)
+      if (land) landPolys.push(land)
+    }
+  }
+  if (!landPolys.length) return null
+
+  // ---- sea = rect − union(land) via robust polygon boolean
+  const rectRing: ClipRing = [
+    [rect.minX, rect.minZ], [rect.maxX, rect.minZ],
+    [rect.maxX, rect.maxZ], [rect.minX, rect.maxZ], [rect.minX, rect.minZ],
+  ]
+  let seaMP: ReturnType<typeof polygonClipping.difference>
+  try {
+    seaMP = polygonClipping.difference([rectRing], ...landPolys.map((r) => [ringToClip(r)]))
+  } catch {
+    return null // degenerate coastline input — under-paint rather than risk a bad ring
+  }
+
+  const maxAllowed = Math.max(2, Math.ceil(buildingCentroids.length * 0.01))
+  const polys: SeaPolygon[] = []
+  let totalInside = 0
+  for (const poly of seaMP) {
+    const ring = clipToRing(poly[0])
+    if (ring.length < 3 || !ringIsSimple(ring)) continue
+    const holes = poly.slice(1).map(clipToRing).filter((h) => h.length >= 3)
+    const areaM2 = ringAreaM2(ring) - holes.reduce((s, h) => s + ringAreaM2(h), 0)
+    if (areaM2 < MIN_WATER_AREA_M2) continue
+    const inside = buildingCentroids.reduce(
+      (n, c) => n + (pointInRing(c, ring) && !holes.some((h) => pointInRing(c, h)) ? 1 : 0),
+      0,
+    )
+    if (inside > maxAllowed) continue // this basin would flood buildings — drop it, keep land
+    polys.push({ ring, holes })
+    totalInside += inside
+  }
+  polys.sort((a, b) => ringAreaM2(b.ring) - ringAreaM2(a.ring))
+  return polys.length ? { polys, buildingsInside: totalInside } : null
+}
+
+const ringToClip = (r: Vec2[]): ClipRing => {
+  const xy: ClipRing = r.map((p) => [p.x, p.z])
+  xy.push([r[0].x, r[0].z]) // polygon-clipping wants closed rings
+  return xy
+}
+const clipToRing = (r: ClipRing): Vec2[] => {
+  const out = r.map(([x, z]) => ({ x, z }))
+  const n = out.length
+  if (n > 1 && Math.abs(out[0].x - out[n - 1].x) < 1e-6 && Math.abs(out[0].z - out[n - 1].z) < 1e-6) out.pop()
+  return out
+}
+
+/** Merge coastline ways end-to-start into maximal chains (land-left/water-right preserved). */
+function mergeCoastlineChains(chains: Vec2[][]): Vec2[][] {
   const pool = chains.map((c) => [...c])
   const merged: Vec2[][] = []
   while (pool.length) {
@@ -169,46 +246,11 @@ export function assembleSea(
     }
     merged.push(cur)
   }
-  merged.sort((a, b) => b.length - a.length)
-  const chain = merged[0]
-  if (chain.length < 3) return null
-  // closed coastline ring (island fully in view) needs hole support — skip, land default
-  if (Math.hypot(chain[0].x - chain[chain.length - 1].x, chain[0].z - chain[chain.length - 1].z) < 2) return null
-
-  const run = longestRunInsideRect(chain, rect)
-  if (!run || run.length < 2) return null
-
-  // water-side probe: OSM convention puts water on the RIGHT of way direction
-  const mi = Math.floor(run.length / 2)
-  const a = run[Math.max(mi - 1, 0)]
-  const b = run[Math.min(mi + 1, run.length - 1)]
-  const dl = Math.hypot(b.x - a.x, b.z - a.z) || 1
-  const probe: Vec2 = {
-    x: (a.x + b.x) / 2 + (-(b.z - a.z) / dl) * 20,
-    z: (a.z + b.z) / 2 + ((b.x - a.x) / dl) * 20,
-  }
-
-  const maxAllowed = Math.max(2, Math.ceil(buildingCentroids.length * 0.01))
-  let best: { ring: Vec2[]; buildingsInside: number; probeHit: boolean } | null = null
-  for (const dir of [1, -1] as const) {
-    const ring = closeAlongBoundary(run, rect, dir)
-    if (!ring || ring.length < 3 || !ringIsSimple(ring)) continue
-    const count = buildingCentroids.reduce((n, c) => n + (pointInRing(c, ring) ? 1 : 0), 0)
-    if (count > maxAllowed) continue
-    const probeHit = pointInRing(probe, ring)
-    if (
-      !best ||
-      (probeHit && !best.probeHit && count <= best.buildingsInside) ||
-      (probeHit === best.probeHit && count < best.buildingsInside)
-    ) {
-      best = { ring, buildingsInside: count, probeHit }
-    }
-  }
-  return best ? { ring: best.ring, buildingsInside: best.buildingsInside } : null
+  return merged
 }
 
-/** Longest contiguous piece of the polyline inside the rect, ends extended/clipped to the boundary. */
-function longestRunInsideRect(chain: Vec2[], rect: Rect): Vec2[] | null {
+/** Every contiguous piece of the polyline inside the rect, each with both ends on the boundary. */
+function runsInsideRect(chain: Vec2[], rect: Rect): Vec2[][] {
   const inside = (p: Vec2) => p.x >= rect.minX && p.x <= rect.maxX && p.z >= rect.minZ && p.z <= rect.maxZ
   const runs: Vec2[][] = []
   let cur: Vec2[] = []
@@ -236,21 +278,42 @@ function longestRunInsideRect(chain: Vec2[], rect: Rect): Vec2[] | null {
     }
   }
   if (cur.length >= 2) runs.push(cur)
-  if (!runs.length) return null
-  const len = (r: Vec2[]) => r.reduce((s, p, i) => (i ? s + Math.hypot(p.x - r[i - 1].x, p.z - r[i - 1].z) : 0), 0)
-  runs.sort((r1, r2) => len(r2) - len(r1))
-  const run = runs[0].map((p) => ({ ...p }))
-  // dangling interior endpoints (coastline cut inside the rect): extend along end tangent to the boundary
-  for (const atEnd of [false, true]) {
-    const e = atEnd ? run[run.length - 1] : run[0]
-    if (onBoundary(e, rect)) continue
-    const n = atEnd ? run[run.length - 2] : run[1]
-    const ext = rayToRect(e, { x: e.x - n.x, z: e.z - n.z }, rect)
-    if (!ext) return null
-    if (atEnd) run.push(ext)
-    else run.unshift(ext)
+
+  const out: Vec2[][] = []
+  for (const r of runs) {
+    const run = r.map((p) => ({ ...p }))
+    // dangling interior endpoints (coastline data cut inside the rect): extend along the end tangent to the boundary
+    let ok = true
+    for (const atEnd of [false, true]) {
+      const e = atEnd ? run[run.length - 1] : run[0]
+      if (onBoundary(e, rect)) continue
+      const nb = atEnd ? run[run.length - 2] : run[1]
+      const ext = rayToRect(e, { x: e.x - nb.x, z: e.z - nb.z }, rect)
+      if (!ext) { ok = false; break }
+      if (atEnd) run.push(ext)
+      else run.unshift(ext)
+    }
+    if (ok && run.length >= 2) out.push(run)
   }
-  return run
+  return out
+}
+
+/** Close an open coastline run into the LAND polygon (land is left of way direction). */
+function landClosure(run: Vec2[], rect: Rect): Vec2[] | null {
+  const mi = Math.floor(run.length / 2)
+  const a = run[Math.max(mi - 1, 0)]
+  const b = run[Math.min(mi + 1, run.length - 1)]
+  const dl = Math.hypot(b.x - a.x, b.z - a.z) || 1
+  // water sits on the RIGHT of way direction (-dz, dx); LAND is the opposite side
+  const landProbe: Vec2 = {
+    x: (a.x + b.x) / 2 + ((b.z - a.z) / dl) * 20,
+    z: (a.z + b.z) / 2 - ((b.x - a.x) / dl) * 20,
+  }
+  for (const dir of [1, -1] as const) {
+    const ring = closeAlongBoundary(run, rect, dir)
+    if (ring && ring.length >= 3 && ringIsSimple(ring) && pointInRing(landProbe, ring)) return ring
+  }
+  return null
 }
 
 function onBoundary(p: Vec2, rect: Rect, eps = 0.01): boolean {
@@ -594,6 +657,8 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
         tunnel: el.tags.tunnel === 'yes' || el.tags.tunnel === 'building_passage',
         layer,
         surfaceTag: el.tags.surface,
+        structure: el.tags['bridge:structure'],
+        wikidata: el.tags.wikidata,
         centerLat: mid.lat,
         centerLng: mid.lon,
       })
@@ -616,9 +681,16 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
     }
     const sea = assembleSea(coastlineChains, centroids, rect)
     if (sea) {
-      areas.push({
-        id: 'water_sea', kind: 'water', ring: sea.ring, render: true,
-        areaM2: ringAreaM2(sea.ring), provenance: 'natural=coastline',
+      sea.polys.forEach((p, i) => {
+        areas.push({
+          id: i === 0 ? 'water_sea' : `water_sea_${i}`,
+          kind: 'water',
+          ring: p.ring,
+          holes: p.holes.length ? p.holes : undefined,
+          render: true,
+          areaM2: ringAreaM2(p.ring) - p.holes.reduce((s, h) => s + ringAreaM2(h), 0),
+          provenance: 'natural=coastline',
+        })
       })
     }
   }

@@ -28,6 +28,19 @@ export const drivableRoads: { pts: { x: number; z: number }[]; width: number }[]
 // spawns the car on the road nearest to where the user was looking.
 export const lastOrbitTarget = new THREE.Vector3()
 
+// Persisted focus point — the selected object's centre (or last framed target).
+// Every camera mode re-seeds itself from this on entry, so switching between
+// orbit / fly / drive never loses the object the user was looking at.
+export const focusTarget = new THREE.Vector3()
+export const focusState = { has: false }
+export function setFocus(center: THREE.Vector3) {
+  focusTarget.copy(center)
+  focusState.has = true
+}
+export function clearFocus() {
+  focusState.has = false
+}
+
 /** Closest point on any drivable road to (x, z), with the road heading there. */
 export function nearestRoadPoint(x: number, z: number) {
   let best = { d: Infinity, x: 0, z: 0, hx: 0, hz: 1 }

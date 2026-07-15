@@ -1,12 +1,15 @@
 import type { RoadSegment } from '../types'
 import type { RoadResolution } from '../resolver/types'
-import { analyzeRoadNodes, cumulative, elevationProfile, rampSpecFor } from '../procgen/roadNetwork'
+import { analyzeRoadNodes, cumulative, rampSpecFor } from '../procgen/roadNetwork'
+import { buildRoadElevation } from '../procgen/corridor'
 
-// Semantic road export (city_semantics.json, semanticsVersion 2).
+// Semantic road export (city_semantics.json, semanticsVersion 3).
 // Centerlines are 3-component [x, y, z] in TRUE meters (y = 0 at grade, no
-// cosmetic render offsets) so a car game can follow bridge decks. Elevation is
-// evaluated on the RAW OSM polyline's own cumulative distances; the smoothed
-// render polyline differs in length by <1%, so profiles agree within cm.
+// cosmetic render offsets) so a car game can follow bridge decks. The y-channel
+// is the shared network elevation solve (default-on, E3) — not just bridge ramps
+// — so approaches and grade-separated at-grade roads carry real elevation too.
+// Elevation is evaluated on the RAW OSM polyline's own cumulative distances; the
+// smoothed render polyline differs in length by <1%, so profiles agree within cm.
 
 export interface RoadSemanticsEntry {
   id: string
@@ -41,11 +44,14 @@ export function buildRoadSemantics(
   resolutions: Map<string, RoadResolution>,
 ): RoadSemanticsEntry[] {
   const nodes = analyzeRoadNodes(roads)
+  const elevation = buildRoadElevation(roads)
   return roads.map((r) => {
     const res = resolutions.get(r.id)
     const cum = cumulative(r.points)
+    // `spec` still reports the bridge-height/ramp-length metadata; the actual
+    // y-channel comes from the shared elevation seam (network solve when on).
     const spec = r.points.length >= 2 ? rampSpecFor(r, cum[cum.length - 1], nodes) : null
-    const ys = elevationProfile(spec, cum)
+    const ys = elevation.profileFor(r, cum)
     return {
       id: r.id,
       name: r.name ?? null,

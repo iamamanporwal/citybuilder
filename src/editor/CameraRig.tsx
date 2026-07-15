@@ -3,8 +3,11 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { MapControls } from '@react-three/drei'
 import { useEditor } from '../state/store'
-import { frameBus, lastOrbitTarget } from './bus'
+import { clearFocus, focusState, focusTarget, frameBus, lastOrbitTarget, setFocus } from './bus'
+import { getVariant } from '../scene/registry'
 import { pressed } from './input'
+
+const PROC_FALLBACK = { state: 'procedural', provider: 'procedural', license: '', approved: true } as const
 
 // Drive mode is a real physics sim now — see editor/driving/DriveSim.tsx.
 // This rig owns orbit + fly only and publishes the orbit target so the drive
@@ -13,10 +16,30 @@ import { pressed } from './input'
 export function CameraRig() {
   const mode = useEditor((s) => s.cameraMode)
   const gizmoDragging = useEditor((s) => s.gizmoDragging)
+  const selection = useEditor((s) => s.selection)
+  const order = useEditor((s) => s.objectOrder)
   const { camera, gl } = useThree()
   const controls = useRef<any>(null)
   const look = useRef({ yaw: 0, pitch: -0.4, active: false })
   const prevMode = useRef<string>('orbit')
+
+  // A new scene invalidates any prior focus point.
+  useEffect(() => clearFocus(), [order])
+
+  // Track the selected object's centre as the persisted focus, so every camera
+  // mode can re-acquire it on entry (fixes "changing mode loses the building").
+  useEffect(() => {
+    if (!selection.length) { clearFocus(); return } // deselect/delete drops the focus point
+    const box = new THREE.Box3()
+    let has = false
+    for (const id of selection) {
+      const obj = useEditor.getState().objects[id]
+      if (!obj) continue
+      const three = getVariant(obj.id, obj.asset) ?? getVariant(obj.id, PROC_FALLBACK)
+      if (three && three.parent) { three.updateMatrixWorld(true); box.expandByObject(three); has = true }
+    }
+    if (has && !box.isEmpty()) setFocus(box.getCenter(new THREE.Vector3()))
+  }, [selection])
 
   // pointer-drag look for fly mode
   useEffect(() => {
@@ -45,12 +68,30 @@ export function CameraRig() {
     }
   }, [gl])
 
-  // mode transitions
+  // mode transitions — re-seed the newly active controller from the shared focus
+  // so the view never jumps to a stale pivot or loses the focused object.
   useEffect(() => {
     if (mode === 'fly' && prevMode.current !== 'fly') {
       const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ')
       look.current.yaw = e.y
       look.current.pitch = e.x
+    }
+    if (mode === 'orbit' && prevMode.current !== 'orbit' && controls.current) {
+      // Entering orbit: the controls' target is stale (fly/drive moved the
+      // camera directly). Re-seed it to the focused object — or, absent a
+      // focus, a point straight ahead — so the first damped update() doesn't
+      // whip the view around the old pivot.
+      const target = new THREE.Vector3()
+      if (focusState.has) {
+        target.copy(focusTarget)
+      } else {
+        const fwd = new THREE.Vector3()
+        camera.getWorldDirection(fwd)
+        target.copy(camera.position).addScaledVector(fwd, 120)
+        target.y = Math.max(target.y, 0)
+      }
+      controls.current.target.copy(target)
+      controls.current.update()
     }
     prevMode.current = mode
   }, [mode, camera])
@@ -119,7 +160,7 @@ export function CameraRig() {
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       maxPolarAngle={Math.PI * 0.49}
       minDistance={8}
-      maxDistance={2500}
+      maxDistance={4000}
     />
   )
 }

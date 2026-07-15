@@ -21,7 +21,48 @@ const AREA_STYLE: Record<string, { y: number; mat: THREE.MeshStandardMaterial } 
 }
 
 const GROUND_MAT = new THREE.MeshStandardMaterial({ color: '#4d5545', roughness: 1 }) // land: mossy green
-const WATER_MAT = new THREE.MeshStandardMaterial({ color: '#39566b', roughness: 0.25, metalness: 0.1 })
+
+// Animated ocean surface. It stays a MeshStandardMaterial so it keeps scene
+// lighting, shadows and the logarithmic depth buffer (see editor/depthConfig);
+// scrolling-wave ripples and a horizon fresnel sheen are injected via
+// onBeforeCompile. A single shared uniform is advanced each render frame by
+// tickOcean() so the water visibly moves — this reads unmistakably as sea/ocean
+// rather than a flat blue slab.
+const OCEAN_UNIFORMS = { uTime: { value: 0 } }
+export function tickOcean(t: number): void {
+  OCEAN_UNIFORMS.uTime.value = t
+}
+function makeOceanMaterial(): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: '#1e4d68', roughness: 0.18, metalness: 0.0 })
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = OCEAN_UNIFORMS.uTime
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vOceanWPos;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n\tvOceanWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vOceanWPos;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float ow1 = sin(vOceanWPos.x * 0.045 + uTime * 0.8) * cos(vOceanWPos.z * 0.052 - uTime * 0.6);
+        float ow2 = sin((vOceanWPos.x + vOceanWPos.z) * 0.11 - uTime * 0.9);
+        float oRip = 0.5 + 0.5 * (ow1 * 0.6 + ow2 * 0.4);
+        diffuseColor.rgb *= mix(0.82, 1.18, oRip);`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        float oFres = pow(1.0 - max(dot(normalize(vViewPosition), normal), 0.0), 3.0);
+        totalEmissiveRadiance += vec3(0.05, 0.11, 0.16) * oFres;`,
+      )
+  }
+  m.customProgramCacheKey = () => 'citybuilder-ocean'
+  return m
+}
+const WATER_MAT = makeOceanMaterial()
 const BANK_MAT = new THREE.MeshStandardMaterial({ color: '#6b6353', roughness: 1, side: THREE.DoubleSide })
 export const WATER_DEPTH = 0.35 // carved water sits this far below grade
 const WATER_PAINT_Y = 0.012 // fallback painted-water layer (depthConfig convention)
@@ -60,37 +101,44 @@ export interface TerrainBuild {
  * vs. rings that fall back to painted overlays. Shared by buildTerrain and the
  * physics collider builder (water sensor volumes) so both agree exactly.
  */
-export function waterRings(waterAreas: AreaFeature[], bounds: Rect): { carved: Vec2[][]; painted: Vec2[][] } {
-  interface Candidate { ring: Vec2[]; area: number }
+export interface WaterRing {
+  ring: Vec2[]
+  holes: Vec2[][] // land islands cut out of this water surface
+}
+export function waterRings(waterAreas: AreaFeature[], bounds: Rect): { carved: WaterRing[]; painted: WaterRing[] } {
+  interface Candidate { ring: Vec2[]; holes: Vec2[][]; area: number }
   const candidates: Candidate[] = []
-  const painted: Vec2[][] = []
+  const painted: WaterRing[] = []
 
   for (const a of waterAreas) {
     if (!a.render || a.kind !== 'water' || a.ring.length < 3) continue
     const clipped = clipRingToRect(a.ring, bounds)
     if (clipped.length < 3) continue
+    const holes = (a.holes ?? [])
+      .map((h) => clipRingToRect(h, bounds))
+      .filter((h) => h.length >= 3 && ringIsSimple(h))
     if (!ringIsSimple(clipped)) {
       // folded ribbon (hairpin river) — same-material overlay is safe to paint
-      painted.push(clipped)
+      painted.push({ ring: clipped, holes })
       continue
     }
     const area = ringAreaM2(clipped)
     if (area < 1) continue
-    candidates.push({ ring: clipped, area })
+    candidates.push({ ring: clipped, holes, area })
   }
 
   candidates.sort((c1, c2) => c2.area - c1.area)
-  const holes: Candidate[] = []
+  const kept: Candidate[] = []
   for (const c of candidates) {
     const bb = ringBBox(c.ring)
-    const clash = holes.some((h) => {
+    const clash = kept.some((h) => {
       const hb = ringBBox(h.ring)
       return bb.minX < hb.maxX && hb.minX < bb.maxX && bb.minZ < hb.maxZ && hb.minZ < bb.maxZ
     })
-    if (clash) painted.push(c.ring)
-    else holes.push(c)
+    if (clash) painted.push({ ring: c.ring, holes: c.holes })
+    else kept.push(c)
   }
-  return { carved: holes.map((h) => h.ring), painted }
+  return { carved: kept.map((h) => ({ ring: h.ring, holes: h.holes })), painted }
 }
 
 /**
@@ -101,32 +149,36 @@ export function waterRings(waterAreas: AreaFeature[], bounds: Rect): { carved: V
  */
 export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBuild {
   const { carved, painted } = waterRings(waterAreas, bounds)
-  const holes = carved.map((ring) => ({ ring }))
-  const paintGeoms = painted.map((ring) => flatRingGeometry(ring, WATER_PAINT_Y))
+  const paintGeoms = painted.map((p) => holedFlatGeometry(p.ring, p.holes, WATER_PAINT_Y))
 
-  // ---- ground: rect shape minus carved holes (shape space: (x, -z))
+  // ---- ground: rect shape minus carved water (shape space: (x, -z))
   const groundShape = new THREE.Shape([
     new THREE.Vector2(bounds.minX, -bounds.minZ),
     new THREE.Vector2(bounds.maxX, -bounds.minZ),
     new THREE.Vector2(bounds.maxX, -bounds.maxZ),
     new THREE.Vector2(bounds.minX, -bounds.maxZ),
   ])
-  for (const h of holes) {
-    groundShape.holes.push(new THREE.Path(h.ring.map((p) => new THREE.Vector2(p.x, -p.z))))
+  for (const c of carved) {
+    groundShape.holes.push(new THREE.Path(c.ring.map((p) => new THREE.Vector2(p.x, -p.z))))
   }
-  const groundGeo = new THREE.ShapeGeometry(groundShape)
-  groundGeo.rotateX(-Math.PI / 2)
-  const ground = new THREE.Mesh(indexed(groundGeo), GROUND_MAT)
+  const groundGeo = indexed(new THREE.ShapeGeometry(groundShape).rotateX(-Math.PI / 2))
+  // land islands sit inside carved water — re-add them as ground faces at grade
+  const islandGeoms: THREE.BufferGeometry[] = []
+  for (const c of carved) for (const h of c.holes) islandGeoms.push(flatRingGeometry(h, 0))
+  const ground = new THREE.Mesh(
+    islandGeoms.length ? mergeGeometries([groundGeo, ...islandGeoms]) : groundGeo,
+    GROUND_MAT,
+  )
   ground.receiveShadow = true
   ground.name = 'Ground'
 
-  // ---- water: sunken surfaces filling the holes + bank skirts to grade
+  // ---- water: sunken surfaces (islands cut out) + bank skirts to grade
   const waterGeoms: THREE.BufferGeometry[] = []
   const bankGeoms: THREE.BufferGeometry[] = []
-  for (const h of holes) {
-    waterGeoms.push(flatRingGeometry(h.ring, -WATER_DEPTH))
-    const closed = [...h.ring, h.ring[0]]
-    bankGeoms.push(wallGeometry(closed, 0, -WATER_DEPTH))
+  for (const c of carved) {
+    waterGeoms.push(holedFlatGeometry(c.ring, c.holes, -WATER_DEPTH))
+    bankGeoms.push(wallGeometry([...c.ring, c.ring[0]], 0, -WATER_DEPTH))
+    for (const h of c.holes) bankGeoms.push(wallGeometry([...h, h[0]], -WATER_DEPTH, 0)) // island shore skirt
   }
 
   let water: THREE.Group | null = null
@@ -145,12 +197,18 @@ export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBu
       water.add(m)
     }
   }
-  return { ground, water, carvedCount: holes.length, paintedCount: painted.length }
+  return { ground, water, carvedCount: carved.length, paintedCount: painted.length }
 }
 
-/** True when point p lies over carved or painted water of these areas. */
+/** True when point p lies over carved or painted water of these areas (islands excluded). */
 export function isWaterAt(p: Vec2, waterAreas: AreaFeature[]): boolean {
-  return waterAreas.some((a) => a.kind === 'water' && a.render && pointInRing(p, a.ring))
+  return waterAreas.some(
+    (a) =>
+      a.kind === 'water' &&
+      a.render &&
+      pointInRing(p, a.ring) &&
+      !(a.holes ?? []).some((h) => pointInRing(p, h)),
+  )
 }
 
 function ringBBox(ring: Vec2[]): Rect {
@@ -166,6 +224,24 @@ export function flatRingGeometry(ring: Vec2[], y: number): THREE.BufferGeometry 
   const pts = ring.map((p) => new THREE.Vector2(p.x, -p.z))
   if (THREE.ShapeUtils.isClockWise(pts)) pts.reverse()
   const geo = new THREE.ShapeGeometry(new THREE.Shape(pts))
+  geo.rotateX(-Math.PI / 2)
+  geo.translate(0, y, 0)
+  return indexed(geo)
+}
+
+/** Flat filled ring with interior holes cut out (islands), at height y. */
+export function holedFlatGeometry(ring: Vec2[], holes: Vec2[][], y: number): THREE.BufferGeometry {
+  if (!holes.length) return flatRingGeometry(ring, y)
+  const outer = ring.map((p) => new THREE.Vector2(p.x, -p.z))
+  if (THREE.ShapeUtils.isClockWise(outer)) outer.reverse()
+  const shape = new THREE.Shape(outer)
+  for (const h of holes) {
+    if (h.length < 3) continue
+    const hp = h.map((p) => new THREE.Vector2(p.x, -p.z))
+    if (!THREE.ShapeUtils.isClockWise(hp)) hp.reverse() // holes wind opposite the outline
+    shape.holes.push(new THREE.Path(hp))
+  }
+  const geo = new THREE.ShapeGeometry(shape)
   geo.rotateX(-Math.PI / 2)
   geo.translate(0, y, 0)
   return indexed(geo)

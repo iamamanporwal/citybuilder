@@ -11,6 +11,7 @@ import {
   rampSpecFor,
 } from '../procgen/roadNetwork'
 import { smoothPolyline } from '../procgen/geometry'
+import { withCorridorElevation } from '../procgen/corridor'
 
 // Materials build canvas textures at module load — stub them so buildRoads
 // runs in plain node for the renderer-parity test.
@@ -116,30 +117,35 @@ describe('bridge elevation profiles', () => {
 })
 
 describe('renderer parity', () => {
-  it('buildRoads bridge deck Y equals elevationProfile + Y_ROAD', async () => {
+  // The legacy per-segment renderer path (flag OFF). Pinned off explicitly since
+  // the network solve is now the default (E3); the network path's own renderer
+  // parity lives in corridorElevation.test.ts.
+  it('buildRoads bridge deck Y equals elevationProfile + Y_ROAD (legacy path, flag off)', async () => {
     const { buildRoads } = await import('../procgen/roads')
-    const bridge = road('bridge', line(0, 300, 20), { bridge: true, layer: 1 })
-    const approach = road('approach', [{ x: -80, z: 0 }, { x: 0, z: 0 }])
-    const graph = { roads: [bridge, approach] } as unknown as CityGraph
-    const resolutions = new Map([
-      ['bridge', resolution],
-      ['approach', resolution],
-    ])
-    const result = buildRoads(graph, {} as ResolvedContext, resolutions)
-    const mesh = result.roadMeshes.get('bridge')!
-    expect(mesh).toBeDefined()
+    withCorridorElevation(false, () => {
+      const bridge = road('bridge', line(0, 300, 20), { bridge: true, layer: 1 })
+      const approach = road('approach', [{ x: -80, z: 0 }, { x: 0, z: 0 }])
+      const graph = { roads: [bridge, approach] } as unknown as CityGraph
+      const resolutions = new Map([
+        ['bridge', resolution],
+        ['approach', resolution],
+      ])
+      const result = buildRoads(graph, {} as ResolvedContext, resolutions)
+      const mesh = result.roadMeshes.get('bridge')!
+      expect(mesh).toBeDefined()
 
-    const pts = smoothPolyline(bridge.points)
-    const cum = cumulative(pts)
-    const nodes = analyzeRoadNodes(graph.roads)
-    const expected = elevationProfile(rampSpecFor(bridge, cum[cum.length - 1], nodes), cum).map(
-      (e) => e + 0.05, // Y_ROAD cosmetic offset (roads.ts)
-    )
-    const pos = mesh.geometry.getAttribute('position')
-    expect(pos.count).toBe(pts.length * 2) // ribbon: left+right vertex per point
-    for (let i = 0; i < pts.length; i++) {
-      expect(pos.getY(i * 2)).toBeCloseTo(expected[i], 5)
-      expect(pos.getY(i * 2 + 1)).toBeCloseTo(expected[i], 5)
-    }
+      const pts = smoothPolyline(bridge.points)
+      const cum = cumulative(pts)
+      const nodes = analyzeRoadNodes(graph.roads)
+      const expected = elevationProfile(rampSpecFor(bridge, cum[cum.length - 1], nodes), cum).map(
+        (e) => e + 0.05, // Y_ROAD cosmetic offset (roads.ts)
+      )
+      const pos = mesh.geometry.getAttribute('position')
+      expect(pos.count).toBe(pts.length * 2) // ribbon: left+right vertex per point
+      for (let i = 0; i < pts.length; i++) {
+        expect(pos.getY(i * 2)).toBeCloseTo(expected[i], 5)
+        expect(pos.getY(i * 2 + 1)).toBeCloseTo(expected[i], 5)
+      }
+    })
   })
 })

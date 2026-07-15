@@ -19,12 +19,11 @@ import { flatRingGeometry, waterRings } from '../procgen/areas'
 import {
   analyzeRoadNodes,
   cumulative,
-  elevationProfile,
   nodeKey,
   NON_DRIVABLE,
-  rampSpecFor,
   type RoadNodeInfo,
 } from '../procgen/roadNetwork'
+import { buildRoadElevation, type RoadElevation } from '../procgen/corridor'
 import type { FurniturePlacements } from '../procgen/props'
 import { CLASS_PHYSICS, SURFACE_PHYSICS } from './materials'
 import type { ColliderClass, ColliderDescriptor, ColliderSet } from './types'
@@ -90,6 +89,9 @@ export function buildColliders(
   const excluded = opts.excluded ?? new Set<string>()
   const colliders: ColliderDescriptor[] = []
   const nodes = analyzeRoadNodes(graph.roads)
+  // Same elevation seam the renderer reads, so collider heights mirror the
+  // visual road surface exactly (the parity contract in the header comment).
+  const elevation = buildRoadElevation(graph.roads)
 
   // ---- bounds (same padded rect as scene/registry.ts terrain)
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
@@ -101,10 +103,10 @@ export function buildColliders(
   const pad = 120
   const bounds: Rect = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad }
 
-  roadColliders(graph, roadResolutions, nodes, colliders)
+  roadColliders(graph, roadResolutions, elevation, colliders)
   intersectionColliders(nodes, colliders)
   sidewalkColliders(graph, roadResolutions, nodes, colliders)
-  bridgeRailColliders(graph, nodes, colliders)
+  bridgeRailColliders(graph, elevation, colliders)
   portalColliders(graph, nodes, colliders)
   buildingColliders(graph, opts, excluded, colliders)
   terrainCollider(bounds, colliders)
@@ -126,7 +128,7 @@ export function buildColliders(
 function roadColliders(
   graph: CityGraph,
   resolutions: Map<string, RoadResolution>,
-  nodes: Map<string, RoadNodeInfo>,
+  elevation: RoadElevation,
   out: ColliderDescriptor[],
 ) {
   for (const r of graph.roads) {
@@ -134,8 +136,7 @@ function roadColliders(
     const pts = smoothPolyline(r.points)
     const half = r.widthM / 2
     const cum = cumulative(pts)
-    const spec = rampSpecFor(r, cum[cum.length - 1], nodes)
-    const profile = elevationProfile(spec, cum).map((e) => e + Y_ROAD_COL)
+    const profile = elevation.profileFor(r, cum).map((e) => e + Y_ROAD_COL)
     // untrimmed at junctions: physics tolerates overlap; trimming would leave
     // gaps under the visual junction discs
     const geometry = toTrimesh(
@@ -220,15 +221,14 @@ function sidewalkColliders(
   }
 }
 
-function bridgeRailColliders(graph: CityGraph, nodes: Map<string, RoadNodeInfo>, out: ColliderDescriptor[]) {
+function bridgeRailColliders(graph: CityGraph, elevation: RoadElevation, out: ColliderDescriptor[]) {
   const RAIL_H = 1.05
   const RAIL_T = 0.12
   for (const r of graph.roads) {
     if (!r.bridge || r.tunnel || r.points.length < 2) continue
     const pts = smoothPolyline(r.points)
     const cum = cumulative(pts)
-    const spec = rampSpecFor(r, cum[cum.length - 1], nodes)
-    const deck = elevationProfile(spec, cum).map((e) => e + Y_ROAD_COL)
+    const deck = elevation.profileFor(r, cum).map((e) => e + Y_ROAD_COL)
     const half = r.widthM / 2
     let n = 0
     for (const side of [1, -1]) {
@@ -348,11 +348,11 @@ function terrainCollider(bounds: Rect, out: ColliderDescriptor[]) {
 function waterSensors(graph: CityGraph, bounds: Rect, out: ColliderDescriptor[]) {
   const { carved, painted } = waterRings(graph.areas.filter((a) => a.kind === 'water'), bounds)
   const rings = [...carved, ...painted]
-  rings.forEach((ring, i) => {
+  rings.forEach((r, i) => {
     out.push({
       id: `col_water_${i}`,
       kind: 'trimesh',
-      geometry: toTrimesh(flatRingGeometry(ring, 0)),
+      geometry: toTrimesh(flatRingGeometry(r.ring, 0)),
       transform: { position: [0, 0, 0], quaternion: IDENTITY_Q },
       semantics: { class: 'water', sensor: true, static: true },
       material: { ...CLASS_PHYSICS.water },

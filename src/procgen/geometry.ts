@@ -117,14 +117,26 @@ export function planarUvXZ(g: THREE.BufferGeometry): THREE.BufferGeometry {
   return g
 }
 
-/** Raised slab ribbon (top face at height h + vertical skirts down to 0 on both edges). */
-export function raisedRibbonGeometry(left: Vec2[], right: Vec2[], h: number): THREE.BufferGeometry {
+/**
+ * Raised slab ribbon: top face at `base + h`, vertical skirts down to `base` on
+ * both edges. `base` is 0 for a flat road (curbs rise off grade) or a per-point
+ * profile so the slab rides a road that the elevation solve has lifted — the top
+ * stays exactly `h` above the road surface at every station (no floating curbs on
+ * a grade). Flat default (`base = 0`) reproduces the original slab byte-for-byte.
+ */
+export function raisedRibbonGeometry(
+  left: Vec2[],
+  right: Vec2[],
+  h: number,
+  base: number | number[] = 0,
+): THREE.BufferGeometry {
+  const top = typeof base === 'number' ? base + h : base.map((b) => b + h)
   const parts: THREE.BufferGeometry[] = []
   // top face gets world-planar UVs: sidewalk slabs from different arms overlap
   // at corners and along dual carriageways at the same curb height
-  parts.push(planarUvXZ(ribbonGeometry(left, right, h)))
-  parts.push(wallGeometry(left, h, 0))
-  parts.push(wallGeometry(right, 0, h)) // reversed winding via height order
+  parts.push(planarUvXZ(ribbonGeometry(left, right, top)))
+  parts.push(wallGeometry(left, top, base))
+  parts.push(wallGeometry(right, base, top)) // reversed winding via height order
   return mergeGeometries(parts)
 }
 

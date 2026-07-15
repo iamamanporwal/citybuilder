@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { lazy, Suspense, useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, Sky } from '@react-three/drei'
 import { Bloom, BrightnessContrast, EffectComposer, SMAA, Vignette } from '@react-three/postprocessing'
 import { useEditor } from '../state/store'
 import { CameraRig } from './CameraRig'
 import { SceneContent } from './SceneContent'
+import { lastOrbitTarget } from './bus'
 import { DEPTH_CONFIG } from './depthConfig'
 
 // physics drive preview: code-split so the rapier wasm loads on first use only
@@ -57,6 +59,37 @@ function Lighting() {
       ambient: Math.max(elev, 0) * 0.9 + 0.5,
     }
   }, [sunTime])
+  const sunDir = useMemo(() => new THREE.Vector3(sun.pos[0], sun.pos[1], sun.pos[2]).normalize(), [sun.pos])
+  const lightRef = useRef<THREE.DirectionalLight>(null)
+  const { scene, camera } = useThree()
+  const focus = useMemo(() => new THREE.Vector3(), [])
+
+  // The shadow frustum follows the view and scales with zoom, so large cities
+  // stay lit off-origin instead of only within a fixed ±650 m box at (0,0).
+  useFrame(() => {
+    const l = lightRef.current
+    if (!l) return
+    if (l.target.parent !== scene) scene.add(l.target) // survives shadowRes remounts
+    if (useEditor.getState().cameraMode === 'orbit') {
+      focus.copy(lastOrbitTarget)
+    } else {
+      const fwd = new THREE.Vector3()
+      camera.getWorldDirection(fwd)
+      const t = Math.abs(fwd.y) > 1e-3 ? -camera.position.y / fwd.y : -1
+      if (t > 0 && t < 5000) focus.copy(camera.position).addScaledVector(fwd, t)
+      else focus.set(camera.position.x, 0, camera.position.z)
+    }
+    l.target.position.copy(focus)
+    l.position.copy(focus).addScaledVector(sunDir, 900)
+    l.target.updateMatrixWorld()
+    const half = Math.min(Math.max(camera.position.distanceTo(focus) * 0.7, 650), 2600)
+    const cam = l.shadow.camera as THREE.OrthographicCamera
+    if (Math.abs(cam.right - half) > 8) { // avoid a per-frame projection rebuild while dollying
+      cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half
+      cam.far = Math.max(3000, half * 2 + 1500)
+      cam.updateProjectionMatrix()
+    }
+  })
 
   return (
     <>
@@ -64,6 +97,7 @@ function Lighting() {
       <hemisphereLight args={['#c6d8ea', '#57584e', sun.ambient]} />
       <ambientLight intensity={0.18} />
       <directionalLight
+        ref={lightRef}
         key={shadowRes}
         position={sun.pos}
         intensity={sun.intensity}

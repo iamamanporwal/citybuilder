@@ -4,6 +4,7 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, TransformControls } from '@react-three/drei'
 import { useEditor } from '../state/store'
 import { getVariant } from '../scene/registry'
+import { tickOcean } from '../procgen/areas'
 import type { SceneObject } from '../types'
 
 const PROC_FALLBACK = {
@@ -27,14 +28,24 @@ function ObjectNode({ id }: { id: string }) {
   if (!obj || !three || obj.deleted || !obj.visible) return null
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
-    if (useEditor.getState().cameraMode !== 'orbit') return
-    if (e.delta > 6) return // was a camera drag, not a click
+    // selectable in orbit AND fly (drive is hands-on-wheel); the guard used to
+    // be orbit-only, which silently broke the "click any object" model in fly
+    if (useEditor.getState().cameraMode === 'drive') return
+    if (e.delta > 6) return // was a camera drag/look, not a click
     e.stopPropagation()
     if (obj.type === 'ground') {
       clearSelection()
       return
     }
+    // instanced props (streetlights/benches/bins/trees) are one object holding
+    // many items — resolve the clicked instance so selection highlights per-item
+    const instanceId = e.instanceId
     select([obj.id], e.nativeEvent.shiftKey)
+    useEditor.getState().setSelectedInstance(
+      instanceId != null && (obj.type === 'street-furniture' || obj.type === 'vegetation')
+        ? { objectId: obj.id, index: instanceId, meshUuid: e.object.uuid }
+        : null,
+    )
   }
 
   const height = typeof obj.meta['height (m)'] === 'number' ? (obj.meta['height (m)'] as number) : 20
@@ -47,6 +58,12 @@ function ObjectNode({ id }: { id: string }) {
         rotation={obj.transform.rotation}
         scale={obj.transform.scale}
         onClick={onClick}
+        onPointerOver={(e: ThreeEvent<PointerEvent>) => {
+          if (obj.type === 'ground' || useEditor.getState().cameraMode === 'drive') return
+          e.stopPropagation()
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={() => { document.body.style.cursor = '' }}
       />
       {job && (
         <Html
@@ -69,16 +86,34 @@ function ObjectNode({ id }: { id: string }) {
   )
 }
 
+function boxInstance(box: THREE.Box3, im: THREE.InstancedMesh, index: number): boolean {
+  if (index < 0 || index >= im.count) return false
+  if (!im.geometry.boundingBox) im.geometry.computeBoundingBox()
+  const m = new THREE.Matrix4()
+  im.getMatrixAt(index, m)
+  box.copy(im.geometry.boundingBox!).applyMatrix4(m).applyMatrix4(im.matrixWorld)
+  return true
+}
+
 function SelectionBox({ id }: { id: string }) {
   const box = useMemo(() => new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 1, 1)), [])
   const helper = useRef<THREE.Box3Helper>(null)
   useFrame(() => {
-    const obj = useEditor.getState().objects[id]
+    const st = useEditor.getState()
+    const obj = st.objects[id]
     if (!obj) return
     const three = currentObject3D(obj)
-    if (three && three.parent) {
-      box.setFromObject(three)
+    if (!three || !three.parent) return
+    // when a specific instance of an instanced group was clicked, box just it
+    const inst = st.selectedInstance
+    if (inst && inst.objectId === id) {
+      let target: THREE.InstancedMesh | null = null
+      three.traverse((o) => {
+        if (!target && o.uuid === inst.meshUuid && (o as THREE.InstancedMesh).isInstancedMesh) target = o as THREE.InstancedMesh
+      })
+      if (target && boxInstance(box, target, inst.index)) return
     }
+    box.setFromObject(three)
   })
   return <box3Helper ref={helper} args={[box, new THREE.Color('#ffc53d')]} />
 }
@@ -131,11 +166,18 @@ function Gizmo() {
   )
 }
 
+/** Drives the shared animated ocean uniform every frame (mounted once). */
+function OceanTicker() {
+  useFrame((state) => tickOcean(state.clock.elapsedTime))
+  return null
+}
+
 export function SceneContent() {
   const order = useEditor((s) => s.objectOrder)
   const selection = useEditor((s) => s.selection)
   return (
     <group>
+      <OceanTicker />
       {order.map((id) => (
         <ObjectNode key={id} id={id} />
       ))}

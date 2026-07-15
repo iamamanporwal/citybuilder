@@ -6,8 +6,11 @@ import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/lib
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
-import { analyzeRoadNodes, cumulative, elevationProfile, nodeKey, NON_DRIVABLE, rampSpecFor } from './roadNetwork'
+import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, nodeKey, NON_DRIVABLE } from './roadNetwork'
+import { buildRoadElevation } from './corridor'
 import { DecalPlanner } from './decalPlan'
+import { matchBridgeLandmark, type LandmarkEntry } from '../scene/landmarks'
+import { buildSuspensionBridge, chainCenterlines, type LandmarkBridge } from './bridges'
 
 // Deterministic procedural road system (PRD §8). Roads are generated from data,
 // never from generative-3D, and are locked in the editor. Surfaces, markings and
@@ -33,6 +36,7 @@ export interface RoadBuildResult {
   decals: THREE.Group | null
   bridges: THREE.Group | null
   portals: THREE.Group | null
+  landmarkBridges: LandmarkBridge[]
 }
 
 function pushQuad(
@@ -87,6 +91,10 @@ export function buildRoads(
 ): RoadBuildResult {
   // ---- junction detection (drivable classes only)
   const nodeUse = analyzeRoadNodes(graph.roads)
+  // ---- elevation: single source of truth (network solve when enabled, else
+  // the legacy per-segment ramp). The collider builder and semantics exporter
+  // read the same seam so all three agree on the y-channel.
+  const elevation = buildRoadElevation(graph.roads)
   const isJunction = (p: Vec2) => (nodeUse.get(nodeKey(p))?.count ?? 0) >= 2
   const junctionRadius = (p: Vec2) => (nodeUse.get(nodeKey(p))?.maxWidth ?? 8) * 0.55
 
@@ -98,6 +106,21 @@ export function buildRoads(
   const bridgeGeoms: THREE.BufferGeometry[] = []
   const pierGeoms: THREE.BufferGeometry[] = []
   const portalBoxes: THREE.BufferGeometry[] = []
+
+  // ---- landmark bridges (Golden Gate & co): grouped by catalog id so a bridge
+  // split across several OSM ways builds ONE recognizable suspension structure.
+  // Their deck surfaces still render per-segment; only the generic fascia+pier
+  // superstructure is replaced by the dedicated generator.
+  const landmarkGroups = new Map<string, { entry: LandmarkEntry; segs: RoadSegment[] }>()
+  for (const r of graph.roads) {
+    if (!r.bridge) continue
+    const lm = matchBridgeLandmark(r)
+    if (!lm || (lm.category !== 'suspension-bridge' && lm.category !== 'cable-stayed-bridge')) continue
+    if (!landmarkGroups.has(lm.id)) landmarkGroups.set(lm.id, { entry: lm, segs: [] })
+    landmarkGroups.get(lm.id)!.segs.push(r)
+  }
+  const landmarkRoadIds = new Set<string>()
+  for (const g of landmarkGroups.values()) for (const s of g.segs) landmarkRoadIds.add(s.id)
   const decalQuads: Record<keyof typeof decalMaterials, { pos: number[]; idx: number[]; uv: number[] }> = {
     crack: { pos: [], idx: [], uv: [] },
     stain: { pos: [], idx: [], uv: [] },
@@ -149,9 +172,24 @@ export function buildRoads(
     const isPath = NON_DRIVABLE.has(r.roadClass)
     const yBase = isPath ? Y_PATH : Y_ROAD
     const cum = cumulative(pts)
-    const spec = rampSpecFor(r, cum[cum.length - 1], nodeUse)
+    const trueProfile = elevation.profileFor(r, cum)
+    // A flat segment stays a scalar height so ribbonGeometry keeps its exact
+    // up-normal fast path (legacy parity); any relief promotes to a per-point
+    // profile. Bridges are always elevated, so decks remain per-point arrays.
+    const elevated = trueProfile.some((e) => Math.abs(e) > 1e-6)
     let profile: number[] | number = yBase
-    if (spec) profile = elevationProfile(spec, cum).map((e) => e + yBase)
+    if (elevated) profile = trueProfile.map((e) => e + yBase)
+
+    // Surface-relative layer heights (Road Corridor Redesign E4). Markings,
+    // decals, crosswalks and sidewalks must ride the road surface: a fixed
+    // global-Y offset stops meaning "above the road" the moment the elevation
+    // solve lifts an at-grade road (a bridge approach), so they'd detach/float
+    // (§1.4). `surfElev` returns the road's ADDED elevation (0 = grade) at any
+    // 2D point by projecting it onto the centerline; a flat road returns a
+    // constant 0, so every layer keeps its exact legacy Y — byte-identical.
+    const surfElev = surfaceElevSampler(pts, trueProfile, elevated)
+    const layerProfile = (line: Vec2[], layerY: number): number | number[] =>
+      elevated ? line.map((p) => surfElev(p) + layerY) : layerY
 
     const surface = ribbonGeometry(left, right, profile)
     if (isPath) planarUvXZ(surface)
@@ -161,21 +199,24 @@ export function buildRoads(
     mesh.receiveShadow = true
     roadMeshes.set(r.id, mesh)
 
-    // ---- bridge structure: fascia + rails + piers
+    // ---- bridge structure: fascia + rails + piers (landmark bridges get the
+    // dedicated suspension generator instead, built after the loop)
     if (r.bridge && Array.isArray(profile)) {
-      const deck = profile
-      const fasciaBottom = deck.map((y) => y - 0.9)
-      const railTop = deck.map((y) => y + 1.05)
-      bridgeGeoms.push(wallGeometry(left, fasciaBottom, railTop))
-      bridgeGeoms.push(wallGeometry(right, railTop, fasciaBottom))
-      const L = cum[cum.length - 1]
-      for (let d = 14; d < L - 10; d += 22) {
-        const { p } = pointAlong(pts, d)
-        const elevHere = deck[nearestIndex(cum, d)]
-        if (elevHere > 3.5) {
-          const pier = new THREE.CylinderGeometry(0.85, 1.0, elevHere - 0.35, 10)
-          pier.translate(p.x, (elevHere - 0.35) / 2, p.z)
-          pierGeoms.push(pier)
+      if (!landmarkRoadIds.has(r.id)) {
+        const deck = profile
+        const fasciaBottom = deck.map((y) => y - 0.9)
+        const railTop = deck.map((y) => y + 1.05)
+        bridgeGeoms.push(wallGeometry(left, fasciaBottom, railTop))
+        bridgeGeoms.push(wallGeometry(right, railTop, fasciaBottom))
+        const L = cum[cum.length - 1]
+        for (let d = 14; d < L - 10; d += 22) {
+          const { p } = pointAlong(pts, d)
+          const elevHere = deck[nearestIndex(cum, d)]
+          if (elevHere > 3.5) {
+            const pier = new THREE.CylinderGeometry(0.85, 1.0, elevHere - 0.35, 10)
+            pier.translate(p.x, (elevHere - 0.35) / 2, p.z)
+            pierGeoms.push(pier)
+          }
         }
       }
       continue // no sidewalks/markings/decals on decks in this pass (P1: elevated markings)
@@ -192,10 +233,13 @@ export function buildRoads(
         : 0
       const walkPts = trimPolyline(pts, startTrim, endTrim)
       if (walkPts && walkPts.length >= 2) {
+        // curb/sidewalk slab rides the road surface: base = road elevation at
+        // each station, top = base + curbHeight (flat road ⇒ base 0 ⇒ legacy).
+        const base = layerProfile(walkPts, 0)
         for (const side of [1, -1]) {
           const inner = offsetPolyline(walkPts, side * (half + 0.05))
           const outer = offsetPolyline(walkPts, side * (half + sw))
-          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, res.crossSection.curbHeight))
+          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, res.crossSection.curbHeight, base))
         }
       }
     }
@@ -211,19 +255,20 @@ export function buildRoads(
       )
       if (markPts && markPts.length >= 2) {
         const buf = res.marking.centerColor === 'yellow' ? yellow : white
+        const markElev = (line: Vec2[]) => layerProfile(line, Y_MARK)
         if (!r.oneway && r.lanes >= 2) {
           if (res.marking.centerPattern === 'double-solid') {
             for (const off of [0.18, -0.18]) {
-              buf.addRibbon(ribbonGeometry(offsetPolyline(markPts, off + 0.06), offsetPolyline(markPts, off - 0.06), Y_MARK))
+              buf.addRibbon(ribbonGeometry(offsetPolyline(markPts, off + 0.06), offsetPolyline(markPts, off - 0.06), markElev(markPts)))
             }
           } else if (res.marking.centerPattern === 'solid') {
-            buf.addRibbon(ribbonGeometry(offsetPolyline(markPts, 0.08), offsetPolyline(markPts, -0.08), Y_MARK))
+            buf.addRibbon(ribbonGeometry(offsetPolyline(markPts, 0.08), offsetPolyline(markPts, -0.08), markElev(markPts)))
           } else {
-            dashedLine(markPts, 0, buf)
+            dashedLine(markPts, 0, buf, markElev)
           }
         } else if (r.oneway && r.lanes >= 2) {
           for (let laneLine = 1; laneLine < Math.min(r.lanes, 4); laneLine++) {
-            dashedLine(markPts, -half + (r.widthM / r.lanes) * laneLine, white)
+            dashedLine(markPts, -half + (r.widthM / r.lanes) * laneLine, white, markElev)
           }
         }
 
@@ -239,12 +284,14 @@ export function buildRoads(
             for (let s = 0; s < stripes; s++) {
               const lateral = -((stripes - 1) / 2) * 1.6 + s * 1.6
               const c = { x: endPt.x + inward.x * 1.6 + across.x * lateral, z: endPt.z + inward.z * 1.6 + across.z * lateral }
-              pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 1.1, across, res.marking.crosswalk === 'ladder' ? 0.3 : 0.4, Y_CROSSWALK)
+              const cwY = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
+              pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 1.1, across, res.marking.crosswalk === 'ladder' ? 0.3 : 0.4, cwY)
             }
             if (res.marking.crosswalk === 'ladder') {
               for (const edge of [-1.3, 1.3]) {
                 const c = { x: endPt.x + inward.x * (1.6 + edge), z: endPt.z + inward.z * (1.6 + edge) }
-                pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.12, across, (stripes * 1.6) / 2 + 0.4, Y_CROSSWALK)
+                const cwY = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
+                pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.12, across, (stripes * 1.6) / 2 + 0.4, cwY)
               }
             }
           }
@@ -266,7 +313,8 @@ export function buildRoads(
             const s = 0.9 + hash01(`${r.id}:ds${i}`) * 1.4
             if (!decalPlanner.tryPlace(c, s)) continue
             const q = decalQuads[kind]
-            pushQuad(q.pos, q.idx, c, dir, s, across, s, Y_DECAL, q.uv)
+            const decalY = elevated ? surfElev(c) + Y_DECAL : Y_DECAL
+            pushQuad(q.pos, q.idx, c, dir, s, across, s, decalY, q.uv)
           }
         }
       }
@@ -288,18 +336,22 @@ export function buildRoads(
     .sort((a, b) => b.rad - a.rad || (a.k < b.k ? -1 : 1))
   const keptDiscs: { x: number; z: number; rad: number; elev: number }[] = []
   for (const { k, info, rad } of junctionNodes) {
+    // Disc sits on the solved node height (network solve) so an intersection
+    // that the elevation solve lifted rides with its approaches; flag-off this
+    // returns the legacy per-node bridge elevation, so discs are byte-identical.
+    const nodeElev = elevation.nodeElevation(k)
     const contained = keptDiscs.some(
-      (o) => o.elev === info.bridgeElev && Math.hypot(o.x - info.p.x, o.z - info.p.z) + rad <= o.rad + 1e-6,
+      (o) => o.elev === nodeElev && Math.hypot(o.x - info.p.x, o.z - info.p.z) + rad <= o.rad + 1e-6,
     )
     if (!contained) {
-      keptDiscs.push({ x: info.p.x, z: info.p.z, rad, elev: info.bridgeElev })
+      keptDiscs.push({ x: info.p.x, z: info.p.z, rad, elev: nodeElev })
       const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
       const g = new THREE.CircleGeometry(rad, seg)
       g.rotateX(-Math.PI / 2)
-      g.translate(info.p.x, info.bridgeElev + Y_DISC, info.p.z)
+      g.translate(info.p.x, nodeElev + Y_DISC, info.p.z)
       discGeoms.push(planarUvXZ(nonIndexedToIndexed(g)))
     }
-    if (info.maxWidth >= 6 && info.bridgeElev === 0 && hash01(k + ':mh') > 0.45) {
+    if (info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ':mh') > 0.45) {
       const off = (hash01(k + ':mo') - 0.5) * rad
       const c = { x: info.p.x + off, z: info.p.z + off * 0.6 }
       // manholes share the decal non-overlap budget: junction nodes a few
@@ -376,18 +428,48 @@ export function buildRoads(
     portals.traverse((o) => (o.userData.objectId = 'net_portals'))
   }
 
-  return { roadMeshes, intersections, sidewalks, markings, markingsYellow, decals: decalsGroup, bridges, portals }
+  // ---- landmark suspension bridges (one recognizable structure per catalog id)
+  const landmarkBridges: LandmarkBridge[] = []
+  for (const g of landmarkGroups.values()) {
+    const centerline = smoothPolyline(chainCenterlines(g.segs))
+    const width = Math.max(...g.segs.map((s) => s.widthM))
+    // deck sits at the elevation solver's bridge height for this layer (see roadNetwork)
+    const maxLayer = Math.max(1, ...g.segs.map((s) => s.layer || 1))
+    const grp = buildSuspensionBridge(centerline, width, {
+      color: g.entry.color ?? '#9a9ea3',
+      deckY: BRIDGE_LAYER_H * maxLayer + Y_ROAD,
+    })
+    if (!grp) continue
+    grp.name = g.entry.label
+    const mid = g.segs[Math.floor(g.segs.length / 2)]
+    landmarkBridges.push({
+      id: `landmark_${g.entry.id}`,
+      name: g.entry.label,
+      wikidata: g.entry.wikidata?.[0],
+      sketchfabQuery: g.entry.sketchfabQuery,
+      centerLat: mid.centerLat,
+      centerLng: mid.centerLng,
+      group: grp,
+    })
+  }
+
+  return { roadMeshes, intersections, sidewalks, markings, markingsYellow, decals: decalsGroup, bridges, portals, landmarkBridges }
 
   // ---- local helpers ----
 
-  function dashedLine(pts: Vec2[], offset: number, buf: MarkingBuffer) {
+  function dashedLine(
+    pts: Vec2[],
+    offset: number,
+    buf: MarkingBuffer,
+    elev: (line: Vec2[]) => number | number[],
+  ) {
     const linePts = offsetPolyline(pts, offset)
     const total = polylineLength(linePts)
     let d = 2
     while (d + 3 < total - 2) {
       const t = trimPolyline(linePts, d, Math.max(total - d - 3, 0))
       if (t && t.length >= 2) {
-        buf.addRibbon(ribbonGeometry(offsetPolyline(t, 0.08), offsetPolyline(t, -0.08), Y_MARK))
+        buf.addRibbon(ribbonGeometry(offsetPolyline(t, 0.08), offsetPolyline(t, -0.08), elev(t)))
       }
       d += 9
     }
@@ -396,6 +478,41 @@ export function buildRoads(
 
 function pickDecal(seed: number): 'crack' | 'stain' | 'patch' {
   return seed < 0.5 ? 'crack' : seed < 0.8 ? 'stain' : 'patch'
+}
+
+/**
+ * Road-surface elevation sampler for surface-riding layers (E4). Given the
+ * smoothed centerline `pts` and its per-point ADDED elevation `profile`
+ * (0 = grade, index-aligned with `pts`), returns the elevation at any 2D query
+ * point by projecting it onto the nearest centerline segment and interpolating.
+ * A flat road (`elevated === false`) returns a constant 0 so every derived layer
+ * keeps its exact legacy global-Y constant — byte-identical, no promotion cost.
+ */
+function surfaceElevSampler(pts: Vec2[], profile: number[], elevated: boolean): (q: Vec2) => number {
+  if (!elevated || pts.length < 2) return () => 0
+  return (q: Vec2): number => {
+    let best = Infinity
+    let bestElev = 0
+    for (let i = 1; i < pts.length; i++) {
+      const ax = pts[i - 1].x
+      const az = pts[i - 1].z
+      const dx = pts[i].x - ax
+      const dz = pts[i].z - az
+      const segLen2 = dx * dx + dz * dz || 1
+      let t = ((q.x - ax) * dx + (q.z - az) * dz) / segLen2
+      t = t < 0 ? 0 : t > 1 ? 1 : t
+      const px = ax + dx * t
+      const pz = az + dz * t
+      const d2 = (q.x - px) * (q.x - px) + (q.z - pz) * (q.z - pz)
+      if (d2 < best) {
+        best = d2
+        const e0 = profile[i - 1]
+        const e1 = profile[Math.min(i, profile.length - 1)]
+        bestElev = e0 + (e1 - e0) * t
+      }
+    }
+    return bestElev
+  }
 }
 
 function nearestIndex(cum: number[], d: number): number {

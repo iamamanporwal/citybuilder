@@ -125,6 +125,36 @@ describe('sea from coastline', () => {
     }
   })
 
+  it('paints a strait between two facing shores without flooding either shore (Golden Gate case)', () => {
+    // north shore runs EAST at lat +0.001 → water on its right = south
+    const northShore = way(400, { natural: 'coastline' }, [[0.001, -0.002], [0.001, -0.0005], [0.001, 0.0005], [0.001, 0.002]])
+    // south shore runs WEST at lat -0.001 → water on its right = north
+    const southShore = way(401, { natural: 'coastline' }, [[-0.001, 0.002], [-0.001, 0.0005], [-0.001, -0.0005], [-0.001, -0.002]])
+    // land buildings on both shores (well clear of the water band between ±0.001 lat)
+    const shoreBuildings = [
+      way(410, { building: 'yes' }, square(0.0018, -0.0008, 30)),
+      way(411, { building: 'yes' }, square(0.0018, 0.0008, 30)),
+      way(412, { building: 'yes' }, square(-0.0018, -0.0008, 30)),
+      way(413, { building: 'yes' }, square(-0.0018, 0.0008, 30)),
+    ]
+    const g = ingest([anchorRoad, northShore, southShore, ...shoreBuildings])
+    const seas = g.areas.filter((a) => a.id.startsWith('water_sea'))
+    expect(seas.length).toBeGreaterThanOrEqual(1)
+    expect(seas.every((s) => ringIsSimple(s.ring))).toBe(true)
+    // a probe in the middle of the strait (local origin ≈ 0,0) is water …
+    const mid = { x: (0 - g.origin.lng) * M * Math.cos((g.origin.lat * Math.PI) / 180), z: -(0 - g.origin.lat) * M }
+    expect(seas.some((s) => pointInRing(mid, s.ring))).toBe(true)
+    // … and NO shore building sits in the water
+    for (const b of g.buildings) {
+      let x = 0, z = 0
+      for (const p of b.footprint) { x += p.x; z += p.z }
+      const c = { x: x / b.footprint.length, z: z / b.footprint.length }
+      expect(seas.some((s) => pointInRing(c, s.ring))).toBe(false)
+    }
+    // and the water audit stays clean (no buildings flooded)
+    expect(auditWater(g).filter((w) => w.severity === 'warn')).toEqual([])
+  })
+
   it('refuses to paint a sea that would flood buildings on both sides', () => {
     const eastBuildings = [1, 2, 3, 4, 5].map((i) =>
       way(300 + i, { building: 'yes' }, square(-0.0015 + i * 0.0006, 0.0015, 30)),

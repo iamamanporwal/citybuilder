@@ -31,6 +31,8 @@ export interface RoadSegment {
   tunnel: boolean
   layer: number // OSM layer for grade separation
   surfaceTag?: string // OSM surface=* if present
+  structure?: string // OSM bridge:structure=* (suspension/cable-stayed/…) — landmark recognition
+  wikidata?: string // OSM wikidata QID — landmark recognition (survives to 3D build)
   centerLat: number
   centerLng: number
 }
@@ -41,6 +43,7 @@ export interface AreaFeature {
   id: string
   kind: AreaKind
   ring: Vec2[]
+  holes?: Vec2[][] // interior land islands cut out of the surface (e.g. islands in a sea)
   render: boolean // zoning-only areas (residential etc.) aren't drawn
   areaM2?: number // shoelace area in local meters (set for water; audited by waterAuditLint)
   provenance?: string // which whitelist rule admitted the feature, e.g. 'natural=water(lake)'

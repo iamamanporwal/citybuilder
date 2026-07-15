@@ -101,7 +101,7 @@ export async function exportCity(): Promise<void> {
 
   const semantics = {
     generator: 'CityBuilder MVP',
-    semanticsVersion: 2, // BREAKING vs v1: road centerlines are now [x, y, z] (y = true elevation in meters)
+    semanticsVersion: 3, // v3: road y-channel is the full network elevation solve (default-on, E3); v2 was bridge-ramp-only; v1 was 2D centerlines
     city: s.cityName,
     attribution: s.attribution,
     exportedAt: new Date().toISOString(),
