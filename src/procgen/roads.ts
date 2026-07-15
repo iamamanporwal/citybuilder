@@ -319,6 +319,24 @@ export function buildRoads(
         }
       }
     }
+
+    // ---- turn-lane arrows (§8.3). Oneway roads only, where turn:lanes maps 1:1
+    // to lanes L→R across the carriageway. Painted near the exit, surface-riding.
+    if (drivable && r.oneway && r.turnLanes && r.turnLanes.length >= 1) {
+      const Ls = polylineLength(surfacePts)
+      if (Ls > 12) {
+        const n = r.turnLanes.length
+        const lw = r.widthM / n
+        const { p, dir } = pointAlong(surfacePts, Ls - 5)
+        const w = { x: dir.z, z: -dir.x } // left normal (leftmost lane at +half)
+        for (let i = 0; i < n; i++) {
+          const off = half - (i + 0.5) * lw
+          const center = { x: p.x + w.x * off, z: p.z + w.z * off }
+          const y = elevated ? surfElev(center) + Y_MARK : Y_MARK
+          pushTurnArrow(whiteQuads, center, dir, w, r.turnLanes[i], y)
+        }
+      }
+    }
   }
 
   // ---- intersection surfaces + manholes
@@ -478,6 +496,56 @@ export function buildRoads(
 
 function pickDecal(seed: number): 'crack' | 'stain' | 'patch' {
   return seed < 0.5 ? 'crack' : seed < 0.8 ? 'stain' : 'patch'
+}
+
+/** Append an up-facing triangle (auto-wound to a +Y normal, like pushQuad). */
+function pushTri(pos: number[], idx: number[], q0: Vec2, q1: Vec2, q2: Vec2, y: number) {
+  const e1x = q1.x - q0.x, e1z = q1.z - q0.z
+  const e2x = q2.x - q0.x, e2z = q2.z - q0.z
+  const base = pos.length / 3
+  if (e1z * e2x - e1x * e2z >= 0) pos.push(q0.x, y, q0.z, q1.x, y, q1.z, q2.x, y, q2.z)
+  else pos.push(q0.x, y, q0.z, q2.x, y, q2.z, q1.x, y, q1.z)
+  idx.push(base, base + 1, base + 2)
+}
+
+/** OSM turn:lanes token → head rotation toward the left normal (radians). */
+function turnAngle(turn: string): number {
+  switch (turn.split(';')[0].trim()) {
+    case 'left': return 0.7
+    case 'slight_left':
+    case 'merge_to_left': return 0.35
+    case 'sharp_left': return 1.15
+    case 'right': return -0.7
+    case 'slight_right':
+    case 'merge_to_right': return -0.35
+    case 'sharp_right': return -1.15
+    case 'reverse': return Math.PI
+    default: return 0 // through / none / empty / unrecognised
+  }
+}
+
+/** Lane-guidance arrow: straight shaft + a head bent per the turn indication. */
+function pushTurnArrow(
+  buf: { pos: number[]; idx: number[] },
+  c: Vec2,
+  u: Vec2,
+  w: Vec2,
+  turn: string,
+  y: number,
+) {
+  const ang = turnAngle(turn)
+  const ca = Math.cos(ang), sa = Math.sin(ang)
+  const hx = u.x * ca + w.x * sa
+  const hz = u.z * ca + w.z * sa
+  const hl = Math.hypot(hx, hz) || 1
+  const h = { x: hx / hl, z: hz / hl }
+  const hp = { x: h.z, z: -h.x } // perpendicular to the head
+  const shaftC = { x: c.x - u.x * 0.2, z: c.z - u.z * 0.2 }
+  pushQuad(buf.pos, buf.idx, shaftC, u, 0.75, w, 0.14, y)
+  const tip = { x: c.x + h.x * 1.25, z: c.z + h.z * 1.25 }
+  const bl = { x: c.x + h.x * 0.45 + hp.x * 0.42, z: c.z + h.z * 0.45 + hp.z * 0.42 }
+  const br = { x: c.x + h.x * 0.45 - hp.x * 0.42, z: c.z + h.z * 0.45 - hp.z * 0.42 }
+  pushTri(buf.pos, buf.idx, tip, bl, br, y)
 }
 
 /**

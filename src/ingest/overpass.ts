@@ -409,6 +409,28 @@ function closeAlongBoundary(run: Vec2[], rect: Rect, dir: 1 | -1): Vec2[] | null
 const LANE_WIDTH_M = 3.3
 const METERS_PER_DEG_LAT = 111320
 
+/**
+ * OSM `maxspeed` → km/h (FAITHFUL tier). OSM convention: a bare number is km/h;
+ * an explicit `mph` suffix converts. Special values map to sensible numbers:
+ * `none` (de-restricted motorway) → a high display cap, `walk` → 7. Returns
+ * undefined for untagged/unparseable so the resolver can apply a region default
+ * and flag it low-confidence.
+ */
+function parseMaxspeedKmh(v?: string): number | undefined {
+  if (!v) return undefined
+  const s = v.trim().toLowerCase()
+  if (s === 'none') return 130
+  if (s === 'walk') return 7
+  const m = s.match(/([\d.]+)/)
+  if (!m) return undefined
+  const n = parseFloat(m[1])
+  if (!isFinite(n) || n <= 0) return undefined
+  // mph explicit; also the country-code forms like "US:urban" carry no number,
+  // so anything with a number + mph is imperial, otherwise km/h.
+  if (s.includes('mph')) return Math.round(n * 1.60934)
+  return Math.round(n)
+}
+
 function parseMeters(v?: string): number | undefined {
   if (!v) return undefined
   const m = v.match(/([\d.]+)/)
@@ -467,6 +489,10 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
 
   const NODE_KINDS: [string, string, PointFeature['kind']][] = [
     ['highway', 'traffic_signals', 'traffic_signal'],
+    // FAITHFUL regulatory nodes (matched before generic traffic_sign fallback)
+    ['highway', 'stop', 'stop_sign'],
+    ['highway', 'give_way', 'give_way'],
+    ['highway', 'crossing', 'crossing'],
     ['natural', 'tree', 'tree'],
     ['highway', 'street_lamp', 'street_lamp'],
     ['amenity', 'bench', 'bench'],
@@ -478,7 +504,14 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
     ['tourism', 'artwork', 'statue'],
   ]
 
-  const addPoint = (id: number, kind: PointFeature['kind'], lat: number, lon: number, tags: Record<string, string>) => {
+  const addPoint = (
+    id: number,
+    kind: PointFeature['kind'],
+    lat: number,
+    lon: number,
+    tags: Record<string, string>,
+    signType?: string,
+  ) => {
     growBbox(lat, lon)
     points.push({
       id: `${kind}_${id}`,
@@ -488,16 +521,26 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
       lng: lon,
       name: tags.name,
       wikidata: tags.wikidata,
+      signType,
     })
   }
 
   for (const el of elements) {
     if (el.type === 'node' && el.tags) {
+      const t = el.tags
+      let matched: PointFeature['kind'] | null = null
       for (const [k, v, kind] of NODE_KINDS) {
-        if (el.tags[k] === v) {
-          addPoint(el.id, kind, el.lat!, el.lon!, el.tags)
+        if (t[k] === v) {
+          matched = kind
           break
         }
+      }
+      if (matched) {
+        // crossing carries its style (zebra/marked/unmarked/traffic_signals)
+        addPoint(el.id, matched, el.lat!, el.lon!, t, matched === 'crossing' ? t.crossing : undefined)
+      } else if (t.traffic_sign) {
+        // generic explicit sign — the OSM value IS the sign class (§8.1)
+        addPoint(el.id, 'road_sign', el.lat!, el.lon!, t, t.traffic_sign)
       }
       continue
     }
@@ -638,13 +681,25 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
 
     const hw = el.tags.highway as RoadClass | undefined
     if (hw && ROAD_CLASSES.includes(hw)) {
-      const pts = el.geometry.map((g) => toLocal(g.lat, g.lon))
       const lanesTag = el.tags.lanes ? parseFloat(el.tags.lanes) : undefined
       const lanes = lanesTag && isFinite(lanesTag) ? lanesTag : CLASS_LANES[hw]
       const widthTag = parseMeters(el.tags.width)
       const widthM = widthTag ?? (lanes > 0 ? Math.max(lanes * LANE_WIDTH_M, 4) : CLASS_WIDTH[hw])
       const mid = el.geometry[Math.floor(el.geometry.length / 2)]
       const layer = el.tags.layer ? parseFloat(el.tags.layer) || 0 : 0
+      // Direction normalisation: OSM `oneway=-1`/`reverse` means travel runs
+      // against the node order — reverse the geometry so "forward" is always the
+      // point order downstream (drive flow, lane arrows). Roundabouts are
+      // implicitly one-way even when the tag is missing.
+      const onewayTag = el.tags.oneway
+      const reversed = onewayTag === '-1' || onewayTag === 'reverse'
+      const roundabout = el.tags.junction === 'roundabout' || el.tags.junction === 'mini_roundabout'
+      const oneway =
+        onewayTag === 'yes' || onewayTag === 'true' || onewayTag === '1' || reversed || roundabout
+      const pts = el.geometry.map((g) => toLocal(g.lat, g.lon))
+      if (reversed) pts.reverse()
+      const turnLanesTag = el.tags['turn:lanes']
+      const turnLanes = turnLanesTag ? turnLanesTag.split('|').map((t) => t.trim()) : undefined
       roads.push({
         id: `road_${el.id}`,
         name: el.tags.name,
@@ -652,13 +707,16 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
         points: pts,
         widthM: Math.min(widthM, 30),
         lanes,
-        oneway: el.tags.oneway === 'yes',
+        oneway,
         bridge: el.tags.bridge === 'yes' || el.tags.bridge === 'viaduct',
         tunnel: el.tags.tunnel === 'yes' || el.tags.tunnel === 'building_passage',
         layer,
         surfaceTag: el.tags.surface,
         structure: el.tags['bridge:structure'],
         wikidata: el.tags.wikidata,
+        maxspeedKmh: parseMaxspeedKmh(el.tags.maxspeed),
+        turnLanes,
+        roundabout: roundabout || undefined,
         centerLat: mid.lat,
         centerLng: mid.lon,
       })

@@ -40,6 +40,12 @@ function buildQuery(b: BBox, opts: FetchOptions): string {
     `node["historic"~"^(memorial|monument)$"]${bbox};`,
     `node["tourism"="artwork"]${bbox};`,
     `way["historic"~"^(memorial|monument)$"]${bbox};`,
+    // FAITHFUL traffic tier (Road-updates.md §8): regulatory signs, crossings and
+    // explicit sign nodes. Always fetched — they are core to a driving trainer.
+    `node["highway"="stop"]${bbox};`,
+    `node["highway"="give_way"]${bbox};`,
+    `node["highway"="crossing"]${bbox};`,
+    `node["traffic_sign"]${bbox};`,
   ]
   if (opts.signals) parts.push(`node["highway"="traffic_signals"]${bbox};`)
   if (opts.trees) parts.push(`node["natural"="tree"]${bbox};`)

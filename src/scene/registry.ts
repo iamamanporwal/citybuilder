@@ -7,6 +7,8 @@ import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCen
 import { buildAreas, buildTerrain } from '../procgen/areas'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
+import { buildGenericSign, buildGiveWaySign, buildSpeedLimitSign, buildStopSign, planSpeedLimitSigns } from '../procgen/signs'
+import { deviceHeading, nearestRoadInfo } from '../procgen/signMath'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
 import { buildingSceneFor, cloneTemplate, getTemplate, isLibraryEnabled } from './libraryTemplates'
@@ -278,12 +280,33 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     )
   }
 
-  // ---- street furniture: signals + common props (movable, selectable)
+  // ---- street furniture: signals + regulatory signs + common props (movable)
   const PROP_BUILDERS: Partial<Record<typeof graph.points[number]['kind'], (p: (typeof graph.points)[number]) => THREE.Object3D>> = {
     traffic_signal: buildTrafficSignal,
     fountain: buildFountain,
     statue: buildStatue,
     bus_stop: buildBusStop,
+    // FAITHFUL regulatory signs (Road-updates.md §8.1). crossing has no prop —
+    // it exports to semantics and future surface crosswalks, not a post.
+    stop_sign: buildStopSign,
+    give_way: buildGiveWaySign,
+    road_sign: buildGenericSign,
+  }
+  // Devices that must face the road grid rather than a fixed world axis: signal
+  // heads align WITH travel; signs turn to CONFRONT the approaching driver (§8.1).
+  const ORIENTED: Partial<Record<typeof graph.points[number]['kind'], boolean>> = {
+    traffic_signal: false, // align with travel
+    stop_sign: true, // face oncoming
+    give_way: true,
+    road_sign: true,
+  }
+  const LABELS: Partial<Record<typeof graph.points[number]['kind'], string>> = {
+    traffic_signal: 'Traffic signal',
+    fountain: 'Fountain',
+    bus_stop: 'Bus stop',
+    stop_sign: 'Stop sign',
+    give_way: 'Give way',
+    road_sign: 'Road sign',
   }
   for (const p of graph.points) {
     const builder = PROP_BUILDERS[p.kind]
@@ -293,11 +316,13 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     const g = tmpl ? cloneTemplate(tmpl) : builder(p)
     g.name = tmpl ? tmpl.name : g.name
     g.position.set(p.position.x, 0, p.position.z)
-    const label =
-      p.kind === 'traffic_signal' ? 'Traffic signal'
-      : p.kind === 'fountain' ? 'Fountain'
-      : p.kind === 'bus_stop' ? 'Bus stop'
-      : 'Statue / memorial'
+    // orient traffic devices to the nearest road (no-op if none nearby)
+    let rotY = 0
+    if (p.kind in ORIENTED) {
+      rotY = deviceHeading(nearestRoadInfo(p.position, graph.roads), ORIENTED[p.kind]!)
+      g.rotation.y = rotY
+    }
+    const label = LABELS[p.kind] ?? 'Statue / memorial'
     // wikidata-linked landmarks route to AI generation via the gateway
     if (p.wikidata && (p.kind === 'statue' || p.kind === 'fountain')) {
       replaceables.set(p.id, {
@@ -312,10 +337,31 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
         name: p.name ?? label,
         tier: p.wikidata ? 'notable' : undefined,
         locked: false,
-        transform: { position: [p.position.x, 0, p.position.z], ...IDENTITY },
+        transform: { position: [p.position.x, 0, p.position.z], rotation: [0, rotY, 0], scale: [1, 1, 1] },
         asset: { ...PROC_ASSET },
         realworld: { lat: p.lat, lng: p.lng, ...mapUrls(p.lat, p.lng), wikidata: p.wikidata, name: p.name },
-        meta: { kind: p.kind !== 'traffic_signal' ? p.kind : undefined },
+        meta: { kind: p.kind !== 'traffic_signal' ? p.kind : undefined, signType: p.signType },
+      },
+      g,
+    )
+  }
+
+  // ---- speed-limit signs placed from tagged road maxspeed (faithful only),
+  // region-keyed face + unit, on the driving side, facing oncoming traffic (§8.4).
+  for (const sp of planSpeedLimitSigns(graph.roads, ctx)) {
+    const g = buildSpeedLimitSign(sp.display, sp.unit, sp.style)
+    g.position.set(sp.position.x, 0, sp.position.z)
+    g.rotation.y = sp.headingY
+    add(
+      {
+        id: sp.id,
+        type: 'street-furniture',
+        name: g.name,
+        locked: false,
+        transform: { position: [sp.position.x, 0, sp.position.z], rotation: [0, sp.headingY, 0], scale: [1, 1, 1] },
+        asset: { ...PROC_ASSET },
+        realworld: { lat: sp.lat, lng: sp.lng, ...mapUrls(sp.lat, sp.lng), name: g.name },
+        meta: { kind: 'speed_limit', speedKmh: sp.kmh, display: `${sp.display} ${sp.unit}`, roadId: sp.roadId },
       },
       g,
     )

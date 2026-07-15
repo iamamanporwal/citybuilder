@@ -139,6 +139,10 @@ describe('deriveSpawn + minimap', () => {
       marking: null,
       confidence: null,
       drivable: true,
+      speed_limit_kmh: null,
+      speed_limit_source: null,
+      turn_lanes: null,
+      roundabout: false,
       cross_section: null,
       elevation: null,
       centerline: [

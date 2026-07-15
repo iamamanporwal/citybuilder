@@ -13,7 +13,8 @@ import { buildTextureManifest } from '../materials/packaging'
 import { buildCollidersFromRegistry } from '../physics/registryColliders'
 import { colliderLint } from '../physics/colliderLint'
 import { colliderGroupMerged } from './colliderGlb'
-import { buildRoadSemantics } from './semantics'
+import { buildRoadSemantics, buildTrafficAudit, buildTrafficDevices } from './semantics'
+import type { SceneObject } from '../types'
 import { optimizeSceneForExport } from './optimizeScene'
 import { buildMinimapGroup, deriveSpawn } from './spawn'
 
@@ -93,6 +94,9 @@ export async function exportCity(): Promise<void> {
   // ---- semantics: the data that drives traffic AI / gameplay at runtime,
   //      plus the resolver's decision record for every object
   const roadSem = buildRoadSemantics([...roadSegments.values()], roadResolutions)
+  const allObjects = s.objectOrder.map((id) => s.objects[id]).filter((o): o is SceneObject => !!o && !o.deleted)
+  const trafficDevices = buildTrafficDevices(allObjects)
+  const trafficAudit = buildTrafficAudit([...roadSegments.values()], trafficDevices)
 
   // ---- auto spawn + minimap derived from the road semantics (review §4)
   const bounds = colliderSet?.bounds ?? boundsFromRoads(roadSem)
@@ -118,6 +122,8 @@ export async function exportCity(): Promise<void> {
         }
       : null,
     roads: roadSem,
+    traffic_devices: trafficDevices,
+    traffic_audit: trafficAudit,
     objects: s.objectOrder
       .map((id) => s.objects[id])
       .filter((o) => o && !o.deleted && o.type === 'building')

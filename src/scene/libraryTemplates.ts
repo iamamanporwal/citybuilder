@@ -11,8 +11,10 @@ import { libraryAsset, pickAssetFor, pooledAssetsOfSemantic, type LibraryAsset }
 
 type PropKind = PointFeature['kind']
 
-// Which OSM tag each point kind resolves against in the pools.
-const KIND_TAG: Record<PropKind, string> = {
+// Which OSM tag each point kind resolves against in the pools. Regulatory-sign
+// kinds (stop/give_way/crossing/road_sign) are procedural-only — never library
+// assets — so they are intentionally absent (Partial): loadOne skips them.
+const KIND_TAG: Partial<Record<PropKind, string>> = {
   tree: 'natural=tree',
   street_lamp: 'highway=street_lamp',
   traffic_signal: 'highway=traffic_signals',
@@ -26,7 +28,7 @@ const KIND_TAG: Record<PropKind, string> = {
 // Canonical real-world height (m) each kind is normalized to on load. Library
 // assets arrive at wildly different authoring scales (metric to ~1000×); this
 // pins them to a believable street size regardless of source units.
-const CANONICAL_HEIGHT: Record<PropKind, number> = {
+const CANONICAL_HEIGHT: Partial<Record<PropKind, number>> = {
   tree: 9,
   street_lamp: 6.5,
   traffic_signal: 5.5,
@@ -133,6 +135,7 @@ function normalize(parts: TemplatePart[], canonicalH: number): { x: number; y: n
 
 async function loadOne(kind: PropKind, loader: GLTFLoader): Promise<void> {
   const tag = KIND_TAG[kind]
+  if (!tag) return // procedural-only kind (e.g. regulatory signs) — no library pool
   // deterministic single representative asset per kind (so instancing groups cleanly)
   const picked = pickAssetFor(tag, `libtemplate:${kind}`)
   if (!picked) return
@@ -143,7 +146,7 @@ async function loadOne(kind: PropKind, loader: GLTFLoader): Promise<void> {
   const gltf = await loader.loadAsync(assetUrl(asset))
   const parts = flatten(gltf.scene)
   if (!parts.length) return
-  const sizeMeters = normalize(parts, CANONICAL_HEIGHT[kind])
+  const sizeMeters = normalize(parts, CANONICAL_HEIGHT[kind] ?? 4)
   templates.set(kind, {
     kind,
     assetId: asset.id,

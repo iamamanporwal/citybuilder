@@ -222,9 +222,11 @@ OSM (Overpass) ── Overture (segments/connectors) ── Mapillary (signs/mar
 **Phase B — terrain + surfaces + signs (faithful-tier completeness)**
 - [ ] Wire GLO-30 (COG via OpenTopography) → smoothed heightfield; 3DEP where US.
 - [ ] Build the road-surface material set from ambientCG/Poly Haven; world-space UV + seeded offset.
-- [ ] Place signs (procedural plate + region sign-face atlas), signals, and markings from OSM + Mapillary; orient to traffic.
-- [ ] Attach speed limits / turn rules to the lane graph; ship in `city_semantics.json`.
-- [ ] Add the "training-ready" audit gate to the coverage report.
+- [x] **Place signs (procedural plate + region-keyed face), signals, and turn arrows from OSM; orient to traffic.** — `ingest/overpass.ts` parses `maxspeed`, `turn:lanes`, `oneway=-1`, `junction=roundabout`, and the `stop`/`give_way`/`crossing`/`traffic_sign` nodes; `procgen/signs.ts` builds pole+plate speed-limit (mph/km/h by region), stop, give-way and generic signs; `procgen/signMath.ts` orients signals (along travel) and signs (facing oncoming) to the nearest road; `procgen/roads.ts` paints surface-riding turn-lane arrows. Mapillary detections still TODO.
+- [x] **Attach speed limits / turn rules to the lane graph; ship in `city_semantics.json`.** — `export/semantics.ts`: roads carry `speed_limit_kmh`/`speed_limit_source`/`turn_lanes`/`roundabout`; a `traffic_devices[]` array carries signals + signs with position/heading/type; `semanticsVersion → 3`.
+- [x] **Add the "training-ready" audit gate to the coverage report.** — `traffic_audit` in the export flags `speed_defaulted` (region-default, low-confidence) counts and sets `training_ready=false` while any drivable road relies on a defaulted limit.
+
+> **Status (Phase B partial, shipped).** Verified on Lower Manhattan: 254 roads with tagged `maxspeed`, 216 region-correct speed-limit signs placed + oriented, 59 signals oriented, 30 turn:lanes roads, `traffic_audit.training_ready=false` (26 defaulted speeds). Terrain/DEM (GLO-30) and CC0 surface materials remain, plus Mapillary sign/marking detections. Road-elevation Phase A (osm2streets substitute) shipped separately as the corridor elevation solve — see `road-corridor-redesign.md`.
 
 **Phase C — bake service (HD + interactive)**
 - [ ] OSM/Overture → OpenDRIVE (SUMO netconvert / CARLA Osm2Odr); mesh via libOpenDRIVE/esmini.

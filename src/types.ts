@@ -33,6 +33,12 @@ export interface RoadSegment {
   surfaceTag?: string // OSM surface=* if present
   structure?: string // OSM bridge:structure=* (suspension/cable-stayed/…) — landmark recognition
   wikidata?: string // OSM wikidata QID — landmark recognition (survives to 3D build)
+  // FAITHFUL traffic tier (Road-updates.md §1, §8.4). Parsed from OSM; a region
+  // default is applied in the resolver where these are absent, and flagged
+  // low-confidence in the coverage report so a human verifies before training use.
+  maxspeedKmh?: number // OSM maxspeed resolved to km/h (undefined ⇒ untagged; resolver fills a region default)
+  turnLanes?: string[] // OSM turn:lanes, one entry per lane L→R, e.g. ['left','through','through;right']
+  roundabout?: boolean // OSM junction=roundabout|mini_roundabout (implicitly one-way)
   centerLat: number
   centerLng: number
 }
@@ -74,11 +80,18 @@ export interface PointFeature {
     | 'fountain'
     | 'statue'
     | 'bus_stop'
+    // FAITHFUL traffic devices (Road-updates.md §8.1/§8.3)
+    | 'stop_sign' // highway=stop
+    | 'give_way' // highway=give_way (yield)
+    | 'crossing' // highway=crossing (pedestrian)
+    | 'road_sign' // traffic_sign=* (type carried in signType)
   position: Vec2
   lat: number
   lng: number
   name?: string
   wikidata?: string
+  /** OSM classifier for a device: traffic_sign value for road_sign, crossing=* for crossing. */
+  signType?: string
 }
 
 export interface BarrierFeature {
