@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import type { RoadSegment, Vec2 } from '../types'
 import { findLandmark, matchBridgeLandmark } from '../scene/landmarks'
-import { buildSuspensionBridge, chainCenterlines } from '../procgen/bridges'
+import { buildArchBridge, buildSuspensionBridge, chainCenterlines } from '../procgen/bridges'
 
 function road(over: Partial<RoadSegment>): RoadSegment {
   return {
@@ -28,6 +28,41 @@ describe('landmark catalog matching', () => {
   it('falls back to a generic suspension structure for bridge:structure=suspension', () => {
     const m = matchBridgeLandmark(road({ bridge: true, name: 'Some Strait Crossing', structure: 'suspension' }))
     expect(m?.category).toBe('suspension-bridge')
+  })
+
+  it('matches Charles Bridge (Karlův most) by wikidata Q204871 and by name → stone arch', () => {
+    expect(findLandmark(undefined, 'Q204871')?.id).toBe('charles-bridge')
+    const m = matchBridgeLandmark(road({ bridge: true, roadClass: 'pedestrian', name: 'Karlův most', structure: 'arch' }))
+    expect(m?.id).toBe('charles-bridge')
+    expect(m?.category).toBe('stone-arch-bridge')
+  })
+
+  it('falls back to a generic stone-arch structure for bridge:structure=arch', () => {
+    const m = matchBridgeLandmark(road({ bridge: true, name: 'Old Stone Bridge', structure: 'arch' }))
+    expect(m?.category).toBe('stone-arch-bridge')
+  })
+})
+
+describe('stone-arch bridge generator', () => {
+  const deckY = 6.55
+  const grp = buildArchBridge([{ x: 0, z: 0 }, { x: 470, z: 0 }], 10, { color: '#b8a883', deckY, towers: true })
+
+  it('builds a masonry structure springing from the water with gate towers above the deck', () => {
+    expect(grp).not.toBeNull()
+    expect(grp!.children.length).toBe(2) // stone mesh + tower mesh
+    const box = new THREE.Box3().setFromObject(grp!)
+    expect(box.min.y).toBeLessThanOrEqual(0.6) // piers/arches reach down to the water
+    expect(box.max.y).toBeGreaterThan(deckY + 20) // gothic towers dominate the silhouette
+  })
+
+  it('returns null for spans too short to be an arch bridge', () => {
+    expect(buildArchBridge([{ x: 0, z: 0 }, { x: 20, z: 0 }], 6, { color: '#fff', deckY })).toBeNull()
+  })
+
+  it('builds without towers when not requested', () => {
+    const g = buildArchBridge([{ x: 0, z: 0 }, { x: 200, z: 0 }], 8, { color: '#b8a883', deckY })
+    expect(g).not.toBeNull()
+    expect(g!.children.length).toBe(1) // stone mesh only
   })
 })
 

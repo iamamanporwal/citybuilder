@@ -214,7 +214,7 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
         transform: { position: [0, 0, 0], ...IDENTITY },
         asset: { ...PROC_ASSET },
         realworld: { lat: lb.centerLat, lng: lb.centerLng, ...mapUrls(lb.centerLat, lb.centerLng), wikidata: lb.wikidata, name: lb.name },
-        meta: { landmark: true, structure: 'suspension', 'replace search': lb.sketchfabQuery },
+        meta: { landmark: true, structure: lb.structure, 'replace search': lb.sketchfabQuery },
       },
       lb.group,
     )

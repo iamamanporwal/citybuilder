@@ -10,7 +10,7 @@ import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, nodeKey, NON_DRIVABLE } f
 import { buildRoadElevation } from './corridor'
 import { DecalPlanner } from './decalPlan'
 import { matchBridgeLandmark, type LandmarkEntry } from '../scene/landmarks'
-import { buildSuspensionBridge, chainCenterlines, type LandmarkBridge } from './bridges'
+import { buildArchBridge, buildSuspensionBridge, chainCenterlines, type LandmarkBridge } from './bridges'
 
 // Deterministic procedural road system (PRD §8). Roads are generated from data,
 // never from generative-3D, and are locked in the editor. Surfaces, markings and
@@ -26,6 +26,12 @@ const Y_DECAL = 0.08
 const Y_DISC = 0.11
 const Y_MARK = 0.16
 const Y_CROSSWALK = 0.175
+
+// Stop lines sit on through-classes only (residential/service/living_street
+// junctions in a dense old town would otherwise get a painted bar at every arm),
+// just behind the crosswalk (which occupies inward 0.5–2.7 m) on the approach.
+const STOP_LINE_CLASSES = new Set(['trunk', 'primary', 'secondary', 'tertiary'])
+const STOP_LINE_DIST = 3.15
 
 export interface RoadBuildResult {
   roadMeshes: Map<string, THREE.Mesh>
@@ -111,16 +117,35 @@ export function buildRoads(
   // split across several OSM ways builds ONE recognizable suspension structure.
   // Their deck surfaces still render per-segment; only the generic fascia+pier
   // superstructure is replaced by the dedicated generator.
+  const PROCEDURAL_BRIDGES = new Set(['suspension-bridge', 'cable-stayed-bridge', 'stone-arch-bridge'])
   const landmarkGroups = new Map<string, { entry: LandmarkEntry; segs: RoadSegment[] }>()
   for (const r of graph.roads) {
     if (!r.bridge) continue
     const lm = matchBridgeLandmark(r)
-    if (!lm || (lm.category !== 'suspension-bridge' && lm.category !== 'cable-stayed-bridge')) continue
+    if (!lm || !PROCEDURAL_BRIDGES.has(lm.category)) continue
+    // the arch generator builds a pedestrian stone bridge (solid parapets, stone
+    // deck); a DRIVABLE arch bridge keeps its generic drivable deck + structure.
+    if (lm.category === 'stone-arch-bridge' && !NON_DRIVABLE.has(r.roadClass)) continue
     if (!landmarkGroups.has(lm.id)) landmarkGroups.set(lm.id, { entry: lm, segs: [] })
     landmarkGroups.get(lm.id)!.segs.push(r)
   }
+  // drop groups whose chained span is too short for their generator to fire, so
+  // the generic bridge structure still covers those segments (no bare deck).
+  const minSpanFor = (cat: string) => (cat === 'stone-arch-bridge' ? 40 : 45)
+  for (const [id, g] of [...landmarkGroups]) {
+    if (polylineLength(chainCenterlines(g.segs)) < minSpanFor(g.entry.category)) landmarkGroups.delete(id)
+  }
   const landmarkRoadIds = new Set<string>()
-  for (const g of landmarkGroups.values()) for (const s of g.segs) landmarkRoadIds.add(s.id)
+  // arch-landmark decks are drawn by buildArchBridge at ONE unified height; their
+  // per-segment ribbons are skipped (mixed OSM `layer` tags on the same bridge —
+  // Charles Bridge spans layer 1 and 3 — would otherwise split the deck in two).
+  const archLandmarkRoadIds = new Set<string>()
+  for (const g of landmarkGroups.values()) {
+    for (const s of g.segs) {
+      landmarkRoadIds.add(s.id)
+      if (g.entry.category === 'stone-arch-bridge') archLandmarkRoadIds.add(s.id)
+    }
+  }
   const decalQuads: Record<keyof typeof decalMaterials, { pos: number[]; idx: number[]; uv: number[] }> = {
     crack: { pos: [], idx: [], uv: [] },
     stain: { pos: [], idx: [], uv: [] },
@@ -133,6 +158,10 @@ export function buildRoads(
     if (r.points.length < 2) continue
     const res = resolutions.get(r.id)
     if (!res) continue
+
+    // arch-landmark decks (Charles Bridge) are built as one unified structure
+    // after the loop — skip the per-segment surface so the deck is single-level.
+    if (archLandmarkRoadIds.has(r.id)) continue
 
     // ---- tunnels: no surface; portal frames at transitions to open air
     if (r.tunnel) {
@@ -294,6 +323,21 @@ export function buildRoads(
                 pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.12, across, (stripes * 1.6) / 2 + 0.4, cwY)
               }
             }
+
+            // ---- stop line: a solid transverse bar just behind the crosswalk on
+            // the approach, on the driving-side half of a two-way carriageway
+            // (full width one-way). Only on through-classes so tiny old-town
+            // junctions don't get a bar at every arm.
+            if (STOP_LINE_CLASSES.has(r.roadClass) && polylineLength(markPts) > STOP_LINE_DIST + 0.6) {
+              const lat = r.oneway ? 0 : (ctx.region?.drivingSide === 'left' ? 1 : -1) * (r.widthM / 4)
+              const halfWid = r.oneway ? r.widthM / 2 - 0.2 : r.widthM / 4 - 0.1
+              const c = {
+                x: endPt.x + inward.x * STOP_LINE_DIST + across.x * lat,
+                z: endPt.z + inward.z * STOP_LINE_DIST + across.z * lat,
+              }
+              const y = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
+              pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.3, across, halfWid, y)
+            }
           }
         }
 
@@ -451,12 +495,26 @@ export function buildRoads(
   for (const g of landmarkGroups.values()) {
     const centerline = smoothPolyline(chainCenterlines(g.segs))
     const width = Math.max(...g.segs.map((s) => s.widthM))
-    // deck sits at the elevation solver's bridge height for this layer (see roadNetwork)
-    const maxLayer = Math.max(1, ...g.segs.map((s) => s.layer || 1))
-    const grp = buildSuspensionBridge(centerline, width, {
-      color: g.entry.color ?? '#9a9ea3',
-      deckY: BRIDGE_LAYER_H * maxLayer + Y_ROAD,
-    })
+    const isArch = g.entry.category === 'stone-arch-bridge'
+    let grp: THREE.Group | null
+    if (isArch) {
+      // arch decks use the MIN positive layer so a stray high `layer` tag on one
+      // segment can't lift the whole (single-level) masonry bridge unrealistically.
+      const layers = g.segs.map((s) => s.layer).filter((l) => l >= 1)
+      const layer = layers.length ? Math.min(...layers) : 1
+      grp = buildArchBridge(centerline, width, {
+        color: g.entry.color ?? '#b8a883',
+        deckY: BRIDGE_LAYER_H * layer + Y_ROAD,
+        towers: true,
+      })
+    } else {
+      // deck sits at the elevation solver's bridge height for this layer (see roadNetwork)
+      const maxLayer = Math.max(1, ...g.segs.map((s) => s.layer || 1))
+      grp = buildSuspensionBridge(centerline, width, {
+        color: g.entry.color ?? '#9a9ea3',
+        deckY: BRIDGE_LAYER_H * maxLayer + Y_ROAD,
+      })
+    }
     if (!grp) continue
     grp.name = g.entry.label
     const mid = g.segs[Math.floor(g.segs.length / 2)]
@@ -465,6 +523,7 @@ export function buildRoads(
       name: g.entry.label,
       wikidata: g.entry.wikidata?.[0],
       sketchfabQuery: g.entry.sketchfabQuery,
+      structure: isArch ? 'stone-arch' : 'suspension',
       centerLat: mid.centerLat,
       centerLng: mid.centerLng,
       group: grp,

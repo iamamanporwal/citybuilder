@@ -3,7 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEditor } from '../state/store'
 import { loadCachedCity, type BBox } from '../ingest/overpassFetch'
-import { buildCityFromArea, buildFromCache, buildSampleCity } from '../app/buildCity'
+import { buildCityFromArea, buildFromCache, buildPragueSample, buildSampleCity } from '../app/buildCity'
 
 // Full-screen location picker: search a place, drag/resize the selection
 // rectangle, and build a 3D city from exactly that area.
@@ -274,6 +274,7 @@ export function AreaPicker() {
         </button>
         <div className="picker-alt">
           <button onClick={() => buildSampleCity()}>Load sample · Lower Manhattan</button>
+          <button onClick={() => buildPragueSample()}>Load sample · Prague (Charles Bridge)</button>
           {cached && <button onClick={() => buildFromCache(cached)}>Continue · {cached.name}</button>}
         </div>
         <div className="picker-attr">Map © OpenStreetMap contributors · © CARTO · Data ODbL</div>

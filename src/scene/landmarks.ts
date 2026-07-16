@@ -14,7 +14,7 @@ import type { RoadSegment } from '../types'
 // wikidata QIDs are the stable key (they survive OSM renames); namePattern is a
 // fallback for features that carry only a name.
 
-export type LandmarkCategory = 'suspension-bridge' | 'cable-stayed-bridge' | 'gltf'
+export type LandmarkCategory = 'suspension-bridge' | 'cable-stayed-bridge' | 'stone-arch-bridge' | 'gltf'
 
 export interface LandmarkEntry {
   id: string
@@ -28,8 +28,19 @@ export interface LandmarkEntry {
 }
 
 const INTERNATIONAL_ORANGE = '#c0362c' // the Golden Gate's actual paint colour
+const PRAGUE_SANDSTONE = '#b8a883' // Charles Bridge's weathered sandstone masonry
 
 export const LANDMARKS: LandmarkEntry[] = [
+  {
+    id: 'charles-bridge',
+    label: 'Charles Bridge',
+    // Q204871 is the QID OSM carries on the bridge's carriageway ways.
+    wikidata: ['Q204871', 'Q188507'],
+    namePattern: /karl[uů]v\s*most|charles\s*bridge/i,
+    category: 'stone-arch-bridge',
+    color: PRAGUE_SANDSTONE,
+    sketchfabQuery: 'charles bridge prague',
+  },
   {
     id: 'golden-gate-bridge',
     label: 'Golden Gate Bridge',
@@ -97,6 +108,12 @@ export function findLandmark(name?: string, wikidata?: string, structure?: strin
   }
   if (structure === 'cable-stayed' || structure === 'cable_stayed') {
     return { id: `cable:${name ?? 'unnamed'}`, label: name ?? 'Cable-stayed bridge', category: 'cable-stayed-bridge', color: '#9a9ea3', sketchfabQuery: name ? `${name} bridge` : 'cable stayed bridge' }
+  }
+  // A masonry/stone arch structure gets the dedicated arch generator (buildRoads
+  // limits this to non-drivable spans long enough to be a real arch bridge, so
+  // drivable arch road bridges keep their generic drivable deck).
+  if (structure === 'arch') {
+    return { id: `arch:${name ?? 'unnamed'}`, label: name ?? 'Stone arch bridge', category: 'stone-arch-bridge', color: PRAGUE_SANDSTONE, sketchfabQuery: name ? `${name} bridge` : 'stone arch bridge' }
   }
   return null
 }

@@ -149,13 +149,27 @@ export async function buildCityFromArea(bbox: BBox, name: string, opts: FetchOpt
 }
 
 export async function buildSampleCity(): Promise<void> {
+  await buildBundledSample('/data/raw_osm.json', 'Lower Manhattan, New York')
+}
+
+/**
+ * Prague, Staré Město — a curated ≤4 km² sample centred on the Old Town so it
+ * captures the Vltava, its road bridges and Charles Bridge (the anchor). Region
+ * resolves to Czechia (eu-central): right-hand traffic, white centre lines,
+ * European crosswalks & signs. Real OSM, prefetched like the Manhattan sample.
+ */
+export async function buildPragueSample(): Promise<void> {
+  await buildBundledSample('/data/prague_osm.json', 'Staré Město, Prague')
+}
+
+async function buildBundledSample(url: string, name: string): Promise<void> {
   const s = useEditor.getState()
   try {
     s.setBuilding('Loading sample city…')
-    const res = await fetch('/data/raw_osm.json')
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`Sample data missing (HTTP ${res.status})`)
     const raw = await res.json()
-    await generateScene(raw, 'Lower Manhattan, New York')
+    await generateScene(raw, name)
   } catch (e) {
     s.setLoadError(e instanceof Error ? e.message : String(e))
   }
