@@ -3,7 +3,7 @@ import { useDriveHud } from '../state/driveHud'
 
 const MODE_HINT: Record<string, string> = {
   orbit: 'Left-drag rotate · right-drag pan · scroll zoom · click objects to select',
-  fly: 'WASD move · Q/E down/up · drag to look · Shift fast · Esc to exit',
+  fly: 'click to capture mouse · WASD fly · Space/C up/down · scroll = speed · Shift fast · Alt slow · Esc release, Esc again exit',
   drive: 'W/S throttle & brake · A/D steer · Esc to exit',
 }
 
