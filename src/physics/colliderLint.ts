@@ -1,6 +1,12 @@
 import type { CityGraph } from '../types'
-import { ringAreaM2, ringIsSimple } from '../procgen/geometry'
-import { MAX_RAMP_GRADE } from '../procgen/roadNetwork'
+import { polylineLength, ringAreaM2, ringIsSimple } from '../procgen/geometry'
+import {
+  BRIDGE_LAYER_H,
+  MAX_RAMP_GRADE,
+  NON_DRIVABLE,
+  shortSpanElevCap,
+} from '../procgen/roadNetwork'
+import { maxGradeFor } from '../procgen/corridor/config'
 import type { LintWarning } from '../resolver/varietyLint'
 import type { ColliderSet } from './types'
 
@@ -78,16 +84,42 @@ export function colliderLint(graph: CityGraph, set: ColliderSet): LintWarning[] 
   }
   if (nanIssues) warn(`Collider: ${nanIssues} collider(s) contain non-finite values`)
 
-  // 3) bridge grade limit along road collider profiles
+  // 3) bridge grade limit along road collider profiles. Each bridge is judged
+  // against its OWN design profile: a short span clamps its ramp to 45% of the
+  // length (roadNetwork.rampSpecFor), so its mean grade legitimately exceeds
+  // MAX_RAMP_GRADE — that compromise is already reported by the road-
+  // consistency lint, and the collider check must not double-fire on it.
+  const roadById = new Map(graph.roads.map((r) => [r.id, r]))
   let gradeIssues = 0
   for (const c of set.colliders) {
     if (c.semantics.class !== 'road' || !c.semantics.bridge || !c.geometry) continue
+    const r = c.semantics.featureId ? roadById.get(c.semantics.featureId) : undefined
+    let allowedMean = MAX_RAMP_GRADE
+    if (r && r.points.length >= 2) {
+      const L = polylineLength(r.points)
+      // mirror the generators: path bridges cap their height by what the span
+      // can climb at the class grade limit (corridor/elevation.ts fallback)
+      let fullElev = Math.max(r.layer, 1) * BRIDGE_LAYER_H
+      if (NON_DRIVABLE.has(r.roadClass)) {
+        fullElev = Math.min(fullElev, shortSpanElevCap(L, maxGradeFor(r.roadClass)))
+      }
+      // design mean grade under either profile source: legacy ramps use
+      // MAX_RAMP_GRADE, the network solve uses the per-class cap — allow the
+      // steeper of the two design intents for this span.
+      const meanFor = (cap: number) =>
+        fullElev / Math.min(Math.max(fullElev / cap, 40), Math.max(L * 0.45, 20))
+      allowedMean = Math.max(
+        MAX_RAMP_GRADE,
+        meanFor(MAX_RAMP_GRADE),
+        meanFor(maxGradeFor(r.roadClass)),
+      )
+    }
     const pos = c.geometry.getAttribute('position')
     // ribbon layout: vertices [left_i, right_i] pairs along the centerline
     for (let i = 0; i + 2 < pos.count; i += 2) {
       const dy = Math.abs(pos.getY(i + 2) - pos.getY(i))
       const dd = Math.hypot(pos.getX(i + 2) - pos.getX(i), pos.getZ(i + 2) - pos.getZ(i))
-      if (dd > 0.5 && dy / dd > MAX_RAMP_GRADE * GRADE_TOLERANCE) {
+      if (dd > 0.5 && dy / dd > allowedMean * GRADE_TOLERANCE) {
         gradeIssues++
         break
       }

@@ -1,6 +1,7 @@
 import type { RoadSegment, SceneObject } from '../types'
 import type { RoadResolution } from '../resolver/types'
 import { analyzeRoadNodes, cumulative, rampSpecFor } from '../procgen/roadNetwork'
+import { densifyPolyline } from '../procgen/geometry'
 import { buildRoadElevation } from '../procgen/corridor'
 import { effectiveSpeed } from '../procgen/signMath'
 
@@ -55,10 +56,14 @@ export function buildRoadSemantics(
   const elevation = buildRoadElevation(roads)
   return roads.map((r) => {
     const res = resolutions.get(r.id)
-    const cum = cumulative(r.points)
+    // Bridges are linearly densified (raw line, no smoothing): a straight
+    // 2-point span otherwise exports only its two (grounded) endpoint heights
+    // and a consumer interpolating between them gets a flat deck with no hump.
+    const pts = r.bridge && r.points.length >= 2 ? densifyPolyline(r.points, 8) : r.points
+    const cum = cumulative(pts)
     // `spec` still reports the bridge-height/ramp-length metadata; the actual
     // y-channel comes from the shared elevation seam (network solve when on).
-    const spec = r.points.length >= 2 ? rampSpecFor(r, cum[cum.length - 1], nodes) : null
+    const spec = pts.length >= 2 ? rampSpecFor(r, cum[cum.length - 1], nodes) : null
     const ys = elevation.profileFor(r, cum)
     const speed = effectiveSpeed(r)
     return {
@@ -89,7 +94,7 @@ export function buildRoadSemantics(
       elevation: spec
         ? { bridge_height_m: round(spec.fullElev), ramp_length_m: round(spec.rampLen) }
         : null,
-      centerline: r.points.map((p, i) => [round(p.x), round(ys[i]), round(p.z)]),
+      centerline: pts.map((p, i) => [round(p.x), round(ys[i]), round(p.z)]),
     }
   })
 }

@@ -7,6 +7,8 @@ import { REGION_PACKS, MATRIX_VERSION } from '../resolver/matrix'
 import { CLIMATE_TREES } from '../resolver/matrix'
 import { ingestOverpass } from '../ingest/overpass'
 import { resolveRoad } from '../resolver/resolve'
+import { solveNetworkElevation } from '../procgen/corridor'
+import { analyzeRoadNodes } from '../procgen/roadNetwork'
 
 vi.mock('../materials/library', () => {
   const mat = () => new THREE.MeshBasicMaterial()
@@ -64,6 +66,35 @@ describe('Prague Staré Město sample (real OSM)', () => {
 
     // markings mesh exists (white centre lines / crosswalks / stop lines)
     expect(result.markings).toBeTruthy()
+  })
+
+  it('consolidates the Čechův most bridgehead to ONE junction cluster at ONE height (§15)', () => {
+    const elev = solveNetworkElevation(graph.roads)
+    // real consolidation happened city-wide, bounded (no runaway chains)
+    expect(elev.stats.clusters).toBeGreaterThan(30)
+    expect(elev.stats.internalEdges).toBeGreaterThan(50)
+    // the 2 m Čechův internal stub is junction interior
+    expect(elev.isInternal('road_904148544')).toBe(true)
+
+    // Čechův most north bridgehead (50.09388, 14.41650): previously 12 junction
+    // nodes at z 3.66–6.50 → now one cluster whose members share one elevation.
+    const mPerDegLng = 111320 * Math.cos((graph.origin.lat * Math.PI) / 180)
+    const tx = (14.4165 - graph.origin.lng) * mPerDegLng
+    const tz = -(50.09388 - graph.origin.lat) * 111320
+    const nodes = analyzeRoadNodes(graph.roads)
+    const clusters = new Map<string, number[]>()
+    for (const [k, info] of nodes) {
+      const d = Math.hypot(info.p.x - tx, info.p.z - tz)
+      if (d > 45) continue
+      const c = elev.clusterOf(k)
+      if (!c) continue
+      if (!clusters.has(c)) clusters.set(c, [])
+      clusters.get(c)!.push(elev.nodeElevation(k))
+    }
+    expect(clusters.size).toBe(1)
+    const zs = [...clusters.values()][0]
+    expect(zs.length).toBeGreaterThanOrEqual(5)
+    for (const z of zs) expect(z).toBe(zs[0]) // ONE height — no stacked pancakes
   })
 
   it('resolves Czechia region markings: white centre lines, right-hand, zebra crosswalks', () => {

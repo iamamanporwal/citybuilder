@@ -21,6 +21,14 @@ export interface RoadElevation {
    * legacy per-node bridge elevation, so junction geometry is byte-identical.
    */
   nodeElevation(key: string): number
+  /**
+   * Canonical key of the consolidated junction cluster containing `key`, or
+   * null when the node is not part of a multi-node junction (always null in
+   * legacy mode — consumers then keep their exact legacy behaviour).
+   */
+  clusterOf(key: string): string | null
+  /** True for junction-internal link roads (both ends in one cluster); always false in legacy mode. */
+  isInternal(roadId: string): boolean
   /** Solve diagnostics when the network solve ran; null in legacy mode. */
   readonly stats: ElevationStats | null
 }
@@ -54,6 +62,10 @@ function legacyElevation(roads: RoadSegment[]): RoadElevation {
     // keeps flag-off geometry byte-identical while the network path (below)
     // supplies the solved node height.
     nodeElevation: (key) => nodes.get(key)?.bridgeElev ?? 0,
+    // No consolidation in legacy mode — consumers see no clusters and keep
+    // their exact per-node behaviour.
+    clusterOf: () => null,
+    isInternal: () => false,
     stats: null,
   }
 }

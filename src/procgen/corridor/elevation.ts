@@ -3,10 +3,15 @@ import {
   analyzeRoadNodes,
   BRIDGE_LAYER_H,
   elevationProfile,
+  groundedNodeKeys,
+  MAX_RAMP_GRADE,
+  nodeKey,
   rampSpecFor,
+  shortSpanElevCap,
   type RoadNodeInfo,
 } from '../roadNetwork'
-import { SOLVER } from './config'
+import { maxGradeFor, SOLVER } from './config'
+import { clusterJunctions, type JunctionClusters } from './cluster'
 import { buildRoadGraph, isCorridorEdge, type RoadGraph } from './graph'
 
 // Road Corridor Redesign — Stage 2 (E1): the network elevation solve.
@@ -49,6 +54,10 @@ export interface ElevationStats {
   converged: boolean
   /** Incident-edge grade constraints the geometry made infeasible. */
   gradeViolations: number
+  /** Consolidated junction clusters (multi-node) found by cluster.ts. */
+  clusters: number
+  /** Junction-internal link edges contracted away by consolidation. */
+  internalEdges: number
 }
 
 export interface NetworkElevation {
@@ -63,6 +72,10 @@ export interface NetworkElevation {
    * per-segment ramp math so footbridges and portals are unchanged.
    */
   profileFor(r: RoadSegment, cum: number[]): number[]
+  /** Canonical key of the consolidated junction containing `key`, or null. */
+  clusterOf(key: string): string | null
+  /** True for junction-internal link roads (both ends in one cluster). */
+  isInternal(roadId: string): boolean
   readonly stats: ElevationStats
 }
 
@@ -78,17 +91,32 @@ function hermite(t: number, z0: number, z1: number, m0: number, m1: number): num
 
 /** Solve the whole road network's elevation from raw OSM road segments. */
 export function solveNetworkElevation(roads: RoadSegment[]): NetworkElevation {
-  const graph = buildRoadGraph(roads)
   const legacyNodes = analyzeRoadNodes(roads) // for the non-corridor fallback path
+  const grounded = groundedNodeKeys(roads) // all-class grounding for footbridges
 
+  // Pass 1 — solve the raw graph, so junction consolidation can judge node
+  // compatibility at SOLVED heights (grade-separated levels must never merge).
+  const graph1 = buildRoadGraph(roads)
+  const pass1 = solveNodeElevations(graph1)
+  const consolidation: JunctionClusters = clusterJunctions(graph1, pass1.z)
+
+  // Pass 2 — contract each cluster to one super-node and re-solve: the whole
+  // junction settles at ONE height and every arm ramps smoothly into it.
+  const graph = consolidation.alias.size ? buildRoadGraph(roads, consolidation.alias) : graph1
   const { z, iterations, residual } = solveNodeElevations(graph)
   const grades = solveEdgeGrades(graph, z)
   const stats = computeStats(graph, z, iterations, residual)
+  stats.clusters = consolidation.clusters.size
+  stats.internalEdges = graph.internalEdges.size
+
+  const zAt = (key: string) => z.get(consolidation.alias.get(key) ?? key) ?? 0
 
   return {
-    nodeElevation: (key) => z.get(key) ?? 0,
+    nodeElevation: zAt,
     edgeGrades: (edgeId) => grades.get(edgeId) ?? null,
-    profileFor: (r, cum) => profileFor(r, cum, graph, z, grades, legacyNodes),
+    profileFor: (r, cum) => profileFor(r, cum, graph, z, grades, legacyNodes, grounded, zAt),
+    clusterOf: (key) => consolidation.alias.get(key) ?? null,
+    isInternal: (roadId) => graph.internalEdges.has(roadId),
     stats,
   }
 }
@@ -205,10 +233,36 @@ function profileFor(
   z: Map<string, number>,
   grades: Map<string, EdgeGrades>,
   legacyNodes: Map<string, RoadNodeInfo>,
+  grounded: Set<string>,
+  zAt: (key: string) => number,
 ): number[] {
+  // Junction-internal link (both ends contracted into one cluster): flat at
+  // the consolidated junction height — the junction patch is its surface.
+  if (graph.internalEdges.has(r.id)) {
+    const zc = zAt(nodeKey(r.points[0]))
+    return cum.map(() => zc)
+  }
   const edge = graph.edges.get(r.id)
   if (!edge || !isCorridorEdge(r)) {
-    // Paths, tunnels, self-loops, degenerate — unchanged legacy behaviour.
+    if (r.bridge && r.points.length >= 2) {
+      // Path bridges (footways/cycleways): legacy ramp shape, but grounded via
+      // the ALL-class node map — analyzeRoadNodes only sees drivable ways, so a
+      // footbridge landing on a path used to stay pinned at full height and
+      // float mid-air at its ends. Height is capped by what the span can
+      // physically climb at the class grade limit (a 21 m footbridge is a
+      // gentle bump, not a 6.5 m spike).
+      const L = cum[cum.length - 1]
+      const fullElev = Math.min(
+        Math.max(r.layer, 1) * BRIDGE_LAYER_H,
+        shortSpanElevCap(L, maxGradeFor(r.roadClass)),
+      )
+      const rampLen = Math.min(Math.max(fullElev / MAX_RAMP_GRADE, 40), Math.max(L * 0.45, 20))
+      const [startElev, endElev] = [r.points[0], r.points[r.points.length - 1]].map((p) =>
+        grounded.has(nodeKey(p)) ? 0 : fullElev,
+      )
+      return elevationProfile({ fullElev, rampLen, startElev, endElev }, cum)
+    }
+    // Non-bridge paths, tunnels, self-loops, degenerate — legacy behaviour.
     const spec = r.points.length >= 2 ? rampSpecFor(r, cum[cum.length - 1], legacyNodes) : null
     return elevationProfile(spec, cum)
   }
@@ -253,5 +307,7 @@ function computeStats(
     residual,
     converged: iterations < SOLVER.maxIterations || residual < SOLVER.tolerance,
     gradeViolations,
+    clusters: 0, // filled by solveNetworkElevation
+    internalEdges: 0,
   }
 }

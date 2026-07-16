@@ -265,15 +265,19 @@ describe('surface layers ride the elevation (E4)', () => {
     confidence: 1,
   })
 
-  // A flat network with a driveable joint (markings + sidewalks emitted), no
-  // bridge → the solve settles every node to exactly 0, so E4 must reproduce the
-  // legacy global-Y layer stack byte-for-byte (flag-on == flag-off).
+  // A flat network around a REAL crossroads (degree 4, markings + sidewalks
+  // emitted), no bridge → the solve settles every node to exactly 0, so E4 must
+  // reproduce the legacy global-Y layer stack byte-for-byte (flag-on == flag-off).
+  // Collinear degree-2 way splits are exercised separately below: junction
+  // consolidation (§15) intentionally makes those CONTINUOUS with the flag on.
   const flatRoads = () => [
     road('a', [{ x: 0, z: 0 }, { x: 120, z: 0 }], { roadClass: 'primary' }),
     road('b', [{ x: 120, z: 0 }, { x: 240, z: 0 }], { roadClass: 'primary' }),
+    road('c', [{ x: 120, z: -100 }, { x: 120, z: 0 }], { roadClass: 'primary' }),
+    road('d', [{ x: 120, z: 0 }, { x: 120, z: 100 }], { roadClass: 'primary' }),
   ]
 
-  it('flat network is byte-identical with the flag on vs off (markings, sidewalks, road)', async () => {
+  it('flat crossroads is byte-identical with the flag on vs off (markings, sidewalks, road)', async () => {
     const { buildRoads } = await import('../procgen/roads')
     const run = (flag: boolean) =>
       withCorridorElevation(flag, () => {
@@ -297,6 +301,30 @@ describe('surface layers ride the elevation (E4)', () => {
     // sanity: the layers actually exist so this isn't vacuously comparing []
     expect(on.markings.length).toBeGreaterThan(0)
     expect(on.sidewalks.length).toBeGreaterThan(0)
+  })
+
+  it('collinear way split: continuous flag-on (no trim/disc), legacy disc flag-off (§15)', async () => {
+    const { buildRoads } = await import('../procgen/roads')
+    const run = (flag: boolean) =>
+      withCorridorElevation(flag, () => {
+        const roads = [
+          road('a', [{ x: 0, z: 0 }, { x: 120, z: 0 }], { roadClass: 'primary' }),
+          road('b', [{ x: 120, z: 0 }, { x: 240, z: 0 }], { roadClass: 'primary' }),
+        ]
+        const graph = { roads } as unknown as CityGraph
+        const res = new Map(roads.map((r) => [r.id, resolution(false)]))
+        const r = buildRoads(graph, {} as ResolvedContext, res)
+        const pos = r.roadMeshes.get('a')!.geometry.getAttribute('position')
+        let maxX = -Infinity
+        for (let i = 0; i < pos.count; i++) maxX = Math.max(maxX, pos.getX(i))
+        return { maxX, discs: r.intersections }
+      })
+    const on = run(true)
+    const off = run(false)
+    expect(on.maxX).toBeCloseTo(120, 3) // ribbon runs through the seam untrimmed
+    expect(on.discs).toBeNull() // no pancake at the way split
+    expect(off.maxX).toBeLessThan(120) // legacy keeps the trimmed seam + disc
+    expect(off.discs).not.toBeNull()
   })
 
   // An elevated approach: a SHORT bridge deck cannot climb 6.5 m within its own

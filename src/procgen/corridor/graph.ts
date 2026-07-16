@@ -63,6 +63,14 @@ export interface RoadGraph {
   junctions: string[]
   /** Node keys with degree 2 — routes flow through with C¹ (grade) continuity. */
   joints: string[]
+  /**
+   * Road ids whose two ends contracted into the SAME consolidated junction
+   * (only populated when the graph is built with an alias map): the 2–15 m
+   * internal link ways inside a big junction. They carry no elevation
+   * constraint (the junction is one height) and the renderer skips their
+   * ribbons — the merged junction patch is their surface.
+   */
+  internalEdges: Set<string>
 }
 
 function segLength(pts: Vec2[]): number {
@@ -76,10 +84,21 @@ export function isCorridorEdge(r: RoadSegment): boolean {
   return !NON_DRIVABLE.has(r.roadClass) && !r.tunnel && r.points.length >= 2
 }
 
-/** Build the road-network topology graph from raw OSM road segments. */
-export function buildRoadGraph(roads: RoadSegment[]): RoadGraph {
+/**
+ * Build the road-network topology graph from raw OSM road segments.
+ * With `alias` (junction consolidation, see cluster.ts), member node keys
+ * contract onto their cluster's canonical key: the cluster solves as ONE
+ * super-node, and edges whose two ends collapse together are recorded as
+ * `internalEdges` (junction-interior links) instead of graph edges.
+ */
+export function buildRoadGraph(roads: RoadSegment[], alias?: Map<string, string>): RoadGraph {
   const nodes = new Map<string, GraphNode>()
   const edges = new Map<string, GraphEdge>()
+  const internalEdges = new Set<string>()
+  const keyOf = (p: Vec2) => {
+    const raw = nodeKey(p)
+    return alias?.get(raw) ?? raw
+  }
 
   const touch = (key: string, p: Vec2): GraphNode => {
     let n = nodes.get(key)
@@ -94,11 +113,15 @@ export function buildRoadGraph(roads: RoadSegment[]): RoadGraph {
     if (!isCorridorEdge(r)) continue
     const start = r.points[0]
     const end = r.points[r.points.length - 1]
-    const startKey = nodeKey(start)
-    const endKey = nodeKey(end)
-    // Drop degenerate self-loops: both ends snap to one node, so there is no
-    // continuity to solve and they would corrupt degree/grade bookkeeping.
-    if (startKey === endKey) continue
+    const startKey = keyOf(start)
+    const endKey = keyOf(end)
+    // Both ends on one node: either a degenerate self-loop (raw) or a
+    // junction-internal link (contracted by the alias) — no continuity to
+    // solve either way.
+    if (startKey === endKey) {
+      if (alias && nodeKey(start) !== nodeKey(end)) internalEdges.add(r.id)
+      continue
+    }
 
     const length = segLength(r.points)
     if (length < 1e-3) continue
@@ -141,5 +164,5 @@ export function buildRoadGraph(roads: RoadSegment[]): RoadGraph {
   junctions.sort()
   joints.sort()
 
-  return { nodes, edges, junctions, joints }
+  return { nodes, edges, junctions, joints, internalEdges }
 }

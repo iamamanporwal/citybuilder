@@ -5,9 +5,10 @@ import { hash01 } from '../resolver/resolve'
 import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/library'
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { densifyPolyline, mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
-import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, nodeKey, NON_DRIVABLE } from './roadNetwork'
-import { buildRoadElevation } from './corridor'
+import polygonClipping from 'polygon-clipping'
+import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, discRadius, nodeKey, NON_DRIVABLE, segCenterline, siblingFootwayBridgeIds } from './roadNetwork'
+import { buildRoadElevation, isCorridorElevationEnabled } from './corridor'
 import { DecalPlanner } from './decalPlan'
 import { matchBridgeLandmark, type LandmarkEntry } from '../scene/landmarks'
 import { buildArchBridge, buildSuspensionBridge, chainCenterlines, type LandmarkBridge } from './bridges'
@@ -101,8 +102,80 @@ export function buildRoads(
   // the legacy per-segment ramp). The collider builder and semantics exporter
   // read the same seam so all three agree on the y-channel.
   const elevation = buildRoadElevation(graph.roads)
-  const isJunction = (p: Vec2) => (nodeUse.get(nodeKey(p))?.count ?? 0) >= 2
+  const consolidate = isCorridorElevationEnabled()
+
+  // ---- pass-through joints (§15): a degree-2 node where two arms continue
+  // near-collinearly at similar width is a WAY SPLIT, not a junction — the
+  // smoothed centerlines + C¹ elevation make the seam tight, so it needs no
+  // disc, no trim and no crosswalk. Without this every OSM way split stamps a
+  // flat pancake that floats visibly on any ramp.
+  const passThrough = new Set<string>()
+  if (consolidate) {
+    const armDirs = new Map<string, { d: Vec2; w: number }[]>()
+    for (const r of graph.roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
+      const ends: [Vec2, Vec2][] = [
+        [r.points[0], r.points[1]],
+        [r.points[r.points.length - 1], r.points[r.points.length - 2]],
+      ]
+      for (const [p, q] of ends) {
+        const l = Math.hypot(q.x - p.x, q.z - p.z) || 1
+        const k = nodeKey(p)
+        let a = armDirs.get(k)
+        if (!a) armDirs.set(k, (a = []))
+        a.push({ d: { x: (q.x - p.x) / l, z: (q.z - p.z) / l }, w: r.widthM })
+      }
+    }
+    for (const [k, arms] of armDirs) {
+      if (arms.length !== 2) continue
+      const [a, b] = arms
+      const dot = a.d.x * b.d.x + a.d.z * b.d.z
+      const ratio = Math.max(a.w, b.w) / Math.max(Math.min(a.w, b.w), 0.1)
+      if (dot <= -0.866 && ratio <= 1.35) passThrough.add(k)
+    }
+  }
+
+  const isJunction = (p: Vec2) =>
+    (nodeUse.get(nodeKey(p))?.count ?? 0) >= 2 && !passThrough.has(nodeKey(p))
   const junctionRadius = (p: Vec2) => (nodeUse.get(nodeKey(p))?.maxWidth ?? 8) * 0.55
+  // Crosswalks/stop lines belong at REAL junctions only: a consolidated
+  // cluster or a degree-≥3 node — never at way splits.
+  const realJunction = (p: Vec2) => {
+    const k = nodeKey(p)
+    return elevation.clusterOf(k) !== null || (nodeUse.get(k)?.count ?? 0) >= 3
+  }
+
+  // ---- consolidated junction clusters (§15): member discs per cluster, for
+  // the merged junction patch and for trimming arms back to the patch edge.
+  const clusterDiscs = new Map<string, { x: number; z: number; rad: number }[]>()
+  for (const [k, info] of nodeUse) {
+    const c = elevation.clusterOf(k)
+    if (!c) continue
+    let list = clusterDiscs.get(c)
+    if (!list) clusterDiscs.set(c, (list = []))
+    list.push({ x: info.p.x, z: info.p.z, rad: discRadius(info.maxWidth) })
+  }
+  /** Trim distance from an end of `pts` back to the cluster patch boundary, or null if unclustered. */
+  const clusterExitTrim = (pts: Vec2[], atEnd: boolean): number | null => {
+    const key = nodeKey(atEnd ? pts[pts.length - 1] : pts[0])
+    const c = elevation.clusterOf(key)
+    if (!c) return null
+    const discs = clusterDiscs.get(c)
+    if (!discs || discs.length < 2) return null
+    const L = polylineLength(pts)
+    const maxWalk = Math.min(L * 0.45, 60)
+    let lastInside = -1
+    for (let s = 0; s <= maxWalk; s += 0.75) {
+      const { p } = pointAlong(pts, atEnd ? L - s : s)
+      if (discs.some((d) => (p.x - d.x) ** 2 + (p.z - d.z) ** 2 <= d.rad * d.rad)) lastInside = s
+    }
+    if (lastInside < 0) return null
+    return Math.min(lastInside + 0.6, maxWalk)
+  }
+
+  // OSM-mapped sidewalk ways of drivable bridges: dropped (the engine's bridges
+  // render no separate sidewalks; these only ever showed up as floating strips).
+  const siblingFootways = consolidate ? siblingFootwayBridgeIds(graph.roads) : new Set<string>()
 
   const roadMeshes = new Map<string, THREE.Mesh>()
   const sidewalkGeoms: THREE.BufferGeometry[] = []
@@ -162,6 +235,10 @@ export function buildRoads(
     // arch-landmark decks (Charles Bridge) are built as one unified structure
     // after the loop — skip the per-segment surface so the deck is single-level.
     if (archLandmarkRoadIds.has(r.id)) continue
+    // junction-internal links: the merged junction patch is their surface
+    if (elevation.isInternal(r.id)) continue
+    // mapped sidewalk ways of a drivable bridge: no separate ribbon
+    if (siblingFootways.has(r.id)) continue
 
     // ---- tunnels: no surface; portal frames at transitions to open air
     if (r.tunnel) {
@@ -176,23 +253,41 @@ export function buildRoads(
       continue
     }
 
-    // continuous reference line: smooth the OSM polyline, endpoints preserved.
-    // Bridges are additionally densified: a straight bridge is often a 2-point
-    // OSM way, so the per-point elevation profile would sample the deck only at
-    // its (grounded) feet and miss the humped interior — the deck would then
-    // render flat on the ground with no structure (§ deck-sampling fix). No-op
-    // for already-dense (curved/multi-point) spans.
-    const pts = r.bridge ? densifyPolyline(smoothPolyline(r.points), 8) : smoothPolyline(r.points)
+    // continuous reference line: smooth the OSM polyline (endpoints preserved),
+    // bridges densified so a straight 2-point span still samples its elevation
+    // hump (shared with colliders/semantics via segCenterline).
+    const pts = segCenterline(r)
     const half = r.widthM / 2
 
     // trim the carriageway at junctions so ribbons never overlap co-planarly —
-    // the junction disc (one layer up) is the intersection surface
+    // the junction surface (one layer up) covers the gap. At a consolidated
+    // cluster the arm trims back to the MERGED patch boundary (not its own
+    // node's disc), and bridge decks trim there too, so a deck no longer runs
+    // through the middle of its bridgehead junction.
     let surfacePts = pts
-    if (!r.bridge) {
-      const t0 = isJunction(pts[0]) ? junctionRadius(pts[0]) * 0.72 : 0
-      const t1 = isJunction(pts[pts.length - 1]) ? junctionRadius(pts[pts.length - 1]) * 0.72 : 0
+    let startTrimApplied = 0
+    {
+      const c0 = clusterExitTrim(pts, false)
+      const c1 = clusterExitTrim(pts, true)
+      let t0: number
+      let t1: number
+      if (!r.bridge) {
+        t0 = c0 ?? (isJunction(pts[0]) ? junctionRadius(pts[0]) * 0.72 : 0)
+        t1 = c1 ?? (isJunction(pts[pts.length - 1]) ? junctionRadius(pts[pts.length - 1]) * 0.72 : 0)
+      } else {
+        t0 = c0 ?? 0
+        t1 = c1 ?? 0
+      }
       if (t0 || t1) {
-        surfacePts = trimPolyline(pts, t0, t1) ?? trimPolyline(pts, t0 * 0.5, t1 * 0.5) ?? pts
+        const full = trimPolyline(pts, t0, t1)
+        const half2 = full ? null : trimPolyline(pts, t0 * 0.5, t1 * 0.5)
+        if (full) {
+          surfacePts = full
+          startTrimApplied = t0
+        } else if (half2) {
+          surfacePts = half2
+          startTrimApplied = t0 * 0.5
+        }
       }
     }
     const left = offsetPolyline(surfacePts, half)
@@ -210,9 +305,17 @@ export function buildRoads(
     // A flat segment stays a scalar height so ribbonGeometry keeps its exact
     // up-normal fast path (legacy parity); any relief promotes to a per-point
     // profile. Bridges are always elevated, so decks remain per-point arrays.
+    // The ribbon's profile is sampled at the TRIMMED stations (offset by the
+    // applied start trim) — sampling the untrimmed stations onto trimmed
+    // vertices shifted an elevated arm's heights by the trim length, stepping
+    // the surface exactly at junction mouths.
     const elevated = trueProfile.some((e) => Math.abs(e) > 1e-6)
     let profile: number[] | number = yBase
-    if (elevated) profile = trueProfile.map((e) => e + yBase)
+    if (elevated) {
+      const stations =
+        surfacePts === pts ? cum : cumulative(surfacePts).map((c) => c + startTrimApplied)
+      profile = elevation.profileFor(r, stations).map((e) => e + yBase)
+    }
 
     // Surface-relative layer heights (Road Corridor Redesign E4). Markings,
     // decals, crosswalks and sidewalks must ride the road surface: a fixed
@@ -237,15 +340,37 @@ export function buildRoads(
     // dedicated suspension generator instead, built after the loop)
     if (r.bridge && Array.isArray(profile)) {
       if (!landmarkRoadIds.has(r.id)) {
-        const deck = profile
-        const fasciaBottom = deck.map((y) => y - 0.9)
-        const railTop = deck.map((y) => y + 1.05)
-        bridgeGeoms.push(wallGeometry(left, fasciaBottom, railTop))
-        bridgeGeoms.push(wallGeometry(right, railTop, fasciaBottom))
-        const L = cum[cum.length - 1]
+        const deck = profile // aligned with surfacePts/left/right stations
+        // fascia + rails only where the deck is genuinely elevated — a wall
+        // along the near-grade ramp portion slices through the junction area
+        // and the terrain (§15). Legacy (flag off) keeps the full-span wall.
+        const runs: [number, number][] = []
+        if (consolidate) {
+          let a = -1
+          for (let i = 0; i < deck.length; i++) {
+            if (deck[i] - yBase > 0.8) {
+              if (a < 0) a = i
+            } else {
+              if (a >= 0 && i - a >= 2) runs.push([a, i])
+              a = -1
+            }
+          }
+          if (a >= 0 && deck.length - a >= 2) runs.push([a, deck.length])
+        } else {
+          runs.push([0, deck.length])
+        }
+        for (const [a, b] of runs) {
+          const dl = deck.slice(a, b)
+          const fasciaBottom = dl.map((y) => y - 0.9)
+          const railTop = dl.map((y) => y + 1.05)
+          bridgeGeoms.push(wallGeometry(left.slice(a, b), fasciaBottom, railTop))
+          bridgeGeoms.push(wallGeometry(right.slice(a, b), railTop, fasciaBottom))
+        }
+        const cumS = surfacePts === pts ? cum : cumulative(surfacePts)
+        const L = cumS[cumS.length - 1]
         for (let d = 14; d < L - 10; d += 22) {
-          const { p } = pointAlong(pts, d)
-          const elevHere = deck[nearestIndex(cum, d)]
+          const { p } = pointAlong(surfacePts, d)
+          const elevHere = deck[nearestIndex(cumS, d)]
           if (elevHere > 3.5) {
             const pier = new THREE.CylinderGeometry(0.85, 1.0, elevHere - 0.35, 10)
             pier.translate(p.x, (elevHere - 0.35) / 2, p.z)
@@ -259,12 +384,18 @@ export function buildRoads(
     const drivable = !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== 'service'
 
     // ---- sidewalks from resolved cross-section, trimmed at junctions
+    // (at a consolidated cluster: back to the merged patch boundary)
     if (res.crossSection.sidewalks) {
       const sw = res.crossSection.sidewalkWidth
-      const startTrim = isJunction(pts[0]) ? junctionRadius(pts[0]) + sw : 0
-      const endTrim = isJunction(pts[pts.length - 1])
-        ? junctionRadius(pts[pts.length - 1]) + sw
-        : 0
+      const cs = clusterExitTrim(pts, false)
+      const ce = clusterExitTrim(pts, true)
+      const startTrim = cs !== null ? cs + sw : isJunction(pts[0]) ? junctionRadius(pts[0]) + sw : 0
+      const endTrim =
+        ce !== null
+          ? ce + sw
+          : isJunction(pts[pts.length - 1])
+            ? junctionRadius(pts[pts.length - 1]) + sw
+            : 0
       const walkPts = trimPolyline(pts, startTrim, endTrim)
       if (walkPts && walkPts.length >= 2) {
         // curb/sidewalk slab rides the road surface: base = road elevation at
@@ -280,12 +411,16 @@ export function buildRoads(
 
     // ---- markings (region-correct via resolver)
     if (drivable && r.lanes >= 1) {
-      const startJ = isJunction(pts[0])
-      const endJ = isJunction(pts[pts.length - 1])
+      const cs = clusterExitTrim(pts, false)
+      const ce = clusterExitTrim(pts, true)
+      // crosswalks/stop lines only at REAL junctions (cluster or degree ≥ 3);
+      // way splits used to paint crosswalks in the middle of nowhere.
+      const startJ = consolidate ? realJunction(pts[0]) : isJunction(pts[0])
+      const endJ = consolidate ? realJunction(pts[pts.length - 1]) : isJunction(pts[pts.length - 1])
       const markPts = trimPolyline(
         pts,
-        startJ ? junctionRadius(pts[0]) : 0,
-        endJ ? junctionRadius(pts[pts.length - 1]) : 0,
+        cs ?? (isJunction(pts[0]) ? junctionRadius(pts[0]) : 0),
+        ce ?? (isJunction(pts[pts.length - 1]) ? junctionRadius(pts[pts.length - 1]) : 0),
       )
       if (markPts && markPts.length >= 2) {
         const buf = res.marking.centerColor === 'yellow' ? yellow : white
@@ -397,11 +532,33 @@ export function buildRoads(
   //     identical texels — whichever triangle wins the depth tie paints the
   //     same pixel, and the overlap region reads as one continuous surface.
   const discGeoms: THREE.BufferGeometry[] = []
-  const junctionNodes = [...nodeUse.entries()]
-    .filter(([, info]) => info.count >= 2)
-    .map(([k, info]) => ({ k, info, rad: info.maxWidth * 0.58 }))
-    .sort((a, b) => b.rad - a.rad || (a.k < b.k ? -1 : 1))
   const keptDiscs: { x: number; z: number; rad: number; elev: number }[] = []
+
+  // ---- consolidated junction patches (§15): ONE merged surface per cluster —
+  // the union of its member discs — at the cluster's single solved height,
+  // instead of a stack of per-node pancakes at mixed heights. Member discs
+  // seed the containment list so leftover single discs inside a patch drop.
+  for (const [canonical, discs] of [...clusterDiscs.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    if (discs.length < 2) continue
+    const zc = elevation.nodeElevation(canonical)
+    let mp: [number, number][][][]
+    try {
+      const polys = discs.map((d) => [circleRing(d)])
+      mp = polygonClipping.union(polys[0] as never, ...(polys.slice(1) as never[])) as [number, number][][][]
+    } catch {
+      mp = discs.map((d) => [circleRing(d)])
+    }
+    for (const poly of mp) {
+      const g = junctionPatchGeometry(poly, zc + Y_DISC)
+      if (g) discGeoms.push(g)
+    }
+    for (const d of discs) keptDiscs.push({ x: d.x, z: d.z, rad: d.rad, elev: zc })
+  }
+
+  const junctionNodes = [...nodeUse.entries()]
+    .filter(([k, info]) => info.count >= 2 && !elevation.clusterOf(k) && !passThrough.has(k))
+    .map(([k, info]) => ({ k, info, rad: discRadius(info.maxWidth) }))
+    .sort((a, b) => b.rad - a.rad || (a.k < b.k ? -1 : 1))
   for (const { k, info, rad } of junctionNodes) {
     // Disc sits on the solved node height (network solve) so an intersection
     // that the elevation solve lifted rides with its approaches; flag-off this
@@ -427,6 +584,19 @@ export function buildRoads(
         const q = decalQuads.manhole
         pushQuad(q.pos, q.idx, c, { x: 1, z: 0 }, 0.45, { x: 0, z: 1 }, 0.45, Y_DISC + 0.015, q.uv)
       }
+    }
+  }
+
+  // manholes on consolidated junction patches too (members left the singles
+  // loop above): same seeds, same planner guard, at the cluster's ONE height.
+  for (const [k, info] of [...nodeUse.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    if (info.count < 2 || !elevation.clusterOf(k) || passThrough.has(k)) continue
+    if (info.maxWidth < 6 || elevation.nodeElevation(k) !== 0 || hash01(k + ':mh') <= 0.45) continue
+    const off = (hash01(k + ':mo') - 0.5) * discRadius(info.maxWidth)
+    const c = { x: info.p.x + off, z: info.p.z + off * 0.6 }
+    if (decalPlanner.tryPlace(c, 0.45)) {
+      const q = decalQuads.manhole
+      pushQuad(q.pos, q.idx, c, { x: 1, z: 0 }, 0.45, { x: 0, z: 1 }, 0.45, Y_DISC + 0.015, q.uv)
     }
   }
 
@@ -650,6 +820,65 @@ function surfaceElevSampler(pts: Vec2[], profile: number[], elevated: boolean): 
 function nearestIndex(cum: number[], d: number): number {
   for (let i = 0; i < cum.length; i++) if (cum[i] >= d) return i
   return cum.length - 1
+}
+
+/** Closed 24-gon ring approximating a junction disc, for the polygon union. */
+function circleRing(d: { x: number; z: number; rad: number }): [number, number][] {
+  const SEG = 24
+  const ring: [number, number][] = []
+  for (let i = 0; i < SEG; i++) {
+    const a = (i / SEG) * Math.PI * 2
+    ring.push([d.x + Math.cos(a) * d.rad, d.z + Math.sin(a) * d.rad])
+  }
+  ring.push([...ring[0]])
+  return ring
+}
+
+/**
+ * Mesh one polygon (outer ring + holes) of a consolidated junction patch as an
+ * up-facing surface at height `y`, with world-planar UVs (same idempotent-
+ * overdraw property as the single discs it replaces).
+ */
+function junctionPatchGeometry(poly: [number, number][][], y: number): THREE.BufferGeometry | null {
+  const toV2 = (ring: [number, number][]): THREE.Vector2[] => {
+    const pts = ring.map(([x, z]) => new THREE.Vector2(x, z))
+    if (pts.length > 1 && pts[0].distanceTo(pts[pts.length - 1]) < 1e-9) pts.pop()
+    return pts
+  }
+  const contour = toV2(poly[0])
+  if (contour.length < 3) return null
+  const holes = poly.slice(1).map(toV2).filter((h) => h.length >= 3)
+  let faces: number[][]
+  try {
+    faces = THREE.ShapeUtils.triangulateShape(contour, holes)
+  } catch {
+    return null
+  }
+  if (!faces.length) return null
+  const all = contour.concat(...holes)
+  const pos = new Float32Array(all.length * 3)
+  all.forEach((p, i) => pos.set([p.x, y, p.y], i * 3))
+  const idx: number[] = []
+  for (const f of faces) idx.push(f[0], f[1], f[2])
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  g.setIndex(idx)
+  // wind up-facing: +Y normals like every other flat road layer
+  const a = all[idx[0]]
+  const b = all[idx[1]]
+  const c = all[idx[2]]
+  if ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) > 0) {
+    for (let i = 0; i < idx.length; i += 3) {
+      const t = idx[i + 1]
+      idx[i + 1] = idx[i + 2]
+      idx[i + 2] = t
+    }
+    g.setIndex(idx)
+  }
+  const normals = new Float32Array(all.length * 3)
+  for (let i = 1; i < normals.length; i += 3) normals[i] = 1
+  g.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
+  return planarUvXZ(g)
 }
 
 function portalGeometry(p: Vec2, dir: Vec2, width: number): THREE.BufferGeometry[] {

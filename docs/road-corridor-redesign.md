@@ -445,3 +445,21 @@ A pure, deterministic transform `scaleRoadNetwork(graph, k) → CityGraph` (iden
 - Penetration resolution is **per-road-superposed**, not a full collision relaxation, so in an unusually narrow block two opposite setbacks can bring buildings close; a light building-vs-building relax pass is a follow-up.
 - Displacement uses 2-D centerline distance; correct for at-grade roads (bridges already excluded).
 - `lat/lng` on displaced features become slightly stale (metres); appearance/recognizer already resolved pre-scale, so this is cosmetic.
+
+## 15. Junction Consolidation — bridgeheads & multi-node junctions  ✅ SHIPPED
+
+**Problem.** OSM maps one big junction (a bridgehead like Čechův most, a dual-carriageway crossing, a signalized complex) as a CLUSTER of nodes a few metres apart joined by 2–15 m internal link ways. Treating each node as its own junction produced: a stack of per-node discs at different solved heights ("pancake piles"), ribbons criss-crossing neighbouring discs, bridge fascia walls slicing through the junction area, and crosswalks painted at every way split. Diagnosed at Čechův most: 12 junction nodes within 60 m at z = 3.66…6.50.
+
+**Model** (same move as osm2streets intersection consolidation / OSMnx `consolidate_intersections`):
+
+1. **Cluster** (`corridor/cluster.ts`): union-find over junction-degree nodes. Rules — (a) *internal-edge contraction*: edge shorter than `1.5 × (radA+radB)`; (b) *proximity*: node discs overlap (`dist ≤ radA+radB`). Both gated on solved-height compatibility (|Δz| ≤ 2.0 / 1.2 m) so **grade-separated levels never merge**, and a cluster bbox is capped at 45 m so chains can't swallow a block. Judged at PASS-1 solved heights.
+2. **Contract & re-solve** (`corridor/elevation.ts`, two-phase): each cluster becomes one super-node in a rebuilt graph → the whole junction settles at **one elevation** and every arm ramps smoothly (C⁰) into it. Edges whose two ends collapse together are **internal edges**: no elevation constraint, flat profile at the cluster height, no rendered ribbon. Prague: 72 clusters / 186 nodes / 108 internal edges; solver now converges in 36 iters (was 80, non-converged) and grade violations dropped 15 → 5.
+3. **One merged patch** (`roads.ts`): per cluster, the union of member discs (polygon-clipping) meshed as a single junction surface at the single height (planar UVs — same idempotent-overdraw property as discs). Member discs seed the containment list so leftover singles inside a patch drop.
+4. **Cluster-aware trims**: every arm — including bridge decks, which never trimmed before — trims back to the patch boundary (walk-out of the disc union + margin). Sidewalks/markings follow.
+5. **Pass-through joints**: a degree-2 node where two arms continue near-collinearly (dot ≤ −0.866, width ratio ≤ 1.35) is a way split, not a junction — no trim, no disc, no crosswalk. Kills the floating seam pancakes on every ramp.
+6. **Real-junction gating**: crosswalks + stop lines only at clusters or degree-≥3 nodes.
+7. **Bridge cleanup**: fascia/rails only where the deck is >0.8 m above grade (walls no longer knife through junction areas); OSM-mapped *sidewalk ways* of a drivable bridge (parallel footway-bridge ways) are detected (`siblingFootwayBridgeIds`) and dropped from render + colliders; standalone footbridges keep, now grounded via an all-class node map and height-capped by what their span can climb (`shortSpanElevCap = grade·L/π`).
+
+**Consistency**: colliders + semantics read the same seam — intersection colliders sit at the solved (aliased) node height, road/rail colliders use the same densified centerline (`segCenterline`), semantics exports densified bridge centerlines. Flag-off (legacy) is untouched: the legacy adapter reports no clusters, so every consumer keeps byte-identical legacy behaviour (`clusterOf → null`, `isInternal → false`).
+
+**Tests**: `junctionConsolidation.test.ts` (contraction/one-height/internal-flat/grade-separation-guard/sibling detection), `pragueBuild.integ.test.ts` (Čechův bridgehead = ONE cluster at ONE height on real data), corridor parity re-pinned on a crossroads + explicit way-split-continuity case.

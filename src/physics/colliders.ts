@@ -19,8 +19,11 @@ import { flatRingGeometry, waterRings } from '../procgen/areas'
 import {
   analyzeRoadNodes,
   cumulative,
+  discRadius,
   nodeKey,
   NON_DRIVABLE,
+  segCenterline,
+  siblingFootwayBridgeIds,
   type RoadNodeInfo,
 } from '../procgen/roadNetwork'
 import { buildRoadElevation, type RoadElevation } from '../procgen/corridor'
@@ -104,7 +107,7 @@ export function buildColliders(
   const bounds: Rect = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad }
 
   roadColliders(graph, roadResolutions, elevation, colliders)
-  intersectionColliders(nodes, colliders)
+  intersectionColliders(nodes, elevation, colliders)
   sidewalkColliders(graph, roadResolutions, nodes, colliders)
   bridgeRailColliders(graph, elevation, colliders)
   portalColliders(graph, nodes, colliders)
@@ -131,9 +134,15 @@ function roadColliders(
   elevation: RoadElevation,
   out: ColliderDescriptor[],
 ) {
+  // mapped sidewalk ways of drivable bridges are not rendered (roads.ts §15) —
+  // no floating invisible collider either. Empty set in legacy mode.
+  const siblings = elevation.stats ? siblingFootwayBridgeIds(graph.roads) : new Set<string>()
   for (const r of graph.roads) {
     if (r.tunnel || r.points.length < 2) continue
-    const pts = smoothPolyline(r.points)
+    if (siblings.has(r.id)) continue
+    // same reference line as the renderer (bridges densified so straight
+    // 2-point spans carry their elevation hump into the collider too)
+    const pts = segCenterline(r)
     const half = r.widthM / 2
     const cum = cumulative(pts)
     const profile = elevation.profileFor(r, cum).map((e) => e + Y_ROAD_COL)
@@ -164,15 +173,22 @@ function roadColliders(
   }
 }
 
-function intersectionColliders(nodes: Map<string, RoadNodeInfo>, out: ColliderDescriptor[]) {
+function intersectionColliders(
+  nodes: Map<string, RoadNodeInfo>,
+  elevation: RoadElevation,
+  out: ColliderDescriptor[],
+) {
   for (const [k, info] of nodes) {
     if (info.count < 2) continue
-    const rad = info.maxWidth * 0.58
+    const rad = discRadius(info.maxWidth)
     const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
     const g = new THREE.CircleGeometry(rad, seg)
     g.rotateX(-Math.PI / 2)
-    // flat disc at ROAD height (not the visual +6cm junction offset)
-    g.translate(info.p.x, info.bridgeElev + Y_ROAD_COL, info.p.z)
+    // flat disc at ROAD height (not the visual +6cm junction offset), on the
+    // SOLVED node elevation — consolidated cluster members all sit at one
+    // height, so a car crosses a bridgehead without steps. The legacy adapter
+    // returns bridgeElev here, keeping flag-off byte-identical.
+    g.translate(info.p.x, elevation.nodeElevation(k) + Y_ROAD_COL, info.p.z)
     out.push({
       id: `col_intersection_${sanitizeId(k)}`,
       kind: 'trimesh',
@@ -224,9 +240,12 @@ function sidewalkColliders(
 function bridgeRailColliders(graph: CityGraph, elevation: RoadElevation, out: ColliderDescriptor[]) {
   const RAIL_H = 1.05
   const RAIL_T = 0.12
+  // same sibling rule as roadColliders: mapped bridge-sidewalk ways get no rails
+  const siblings = elevation.stats ? siblingFootwayBridgeIds(graph.roads) : new Set<string>()
   for (const r of graph.roads) {
     if (!r.bridge || r.tunnel || r.points.length < 2) continue
-    const pts = smoothPolyline(r.points)
+    if (siblings.has(r.id)) continue
+    const pts = segCenterline(r) // densified: rails ride the humped deck, not a flat chord
     const cum = cumulative(pts)
     const deck = elevation.profileFor(r, cum).map((e) => e + Y_ROAD_COL)
     const half = r.widthM / 2
