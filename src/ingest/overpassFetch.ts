@@ -201,6 +201,7 @@ export interface CachedCity {
 }
 
 export function cacheCity(name: string, raw: any): void {
+  if (typeof localStorage === 'undefined') return // headless (Node API/CLI): no browser cache
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ name, raw }))
   } catch {
@@ -209,6 +210,7 @@ export function cacheCity(name: string, raw: any): void {
 }
 
 export function loadCachedCity(): CachedCity | null {
+  if (typeof localStorage === 'undefined') return null
   try {
     const s = localStorage.getItem(CACHE_KEY)
     if (!s) return null

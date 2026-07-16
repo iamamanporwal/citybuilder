@@ -11,14 +11,22 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "bake": "node tools/bake-glb.mjs"
+    "bake": "node tools/bake-glb.mjs",
+    "generate": "tsx tools/generate-city.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
+    "@gltf-transform/core": "^4.4.1",
+    "@gltf-transform/extensions": "^4.4.1",
+    "@gltf-transform/functions": "^4.4.1",
+    "@napi-rs/canvas": "^1.0.2",
     "@react-three/drei": "^9.114.3",
     "@react-three/fiber": "^8.17.10",
     "@react-three/postprocessing": "^2.19.1",
     "@react-three/rapier": "^1.5.0",
+    "@vercel/blob": "^2.6.1",
+    "@vercel/functions": "^3.7.5",
+    "draco3dgltf": "^1.5.7",
     "leaflet": "^1.9.4",
     "polygon-clipping": "^0.15.7",
     "postprocessing": "^6.39.2",
@@ -28,16 +36,13 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
-    "@gltf-transform/core": "^4.4.1",
-    "@gltf-transform/extensions": "^4.4.1",
-    "@gltf-transform/functions": "^4.4.1",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^26.1.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.169.0",
     "@vitejs/plugin-react": "^4.3.2",
-    "draco3dgltf": "^1.5.7",
+    "tsx": "^4.23.1",
     "typescript": "~5.6.3",
     "vite": "^5.4.9",
     "vitest": "^2.1.9"
