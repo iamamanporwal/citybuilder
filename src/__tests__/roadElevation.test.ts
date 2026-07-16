@@ -10,7 +10,7 @@ import {
   MAX_RAMP_GRADE,
   rampSpecFor,
 } from '../procgen/roadNetwork'
-import { smoothPolyline } from '../procgen/geometry'
+import { densifyPolyline, smoothPolyline } from '../procgen/geometry'
 import { withCorridorElevation } from '../procgen/corridor'
 
 // Materials build canvas textures at module load — stub them so buildRoads
@@ -147,5 +147,46 @@ describe('renderer parity', () => {
         expect(pos.getY(i * 2 + 1)).toBeCloseTo(expected[i], 5)
       }
     })
+  })
+
+  // Regression: a straight bridge is often a 2-point OSM way. smoothPolyline
+  // leaves 2-point spans alone, so the per-point elevation profile sampled the
+  // deck ONLY at its (grounded) feet and missed the humped interior — the deck
+  // rendered flat on the ground with NO structure (Mánesův most bug). buildRoads
+  // now densifies bridge centerlines so the hump is always sampled.
+  it('elevates a straight 2-point bridge deck and builds its structure', async () => {
+    const { buildRoads } = await import('../procgen/roads')
+    withCorridorElevation(false, () => {
+      const bridge = road('bridge', [{ x: 0, z: 0 }, { x: 260, z: 0 }], { bridge: true, layer: 1 })
+      const approachA = road('appA', [{ x: -80, z: 0 }, { x: 0, z: 0 }])
+      const approachB = road('appB', [{ x: 260, z: 0 }, { x: 340, z: 0 }])
+      const graph = { roads: [bridge, approachA, approachB] } as unknown as CityGraph
+      const resolutions = new Map([
+        ['bridge', resolution], ['appA', resolution], ['appB', resolution],
+      ])
+      const result = buildRoads(graph, {} as ResolvedContext, resolutions)
+      const mesh = result.roadMeshes.get('bridge')!
+      const pos = mesh.geometry.getAttribute('position')
+      let maxY = -Infinity
+      for (let i = 0; i < pos.count; i++) maxY = Math.max(maxY, pos.getY(i))
+      expect(maxY).toBeGreaterThan(5) // deck humps toward the layer-1 deck height (6.5 m)
+      expect(result.bridges).not.toBeNull() // fascia/rails/piers were built (profile is a per-point array)
+    })
+  })
+})
+
+describe('densifyPolyline', () => {
+  it('is a no-op when every segment is already within maxSpacing', () => {
+    const pts = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 8, z: 0 }]
+    expect(densifyPolyline(pts, 8)).toEqual(pts)
+  })
+  it('splits long segments so none exceed maxSpacing, preserving endpoints', () => {
+    const out = densifyPolyline([{ x: 0, z: 0 }, { x: 200, z: 0 }], 8)
+    expect(out.length).toBeGreaterThan(20)
+    expect(out[0]).toEqual({ x: 0, z: 0 })
+    expect(out[out.length - 1]).toEqual({ x: 200, z: 0 })
+    for (let i = 1; i < out.length; i++) {
+      expect(Math.hypot(out[i].x - out[i - 1].x, out[i].z - out[i - 1].z)).toBeLessThanOrEqual(8 + 1e-9)
+    }
   })
 })

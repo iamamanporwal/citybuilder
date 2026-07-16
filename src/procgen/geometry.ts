@@ -232,6 +232,31 @@ export function smoothPolyline(pts: Vec2[], spacing = 4): Vec2[] {
   return curve.getSpacedPoints(n).map((v) => ({ x: v.x, z: v.z }))
 }
 
+/**
+ * Insert evenly-spaced points so no segment exceeds `maxSpacing` metres. A
+ * straight OSM way is often just its two endpoints; the road elevation solve is
+ * a per-point profile, so a 2-point span samples the deck ONLY at its ends — and
+ * a bridge whose feet sit at grade then renders flat on the ground with its
+ * humped interior never sampled. Densifying first guarantees the ramp/hump is
+ * captured. No-op when every segment is already ≤ maxSpacing (returns the same
+ * points), so smoothed centerlines (4 m spacing) pass through unchanged.
+ */
+export function densifyPolyline(pts: Vec2[], maxSpacing: number): Vec2[] {
+  if (pts.length < 2 || maxSpacing <= 0) return pts
+  const out: Vec2[] = [pts[0]]
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]
+    const b = pts[i]
+    const d = Math.hypot(b.x - a.x, b.z - a.z)
+    const n = Math.max(1, Math.ceil(d / maxSpacing))
+    for (let k = 1; k <= n; k++) {
+      const t = k / n
+      out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t })
+    }
+  }
+  return out
+}
+
 export function polylineLength(pts: Vec2[]): number {
   let l = 0
   for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)

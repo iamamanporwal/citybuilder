@@ -5,7 +5,7 @@ import { hash01 } from '../resolver/resolve'
 import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/library'
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { densifyPolyline, mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
 import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, nodeKey, NON_DRIVABLE } from './roadNetwork'
 import { buildRoadElevation } from './corridor'
 import { DecalPlanner } from './decalPlan'
@@ -176,8 +176,13 @@ export function buildRoads(
       continue
     }
 
-    // continuous reference line: smooth the OSM polyline, endpoints preserved
-    const pts = smoothPolyline(r.points)
+    // continuous reference line: smooth the OSM polyline, endpoints preserved.
+    // Bridges are additionally densified: a straight bridge is often a 2-point
+    // OSM way, so the per-point elevation profile would sample the deck only at
+    // its (grounded) feet and miss the humped interior — the deck would then
+    // render flat on the ground with no structure (§ deck-sampling fix). No-op
+    // for already-dense (curved/multi-point) spans.
+    const pts = r.bridge ? densifyPolyline(smoothPolyline(r.points), 8) : smoothPolyline(r.points)
     const half = r.widthM / 2
 
     // trim the carriageway at junctions so ribbons never overlap co-planarly —
