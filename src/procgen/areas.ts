@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import polygonClipping from 'polygon-clipping'
 import type { AreaFeature, Vec2 } from '../types'
 import { clipRingToRect, mergeGeometries, pointInRing, ringAreaM2, ringIsSimple, wallGeometry, type Rect } from './geometry'
 
@@ -67,16 +68,48 @@ const BANK_MAT = new THREE.MeshStandardMaterial({ color: '#6b6353', roughness: 1
 export const WATER_DEPTH = 0.35 // carved water sits this far below grade
 const WATER_PAINT_Y = 0.012 // fallback painted-water layer (depthConfig convention)
 
-/** Non-water land cover (grass, park, sand, forest floor) as flat tinted overlays. */
+type ClipPoly = [number, number][][]
+const toClipPoly = (ring: Vec2[], holes: Vec2[][] = []): ClipPoly => [
+  ring.map((p) => [p.x, p.z] as [number, number]),
+  ...holes.map((h) => h.map((p) => [p.x, p.z] as [number, number])),
+]
+
+/**
+ * Non-water land cover (grass, park, sand, forest floor) as flat tinted
+ * overlays. Land cover renders ABOVE the water layer, so any pond/river inside
+ * a park polygon would be painted over and vanish — water is subtracted from
+ * every overlapping land-cover polygon first (a pond in a park stays a pond).
+ */
 export function buildAreas(areas: AreaFeature[]): { kind: string; mesh: THREE.Mesh }[] {
+  const water = areas.filter((a) => a.render && a.kind === 'water' && a.ring.length >= 3)
+  const waterPolys: ClipPoly[] = water.map((a) => toClipPoly(a.ring, a.holes))
+  const waterBoxes = water.map((a) => ringBBox(a.ring))
+
   const byKind = new Map<string, THREE.BufferGeometry[]>()
   for (const a of areas) {
     if (!a.render || a.kind === 'water') continue
     const style = AREA_STYLE[a.kind]
     if (!style || a.ring.length < 3) continue
-    const geo = flatRingGeometry(a.ring, style.y)
+    const bb = ringBBox(a.ring)
+    const clash = waterBoxes.some(
+      (wb) => bb.minX < wb.maxX && wb.minX < bb.maxX && bb.minZ < wb.maxZ && wb.minZ < bb.maxZ,
+    )
     if (!byKind.has(a.kind)) byKind.set(a.kind, [])
-    byKind.get(a.kind)!.push(geo)
+    if (!clash) {
+      byKind.get(a.kind)!.push(flatRingGeometry(a.ring, style.y))
+      continue
+    }
+    try {
+      const cut = polygonClipping.difference([toClipPoly(a.ring, a.holes)], waterPolys)
+      for (const poly of cut) {
+        if (!poly.length || poly[0].length < 3) continue
+        const ring = poly[0].map(([x, z]) => ({ x, z }))
+        const holes = poly.slice(1).filter((h) => h.length >= 3).map((h) => h.map(([x, z]) => ({ x, z })))
+        byKind.get(a.kind)!.push(holedFlatGeometry(ring, holes, style.y))
+      }
+    } catch {
+      byKind.get(a.kind)!.push(flatRingGeometry(a.ring, style.y)) // degenerate input — keep legacy behaviour
+    }
   }
   const out: { kind: string; mesh: THREE.Mesh }[] = []
   for (const [kind, geoms] of byKind) {

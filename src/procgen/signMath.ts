@@ -13,20 +13,31 @@ export interface NearestRoad {
   oneway: boolean
   /** Perpendicular distance from the query point to that road's centerline (m). */
   dist: number
+  /** The nearest road segment itself (undefined only for hand-built test stubs). */
+  road?: RoadSegment
+  /** Closest point on that road's centerline. */
+  point?: Vec2
+  /** Distance along the road polyline to the closest point (m) — the elevation station. */
+  station?: number
 }
 
 /**
- * Nearest drivable road tangent to a point — used to orient street devices to
+ * Nearest road tangent to a point — used to orient street devices to
  * the road grid instead of a fixed world axis. O(points); fine for the handful
- * of device nodes per scene.
+ * of device nodes per scene. Drivable roads only by default; `includePaths`
+ * admits footway/cycleway/pedestrian (a lamp mapped on a footbridge must follow
+ * the FOOTWAY's elevation, not a distant carriageway's).
  */
-export function nearestRoadInfo(pos: Vec2, roads: RoadSegment[]): NearestRoad | null {
+export function nearestRoadInfo(pos: Vec2, roads: RoadSegment[], includePaths = false): NearestRoad | null {
   let best = Infinity
   let bestDir: Vec2 | null = null
-  let bestOneway = false
+  let bestRoad: RoadSegment | null = null
+  let bestPoint: Vec2 | null = null
+  let bestStation = 0
   for (const r of roads) {
-    if (NON_DRIVABLE.has(r.roadClass)) continue
+    if (!includePaths && NON_DRIVABLE.has(r.roadClass)) continue
     const pts = r.points
+    let cum = 0
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1].x
       const az = pts[i - 1].z
@@ -34,6 +45,7 @@ export function nearestRoadInfo(pos: Vec2, roads: RoadSegment[]): NearestRoad | 
       const dz = pts[i].z - az
       const len2 = dx * dx + dz * dz
       if (len2 < 1e-9) continue
+      const l = Math.sqrt(len2)
       let t = ((pos.x - ax) * dx + (pos.z - az) * dz) / len2
       t = t < 0 ? 0 : t > 1 ? 1 : t
       const px = ax + dx * t
@@ -41,14 +53,45 @@ export function nearestRoadInfo(pos: Vec2, roads: RoadSegment[]): NearestRoad | 
       const d2 = (pos.x - px) * (pos.x - px) + (pos.z - pz) * (pos.z - pz)
       if (d2 < best) {
         best = d2
-        const l = Math.sqrt(len2)
         bestDir = { x: dx / l, z: dz / l }
-        bestOneway = r.oneway
+        bestRoad = r
+        bestPoint = { x: px, z: pz }
+        bestStation = cum + l * t
       }
+      cum += l
     }
   }
-  if (!bestDir) return null
-  return { dir: bestDir, oneway: bestOneway, dist: Math.sqrt(best) }
+  if (!bestDir || !bestRoad) return null
+  return {
+    dir: bestDir,
+    oneway: bestRoad.oneway,
+    dist: Math.sqrt(best),
+    road: bestRoad,
+    point: bestPoint!,
+    station: bestStation,
+  }
+}
+
+/**
+ * Curbside position for a traffic device (§8.1). OSM maps signals/stop/give-way
+ * nodes ON the highway way itself — rendering a physical pole at the raw node
+ * position plants it in the middle of the carriageway (and the drive preview
+ * crashes into it). A device within the roadway moves perpendicular to the
+ * driving side, just past the curb; a node already clear of the carriageway is
+ * authoritative and stays put.
+ */
+export function curbsideDevicePosition(
+  pos: Vec2,
+  near: NearestRoad | null,
+  drivingSide: 'left' | 'right',
+): Vec2 {
+  if (!near || !near.road || !near.point) return pos
+  const half = near.road.widthM / 2
+  if (near.dist > half + 0.2) return pos
+  const s = drivingSide === 'right' ? -1 : 1 // matches the speed-sign side convention
+  const across = { x: -near.dir.z * s, z: near.dir.x * s }
+  const off = half + 0.7
+  return { x: near.point.x + across.x * off, z: near.point.z + across.z * off }
 }
 
 /**

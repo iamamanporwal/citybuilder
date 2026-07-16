@@ -467,7 +467,7 @@ function propColliders(
         radius: shape.radius!,
         halfHeight: shape.halfHeight!,
         ...base,
-        transform: { ...base.transform, position: [pos[0], shape.halfHeight!, pos[2]] },
+        transform: { ...base.transform, position: [pos[0], pos[1] + shape.halfHeight!, pos[2]] },
       })
     } else {
       out.push({
@@ -475,7 +475,7 @@ function propColliders(
         kind: 'box',
         halfExtents: shape.box!,
         ...base,
-        transform: { ...base.transform, position: [pos[0], shape.box![1], pos[2]] },
+        transform: { ...base.transform, position: [pos[0], pos[1] + shape.box![1], pos[2]] },
       })
     }
   }
@@ -499,21 +499,22 @@ function propColliders(
     push(p.id, shape, p.kind, pos, rotY)
   }
 
-  // generated street furniture (lamps always; benches/bins/signs are minor)
+  // generated street furniture (lamps always; benches/bins/signs are minor).
+  // The base y is the placement's road-surface elevation (props on ramps/decks).
   const fp = opts.furniturePlacements
   if (fp) {
     fp.lamps.forEach((l, i) =>
-      push(`furn_lamp_${i}`, { kind: 'cylinder', radius: 0.1, halfHeight: 3.7 }, 'street_lamp', [l.p.x, 0, l.p.z], l.rotY),
+      push(`furn_lamp_${i}`, { kind: 'cylinder', radius: 0.1, halfHeight: 3.7 }, 'street_lamp', [l.p.x, l.y ?? 0, l.p.z], l.rotY),
     )
     if (opts.includeMinorProps) {
       fp.benches.forEach((b, i) =>
-        push(`furn_bench_${i}`, { kind: 'box', box: [0.85, 0.45, 0.3] }, 'bench', [b.p.x, 0, b.p.z], b.rotY),
+        push(`furn_bench_${i}`, { kind: 'box', box: [0.85, 0.45, 0.3] }, 'bench', [b.p.x, b.y ?? 0, b.p.z], b.rotY),
       )
       fp.bins.forEach((b, i) =>
-        push(`furn_bin_${i}`, { kind: 'cylinder', radius: 0.28, halfHeight: 0.43 }, 'waste_basket', [b.p.x, 0, b.p.z], b.rotY),
+        push(`furn_bin_${i}`, { kind: 'cylinder', radius: 0.28, halfHeight: 0.43 }, 'waste_basket', [b.p.x, b.y ?? 0, b.p.z], b.rotY),
       )
       fp.signs.forEach((s, i) =>
-        push(`furn_sign_${i}`, { kind: 'cylinder', radius: 0.06, halfHeight: 1.3 }, 'sign', [s.p.x, 0, s.p.z], s.rotY),
+        push(`furn_sign_${i}`, { kind: 'cylinder', radius: 0.06, halfHeight: 1.3 }, 'sign', [s.p.x, s.y ?? 0, s.p.z], s.rotY),
       )
     }
   }

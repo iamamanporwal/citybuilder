@@ -31,6 +31,42 @@ function FxPreview() {
   )
 }
 
+// Dev-only bridge for scripted QA (Playwright): position the camera exactly and
+// introspect the scene without going through pointer gestures. No-op in prod.
+function DebugBridge() {
+  const { camera, scene, gl } = useThree()
+  const get = useThree((s) => s.get)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const api = {
+      camera,
+      scene,
+      gl,
+      // Teleport the orbit camera: position + look target. Orbit controls keep
+      // the pose stable (fly mode would re-assert its own yaw/pitch each frame).
+      setCam(pos: [number, number, number], look: [number, number, number]) {
+        useEditor.getState().setCameraMode('orbit')
+        camera.position.set(pos[0], pos[1], pos[2])
+        const ctrl: any = get().controls
+        if (ctrl) {
+          ctrl.target.set(look[0], look[1], look[2])
+          ctrl.update()
+        } else {
+          camera.lookAt(look[0], look[1], look[2])
+        }
+        camera.updateMatrixWorld(true)
+      },
+      store: useEditor,
+      THREE,
+    }
+    ;(window as any).__cb = api
+    return () => {
+      if ((window as any).__cb === api) delete (window as any).__cb
+    }
+  }, [camera, scene, gl, get])
+  return null
+}
+
 // Drive mode renders an eye-level view down long streets (deep frustum, many
 // buildings). Drop the render resolution there to keep 60fps; orbit/fly stay at
 // full retina. Slightly softer while driving, big fill-rate win.
@@ -136,6 +172,7 @@ export function Viewport() {
       }}
       dpr={[1, 2]}
     >
+      <DebugBridge />
       <DprController />
       <Lighting />
       <SceneContent />

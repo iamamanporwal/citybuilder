@@ -32,6 +32,13 @@ function buildQuery(b: BBox, opts: FetchOptions): string {
     // streams/ditches/drains deliberately not fetched: never rendered as water
     `way["waterway"~"^(river|canal|riverbank)$"]${bbox};`,
     `way["leisure"~"^(park|garden|pitch|playground)$"]${bbox};`,
+    // multipolygon area relations: big rivers/lakes and most large parks are
+    // relations, not closed ways — without these the Vltava/Thames simply end
+    // mid-scene. Member geometry comes back in full and is clipped at ingest.
+    `relation["natural"~"^(water|wood)$"]${bbox};`,
+    `relation["waterway"="riverbank"]${bbox};`,
+    `relation["landuse"~"^(grass|forest|meadow|reservoir)$"]${bbox};`,
+    `relation["leisure"~"^(park|garden)$"]${bbox};`,
     `way["barrier"~"^(fence|wall)$"]${bbox};`,
     `way["amenity"="fountain"]${bbox};`,
     `node["highway"="street_lamp"]${bbox};`,

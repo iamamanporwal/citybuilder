@@ -647,7 +647,10 @@ export function buildRoads(
   if (bridgeGeoms.length || pierGeoms.length) {
     bridges = new THREE.Group()
     bridges.name = 'Bridge structures'
-    const structMat = new THREE.MeshStandardMaterial({ color: '#9d9e97', roughness: 0.9 })
+    // DoubleSide is load-bearing: rails/fascias are single-quad walls, so a
+    // one-sided material makes guardrails vanish when viewed from the deck
+    // (the inside face is the back face) — they must read from every angle.
+    const structMat = new THREE.MeshStandardMaterial({ color: '#9d9e97', roughness: 0.9, side: THREE.DoubleSide })
     if (bridgeGeoms.length) bridges.add(new THREE.Mesh(mergeVertices(mergeGeometries(bridgeGeoms), 1e-3), structMat))
     if (pierGeoms.length) bridges.add(new THREE.Mesh(mergeGeometries(pierGeoms.map(nonIndexedToIndexed)), structMat))
     bridges.traverse((o) => {

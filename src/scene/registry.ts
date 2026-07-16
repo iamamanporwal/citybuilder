@@ -8,7 +8,8 @@ import { buildAreas, buildTerrain } from '../procgen/areas'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { buildGenericSign, buildGiveWaySign, buildSpeedLimitSign, buildStopSign, planSpeedLimitSigns } from '../procgen/signs'
-import { deviceHeading, nearestRoadInfo } from '../procgen/signMath'
+import { curbsideDevicePosition, deviceHeading, nearestRoadInfo } from '../procgen/signMath'
+import { buildRoadElevation } from '../procgen/corridor'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
 import { buildingSceneFor, cloneTemplate, getTemplate, isLibraryEnabled } from './libraryTemplates'
@@ -308,6 +309,9 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     give_way: 'Give way',
     road_sign: 'Road sign',
   }
+  // devices ride the solved road elevation (a signal on a bridge approach must
+  // stand on the ramp, not float at grade under it) — memoised per roads array
+  const deviceElevation = buildRoadElevation(graph.roads)
   for (const p of graph.points) {
     const builder = PROP_BUILDERS[p.kind]
     if (!builder) continue
@@ -315,13 +319,22 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     const tmpl = getTemplate(p.kind)
     const g = tmpl ? cloneTemplate(tmpl) : builder(p)
     g.name = tmpl ? tmpl.name : g.name
-    g.position.set(p.position.x, 0, p.position.z)
-    // orient traffic devices to the nearest road (no-op if none nearby)
+    // OSM maps traffic devices ON the highway way — move them to the curb and
+    // onto the road's solved elevation (§8.1); other props keep their position.
+    let pos: { x: number; z: number } = p.position
+    let posY = 0
     let rotY = 0
     if (p.kind in ORIENTED) {
-      rotY = deviceHeading(nearestRoadInfo(p.position, graph.roads), ORIENTED[p.kind]!)
+      const near = nearestRoadInfo(p.position, graph.roads)
+      pos = curbsideDevicePosition(p.position, near, ctx.region.drivingSide)
+      if (near?.road && near.dist <= near.road.widthM / 2 + 8) {
+        const e = deviceElevation.profileFor(near.road, [near.station ?? 0])[0] ?? 0
+        posY = Math.abs(e) > 1e-6 ? e : 0
+      }
+      rotY = deviceHeading(near, ORIENTED[p.kind]!)
       g.rotation.y = rotY
     }
+    g.position.set(pos.x, posY, pos.z)
     const label = LABELS[p.kind] ?? 'Statue / memorial'
     // wikidata-linked landmarks route to AI generation via the gateway
     if (p.wikidata && (p.kind === 'statue' || p.kind === 'fountain')) {
@@ -337,7 +350,7 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
         name: p.name ?? label,
         tier: p.wikidata ? 'notable' : undefined,
         locked: false,
-        transform: { position: [p.position.x, 0, p.position.z], rotation: [0, rotY, 0], scale: [1, 1, 1] },
+        transform: { position: [pos.x, posY, pos.z], rotation: [0, rotY, 0], scale: [1, 1, 1] },
         asset: { ...PROC_ASSET },
         realworld: { lat: p.lat, lng: p.lng, ...mapUrls(p.lat, p.lng), wikidata: p.wikidata, name: p.name },
         meta: { kind: p.kind !== 'traffic_signal' ? p.kind : undefined, signType: p.signType },
@@ -350,7 +363,7 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   // region-keyed face + unit, on the driving side, facing oncoming traffic (§8.4).
   for (const sp of planSpeedLimitSigns(graph.roads, ctx)) {
     const g = buildSpeedLimitSign(sp.display, sp.unit, sp.style)
-    g.position.set(sp.position.x, 0, sp.position.z)
+    g.position.set(sp.position.x, sp.y, sp.position.z)
     g.rotation.y = sp.headingY
     add(
       {
@@ -358,7 +371,7 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
         type: 'street-furniture',
         name: g.name,
         locked: false,
-        transform: { position: [sp.position.x, 0, sp.position.z], rotation: [0, sp.headingY, 0], scale: [1, 1, 1] },
+        transform: { position: [sp.position.x, sp.y, sp.position.z], rotation: [0, sp.headingY, 0], scale: [1, 1, 1] },
         asset: { ...PROC_ASSET },
         realworld: { lat: sp.lat, lng: sp.lng, ...mapUrls(sp.lat, sp.lng), name: g.name },
         meta: { kind: 'speed_limit', speedKmh: sp.kmh, display: `${sp.display} ${sp.unit}`, roadId: sp.roadId },

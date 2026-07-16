@@ -201,7 +201,7 @@ export async function loadLibraryTemplates(kinds: Iterable<PropKind>, enabled: b
 /** Instance a template's parts across placements. Returns meshes to add to a group. */
 export function instanceTemplate(
   tmpl: AssetTemplate,
-  placements: { x: number; z: number; rotY: number; scale?: number }[],
+  placements: { x: number; y?: number; z: number; rotY: number; scale?: number }[],
   objectId: string,
 ): THREE.InstancedMesh[] {
   const out: THREE.InstancedMesh[] = []
@@ -215,7 +215,7 @@ export function instanceTemplate(
     placements.forEach((pl, i) => {
       const sc = pl.scale ?? 1
       q.setFromAxisAngle(up, pl.rotY)
-      v.set(pl.x, 0, pl.z)
+      v.set(pl.x, pl.y ?? 0, pl.z)
       s.set(sc, sc, sc)
       m.compose(v, q, s)
       im.setMatrixAt(i, m)

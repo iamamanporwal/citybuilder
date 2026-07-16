@@ -5,6 +5,9 @@ import { hash01, propRulesFor, resolveTree } from '../resolver/resolve'
 import { mats } from './materials'
 import { mergeGeometries } from './geometry'
 import { getTemplate, instanceTemplate } from '../scene/libraryTemplates'
+import { buildRoadElevation } from './corridor'
+import { NON_DRIVABLE } from './roadNetwork'
+import { nearestRoadInfo } from './signMath'
 
 // Street furniture & vegetation. Everything is seeded by object id — varied but
 // deterministic. Densities are zoning-aware via the Context Resolver.
@@ -197,6 +200,67 @@ function signGeometry(shape: string): THREE.BufferGeometry {
 export interface Placement {
   p: Vec2
   rotY: number
+  /** Road-surface elevation at the placement (0 = grade) — props ride ramps/decks. */
+  y?: number
+}
+
+/**
+ * Spatial index of carriageway centerlines for placement clearance queries.
+ * Generated furniture historically offset from its OWN road only, so a lamp
+ * beside carriageway A could land inside parallel carriageway B (dual
+ * carriageways, service roads) — visibly standing in a driving lane and
+ * crashing the drive preview. Every generated placement now proves clearance
+ * against the whole drivable network.
+ */
+export class CarriagewayIndex {
+  private cells = new Map<string, { ax: number; az: number; bx: number; bz: number; half: number; id: string }[]>()
+  private static CELL = 24
+
+  constructor(roads: RoadSegment[]) {
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
+      const half = r.widthM / 2
+      for (let i = 1; i < r.points.length; i++) {
+        const a = r.points[i - 1]
+        const b = r.points[i]
+        const pad = half + 1
+        const minX = Math.min(a.x, b.x) - pad
+        const maxX = Math.max(a.x, b.x) + pad
+        const minZ = Math.min(a.z, b.z) - pad
+        const maxZ = Math.max(a.z, b.z) + pad
+        const C = CarriagewayIndex.CELL
+        for (let cx = Math.floor(minX / C); cx <= Math.floor(maxX / C); cx++) {
+          for (let cz = Math.floor(minZ / C); cz <= Math.floor(maxZ / C); cz++) {
+            const key = `${cx},${cz}`
+            let list = this.cells.get(key)
+            if (!list) this.cells.set(key, (list = []))
+            list.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half, id: r.id })
+          }
+        }
+      }
+    }
+  }
+
+  /** True when p is inside any carriageway (+margin), optionally ignoring one road. */
+  insideCarriageway(p: Vec2, margin: number, excludeId?: string): boolean {
+    const C = CarriagewayIndex.CELL
+    const key = `${Math.floor(p.x / C)},${Math.floor(p.z / C)}`
+    const list = this.cells.get(key)
+    if (!list) return false
+    for (const s of list) {
+      if (excludeId && s.id === excludeId) continue
+      const dx = s.bx - s.ax
+      const dz = s.bz - s.az
+      const len2 = dx * dx + dz * dz
+      let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0
+      t = t < 0 ? 0 : t > 1 ? 1 : t
+      const px = s.ax + dx * t
+      const pz = s.az + dz * t
+      const d = Math.hypot(p.x - px, p.z - pz)
+      if (d < s.half + margin) return true
+    }
+    return false
+  }
 }
 
 export interface FurniturePlacements {
@@ -216,40 +280,89 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
   const group = new THREE.Group()
   group.name = 'Street furniture'
 
+  // shared placement infrastructure: the elevation seam (props ride ramps and
+  // bridge decks instead of floating at grade under them) and the carriageway
+  // clearance index (nothing generated may stand in a driving lane).
+  const elevation = buildRoadElevation(graph.roads)
+  const index = new CarriagewayIndex(graph.roads)
+  const elevAt = (r: RoadSegment, station: number): number => {
+    const e = elevation.profileFor(r, [station])[0] ?? 0
+    return Math.abs(e) > 1e-6 ? e : 0
+  }
+  // OSM-mapped furniture is authoritative in plan (x/z) but still needs the
+  // solved elevation: a lamp mapped on a bridge deck must stand ON the deck.
+  // Bridges add one subtlety: OSM lamps sit on the bridge's SIDEWALK ways,
+  // which the engine drops (the rendered deck has no separate sidewalks) — the
+  // raw position would float in mid-air beside the deck. Those clamp onto the
+  // nearest drivable deck's edge; everything else keeps its mapped position.
+  const placeOsm = (p: PointFeature, rotY: number): Placement => {
+    const near = nearestRoadInfo(p.position, graph.roads, true)
+    if (!near?.road || near.dist > near.road.widthM / 2 + 8) return { p: p.position, rotY, y: 0 }
+    const e = elevAt(near.road, near.station ?? 0)
+    if (!near.road.bridge && e < 0.5) return { p: p.position, rotY, y: e }
+    // elevated context — find the drivable deck this furniture belongs to
+    const deck = nearestRoadInfo(p.position, graph.roads, false)
+    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || elevAt(deck.road, deck.station ?? 0) > 0.5)) {
+      const halfD = deck.road.widthM / 2
+      const yDeck = elevAt(deck.road, deck.station ?? 0)
+      if (deck.dist > halfD - 0.55) {
+        const n = { x: -deck.dir.z, z: deck.dir.x }
+        const side = n.x * (p.position.x - deck.point.x) + n.z * (p.position.z - deck.point.z) >= 0 ? 1 : -1
+        const pos = {
+          x: deck.point.x + n.x * side * (halfD - 0.55),
+          z: deck.point.z + n.z * side * (halfD - 0.55),
+        }
+        return { p: pos, rotY, y: yDeck }
+      }
+      return { p: p.position, rotY, y: yDeck }
+    }
+    // no drivable deck nearby (e.g. a pedestrian bridge): follow the path's height
+    return { p: p.position, rotY, y: e }
+  }
+
   // OSM-mapped furniture positions (authoritative where present)
   const osmLamps = graph.points.filter((p) => p.kind === 'street_lamp')
   const osmBenches = graph.points.filter((p) => p.kind === 'bench')
   const osmBins = graph.points.filter((p) => p.kind === 'waste_basket')
 
-  const lamps: Placement[] = osmLamps.map((p) => ({ p: p.position, rotY: hash01(p.id) * Math.PI * 2 }))
-  const benches: Placement[] = osmBenches.map((p) => ({ p: p.position, rotY: hash01(p.id) * Math.PI * 2 }))
-  const bins: Placement[] = osmBins.map((p) => ({ p: p.position, rotY: 0 }))
+  const lamps: Placement[] = osmLamps.map((p) => placeOsm(p, hash01(p.id) * Math.PI * 2))
+  const benches: Placement[] = osmBenches.map((p) => placeOsm(p, hash01(p.id) * Math.PI * 2))
+  const bins: Placement[] = osmBins.map((p) => placeOsm(p, 0))
   const signs: Placement[] = []
 
   const nearExistingLamp = (p: Vec2) => lamps.some((l) => (l.p.x - p.x) ** 2 + (l.p.z - p.z) ** 2 < 64)
 
   for (const r of graph.roads) {
-    if (!FURNITURE_ROADS.has(r.roadClass) || r.bridge || r.tunnel || r.points.length < 2) continue
+    if (!FURNITURE_ROADS.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
     const L = polyLen(r.points)
     if (L < 20) continue
     const mid = r.points[Math.floor(r.points.length / 2)]
     const zone = ctx.zoneAt(mid)
     const rules = propRulesFor(zone)
 
-    // streetlights: alternate sides, zone spacing, seeded jitter
-    if (rules.lampSpacing) {
+    // streetlights: alternate sides, zone spacing, seeded jitter. On bridges the
+    // lamps move INSIDE the deck edge (hugging the parapet) — the sidewalk
+    // offset would hang them in the air beside the deck.
+    const onBridge = r.bridge
+    if (rules.lampSpacing && (!onBridge || r.widthM >= 8)) {
+      const lampOff = onBridge ? r.widthM / 2 - 0.55 : r.widthM / 2 + 1.1
       let side = hash01(r.id + ':side') > 0.5 ? 1 : -1
       for (let d = rules.lampSpacing * 0.5; d < L; d += rules.lampSpacing) {
-        const jitter = (hash01(`${r.id}:lj${d}`) - 0.5) * 6
-        const { p, dir } = alongWithDir(r.points, Math.min(Math.max(d + jitter, 2), L - 2))
+        const jitter = onBridge ? 0 : (hash01(`${r.id}:lj${d}`) - 0.5) * 6
+        const station = Math.min(Math.max(d + jitter, 2), L - 2)
+        const { p, dir } = alongWithDir(r.points, station)
         const across = { x: -dir.z * side, z: dir.x * side }
-        const lp = { x: p.x + across.x * (r.widthM / 2 + 1.1), z: p.z + across.z * (r.widthM / 2 + 1.1) }
-        if (ctx.landCoverAt(lp) !== 'water' && !nearExistingLamp(lp)) {
-          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z) })
+        const lp = { x: p.x + across.x * lampOff, z: p.z + across.z * lampOff }
+        const clearOfRoads = onBridge
+          ? !index.insideCarriageway(lp, 0.35, r.id) // deck-edge lamps sit inside their own deck by design
+          : !index.insideCarriageway(lp, 0.35)
+        if ((onBridge || ctx.landCoverAt(lp) !== 'water') && clearOfRoads && !nearExistingLamp(lp)) {
+          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) })
         }
         side = -side
       }
     }
+    if (onBridge) continue // no benches/bins/signs on decks
 
     // benches & bins in social zones, on the sidewalk
     if (rules.benchDensity > 0) {
@@ -260,7 +373,9 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
         const { p, dir } = alongWithDir(r.points, d)
         const across = { x: -dir.z * side, z: dir.x * side }
         const bp = { x: p.x + across.x * (r.widthM / 2 + 1.6), z: p.z + across.z * (r.widthM / 2 + 1.6) }
-        if (ctx.landCoverAt(bp) !== 'water') benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI })
+        if (ctx.landCoverAt(bp) !== 'water' && !index.insideCarriageway(bp, 0.3)) {
+          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) })
+        }
       }
     }
     if (rules.binDensity > 0) {
@@ -271,7 +386,9 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
         const { p, dir } = alongWithDir(r.points, d)
         const across = { x: -dir.z * side, z: dir.x * side }
         const bp = { x: p.x + across.x * (r.widthM / 2 + 0.9), z: p.z + across.z * (r.widthM / 2 + 0.9) }
-        if (ctx.landCoverAt(bp) !== 'water') bins.push({ p: bp, rotY: 0 })
+        if (ctx.landCoverAt(bp) !== 'water' && !index.insideCarriageway(bp, 0.3)) {
+          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) })
+        }
       }
     }
 
@@ -283,7 +400,9 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
       const side = ctx.region.drivingSide === 'right' ? -1 : 1
       const across = { x: -dir.z * side, z: dir.x * side }
       const sp = { x: p.x + across.x * (r.widthM / 2 + 0.8), z: p.z + across.z * (r.widthM / 2 + 0.8) }
-      if (ctx.landCoverAt(sp) !== 'water') signs.push({ p: sp, rotY: Math.atan2(dir.x, dir.z) })
+      if (ctx.landCoverAt(sp) !== 'water' && !index.insideCarriageway(sp, 0.3)) {
+        signs.push({ p: sp, rotY: Math.atan2(dir.x, dir.z), y: elevAt(r, d) })
+      }
     }
   }
 
@@ -302,7 +421,7 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
     const v = new THREE.Vector3()
     list.forEach((e, i) => {
       q.setFromAxisAngle(up, e.rotY)
-      v.set(e.p.x, 0, e.p.z)
+      v.set(e.p.x, e.y ?? 0, e.p.z)
       m.compose(v, q, s)
       im.setMatrixAt(i, m)
     })
@@ -325,7 +444,7 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
     if (!list.length) return
     const tmpl = getTemplate(kind)
     if (tmpl) {
-      const im = instanceTemplate(tmpl, list.map((e) => ({ x: e.p.x, z: e.p.z, rotY: e.rotY })), 'furn_all')
+      const im = instanceTemplate(tmpl, list.map((e) => ({ x: e.p.x, y: e.y, z: e.p.z, rotY: e.rotY })), 'furn_all')
       im.forEach((mesh, i) => { mesh.name = i === 0 ? name : `${name} #${i}` })
       group.add(...im)
     } else {

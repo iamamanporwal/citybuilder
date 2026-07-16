@@ -5,6 +5,8 @@ import { mats } from './materials'
 import { NON_DRIVABLE } from './roadNetwork'
 import { pointAlong, polylineLength } from './geometry'
 import { deviceHeading, displaySpeed, effectiveSpeed, speedUnitFor } from './signMath'
+import { buildRoadElevation } from './corridor'
+import { CarriagewayIndex } from './props'
 
 // FAITHFUL traffic signs (Road-updates.md §8.1). Procedural pole + plate; the
 // plate face is a region-keyed canvas texture drawn to the actual sign class
@@ -196,6 +198,8 @@ export interface SpeedSignPlacement {
   id: string
   roadId: string
   position: Vec2
+  /** Road-surface elevation at the sign (0 = grade). */
+  y: number
   headingY: number
   display: number
   unit: 'mph' | 'km/h'
@@ -215,6 +219,8 @@ export function planSpeedLimitSigns(roads: RoadSegment[], ctx: ResolvedContext):
   const style: 'us-rect' | 'circle' = ctx.region.signShape === 'us-rect' ? 'us-rect' : 'circle'
   const unit = speedUnitFor(ctx.region.id)
   const sideSign = ctx.region.drivingSide === 'left' ? 1 : -1 // left-normal for LHT, right for RHT
+  const elevation = buildRoadElevation(roads)
+  const index = new CarriagewayIndex(roads)
   for (const r of roads) {
     if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
     const eff = effectiveSpeed(r, ctx.region.id)
@@ -226,10 +232,13 @@ export function planSpeedLimitSigns(roads: RoadSegment[], ctx: ResolvedContext):
     const leftN = { x: dir.z, z: -dir.x }
     const off = r.widthM / 2 + 1.2
     const position = { x: p.x + leftN.x * sideSign * off, z: p.z + leftN.z * sideSign * off }
+    if (index.insideCarriageway(position, 0.3)) continue // would stand in a parallel carriageway
+    const e = elevation.profileFor(r, [s])[0] ?? 0
     out.push({
       id: `speedsign_${r.id}`,
       roadId: r.id,
       position,
+      y: Math.abs(e) > 1e-6 ? e : 0,
       headingY: deviceHeading({ dir, oneway: r.oneway, dist: 0 }, true), // face oncoming
       display: displaySpeed(eff.kmh, unit),
       unit,

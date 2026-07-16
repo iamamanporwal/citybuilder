@@ -17,6 +17,13 @@ type ClipRing = [number, number][]
 // Overpass/OSM adapter: maps raw OSM JSON into the internal City Graph schema.
 // Other adapters (Overture, premium HD-map) implement the same output contract.
 
+interface OsmMember {
+  type: 'node' | 'way' | 'relation'
+  ref: number
+  role?: string
+  geometry?: { lat: number; lon: number }[]
+}
+
 interface OsmElement {
   type: 'node' | 'way' | 'relation'
   id: number
@@ -24,6 +31,7 @@ interface OsmElement {
   lon?: number
   tags?: Record<string, string>
   geometry?: { lat: number; lon: number }[]
+  members?: OsmMember[]
 }
 
 const ROAD_CLASSES: RoadClass[] = [
@@ -131,6 +139,56 @@ function waterwayRing(pts: Vec2[], width: number): Vec2[] | null {
   const left = offsetPolyline(pts, width / 2)
   const right = offsetPolyline(pts, -width / 2)
   return [...left, ...right.reverse()]
+}
+
+// ---- multipolygon relations (rivers, lakes, parks, woods) ----
+// Large water bodies are almost never single closed ways: the Vltava, the
+// Thames, most big parks are relations whose outer boundary is stitched from
+// many member ways. Dropping them was the single largest realism gap (rivers
+// simply ended mid-scene). Members are stitched endpoint-to-endpoint into
+// closed rings; anything that fails to close (truly partial data) is dropped —
+// the same "positive evidence only" policy as the closed-way path.
+
+type LatLon = { lat: number; lon: number }
+
+/** Stitch multipolygon member ways of one role into closed rings (lat/lon space). */
+export function assembleMemberRings(members: OsmMember[], role: 'outer' | 'inner'): LatLon[][] {
+  const k = (g: LatLon) => `${g.lat.toFixed(7)},${g.lon.toFixed(7)}`
+  const segs: LatLon[][] = []
+  for (const m of members) {
+    const r = m.role || 'outer'
+    if (m.type === 'way' && r === role && (m.geometry?.length ?? 0) >= 2) segs.push([...m.geometry!])
+  }
+  const rings: LatLon[][] = []
+  while (segs.length) {
+    let chain = segs.pop()!
+    let closed = k(chain[0]) === k(chain[chain.length - 1])
+    let progress = true
+    while (!closed && progress) {
+      progress = false
+      const endK = k(chain[chain.length - 1])
+      const startK = k(chain[0])
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i]
+        const sK = k(s[0])
+        const eK = k(s[s.length - 1])
+        if (sK === endK) chain = chain.concat(s.slice(1))
+        else if (eK === endK) chain = chain.concat([...s].reverse().slice(1))
+        else if (eK === startK) chain = s.concat(chain.slice(1))
+        else if (sK === startK) chain = [...s].reverse().concat(chain.slice(1))
+        else continue
+        segs.splice(i, 1)
+        progress = true
+        break
+      }
+      closed = k(chain[0]) === k(chain[chain.length - 1])
+    }
+    if (closed && chain.length >= 4) {
+      chain.pop() // drop the closing duplicate
+      rings.push(chain)
+    }
+  }
+  return rings
 }
 
 /**
@@ -480,6 +538,13 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
   const barriers: BarrierFeature[] = []
   const points: PointFeature[] = []
   const coastlineChains: Vec2[][] = []
+  // deferred work: multipolygon relations assemble after the way scan (they
+  // need the scene rect), and buffered waterway ribbons are only kept where no
+  // polygon water already covers them (a ribbon over a real riverbank polygon
+  // both z-fights and draws the wrong banks).
+  const pendingRelations: OsmElement[] = []
+  const pendingWaterways: { id: number; pts: Vec2[]; width: number; ww: string }[] = []
+  const wayAreaKinds = new Map<number, AreaKind>()
 
   let bS = Infinity, bW = Infinity, bN = -Infinity, bE = -Infinity
   const growBbox = (lat: number, lon: number) => {
@@ -544,6 +609,16 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
       }
       continue
     }
+    if (el.type === 'relation') {
+      // multipolygon area relations (rivers, lakes, parks, woods). The scene
+      // bbox must NOT grow from members — a river relation's full geometry can
+      // run tens of km beyond the selected area; it is clipped to the scene
+      // rect during assembly below.
+      if (el.tags?.type === 'multipolygon' && el.members?.length && areaKindFor(el.tags)) {
+        pendingRelations.push(el)
+      }
+      continue
+    }
     if (el.type !== 'way' || !el.tags || !el.geometry || el.geometry.length < 2) continue
     for (const g of el.geometry) growBbox(g.lat, g.lon)
 
@@ -559,13 +634,8 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
       const layerTag = el.tags.layer ? parseFloat(el.tags.layer) || 0 : 0
       if ((el.tags.tunnel && el.tags.tunnel !== 'no') || el.tags.covered === 'yes' || layerTag < 0) continue
       const width = parseMeters(el.tags.width) ?? WATERWAY_WIDTH[ww]
-      const ring = waterwayRing(el.geometry.map((g) => toLocal(g.lat, g.lon)), width)
-      if (ring) {
-        const areaM2 = ringAreaM2(ring)
-        if (areaM2 >= MIN_WATER_AREA_M2) {
-          areas.push({ id: `water_${el.id}`, kind: 'water', ring, render: true, areaM2, provenance: `waterway=${ww}` })
-        }
-      }
+      // deferred: only buffered into a ribbon if no polygon water covers it
+      pendingWaterways.push({ id: el.id, pts: el.geometry.map((g) => toLocal(g.lat, g.lon)), width, ww })
       continue
     }
     // riverbank is an AREA tag handled by areaKindFor below; every other
@@ -672,8 +742,10 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
             id: `area_${el.id}`, kind: 'water', ring, render: true,
             areaM2, provenance: waterProvenance(el.tags)!,
           })
+          wayAreaKinds.set(el.id, 'water')
         } else {
           areas.push({ id: `area_${el.id}`, kind: areaKind, ring, render: RENDERED_AREAS.has(areaKind) })
+          wayAreaKinds.set(el.id, areaKind)
         }
       }
       continue
@@ -723,7 +795,10 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
     }
   }
 
-  // ---- sea from coastline ways (clipped to scene rect, closed along its boundary)
+  // ---- sea from coastline ways (clipped to scene rect, closed along its boundary).
+  // Assembled BEFORE water relations so a river relation overlapping the sea
+  // (harbour mouths, tidal rivers) can be detected and skipped — otherwise the
+  // same water renders twice.
   if (coastlineChains.length && isFinite(bS)) {
     const centroids = buildings.map((b) => {
       let x = 0, z = 0
@@ -750,6 +825,108 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
           provenance: 'natural=coastline',
         })
       })
+    }
+  }
+
+  /** True where some already-accepted water polygon covers p (islands excluded). */
+  const coveredByPolygonWater = (p: Vec2) =>
+    areas.some(
+      (a) =>
+        a.kind === 'water' && a.render &&
+        pointInRing(p, a.ring) && !(a.holes ?? []).some((h) => pointInRing(p, h)),
+    )
+
+  // ---- multipolygon relations → area polygons (clipped to the scene rect)
+  if (pendingRelations.length && isFinite(bS)) {
+    const pad = 120
+    const nw = toLocal(bN, bW)
+    const se = toLocal(bS, bE)
+    const rectPoly: ClipRing[] = [[
+      [nw.x - pad, nw.z - pad],
+      [se.x + pad, nw.z - pad],
+      [se.x + pad, se.z + pad],
+      [nw.x - pad, se.z + pad],
+    ]]
+    for (const rel of pendingRelations) {
+      const tags = rel.tags!
+      const kind = areaKindFor(tags)!
+      // old-style tagging: if an outer member way carried the same area tags and
+      // was already ingested, the relation would double-render it (coplanar).
+      if (rel.members!.some((m) => m.type === 'way' && (m.role || 'outer') === 'outer' && wayAreaKinds.get(m.ref) === kind)) {
+        continue
+      }
+      const outers = assembleMemberRings(rel.members!, 'outer').map((ring) => ring.map((g) => toLocal(g.lat, g.lon)))
+      if (!outers.length) continue
+      const inners = assembleMemberRings(rel.members!, 'inner').map((ring) => ring.map((g) => toLocal(g.lat, g.lon)))
+      let n = 0
+      for (const outer of outers) {
+        // holes = inner rings inside this outer
+        const holes = inners.filter((h) => h.length >= 3 && pointInRing(h[0], outer))
+        // clip to the padded scene rect: rivers/parks extend far beyond the
+        // selected area; polygon-clipping yields clean simple pieces + holes
+        // that the terrain carver can consume directly.
+        const subject: ClipRing[] = [
+          outer.map((p) => [p.x, p.z] as [number, number]),
+          ...holes.map((h) => h.map((p) => [p.x, p.z] as [number, number])),
+        ]
+        let clipped: ClipRing[][]
+        try {
+          clipped = polygonClipping.intersection([subject], [rectPoly])
+        } catch {
+          continue // degenerate self-intersecting input — drop rather than flood
+        }
+        for (const poly of clipped) {
+          if (!poly.length || poly[0].length < 3) continue
+          const ring = poly[0].map(([x, z]) => ({ x, z }))
+          const polyHoles = poly.slice(1).filter((h) => h.length >= 3).map((h) => h.map(([x, z]) => ({ x, z })))
+          if (kind === 'water') {
+            const areaM2 = ringAreaM2(ring) - polyHoles.reduce((s, h) => s + ringAreaM2(h), 0)
+            if (areaM2 < MIN_WATER_AREA_M2) continue
+            // skip pieces the coastline sea (or earlier water) already covers
+            const step = Math.max(1, Math.floor(ring.length / 16))
+            let inside = 0
+            let sampled = 0
+            for (let i = 0; i < ring.length; i += step) {
+              sampled++
+              if (coveredByPolygonWater(ring[i])) inside++
+            }
+            if (sampled && inside / sampled >= 0.8) continue
+            areas.push({
+              id: n === 0 ? `area_rel_${rel.id}` : `area_rel_${rel.id}_${n}`,
+              kind: 'water', ring, holes: polyHoles.length ? polyHoles : undefined,
+              render: true, areaM2, provenance: `${waterProvenance(tags)!} (multipolygon)`,
+            })
+          } else {
+            areas.push({
+              id: n === 0 ? `area_rel_${rel.id}` : `area_rel_${rel.id}_${n}`,
+              kind, ring, holes: polyHoles.length ? polyHoles : undefined,
+              render: RENDERED_AREAS.has(kind),
+            })
+          }
+          n++
+        }
+      }
+    }
+  }
+
+  // ---- buffered waterway ribbons: kept only where polygon water does not
+  // already cover the channel (double water both z-fights and paints wrong banks)
+  for (const wwy of pendingWaterways) {
+    const L = wwy.pts.length
+    let inside = 0
+    let sampled = 0
+    for (let i = 0; i < 12; i++) {
+      const p = wwy.pts[Math.min(L - 1, Math.round((i / 11) * (L - 1)))]
+      sampled++
+      if (coveredByPolygonWater(p)) inside++
+    }
+    if (sampled && inside / sampled >= 0.6) continue // real banks already exist
+    const ring = waterwayRing(wwy.pts, wwy.width)
+    if (ring) {
+      const areaM2 = ringAreaM2(ring)
+      if (areaM2 >= MIN_WATER_AREA_M2) {
+        areas.push({ id: `water_${wwy.id}`, kind: 'water', ring, render: true, areaM2, provenance: `waterway=${wwy.ww}` })
+      }
     }
   }
 

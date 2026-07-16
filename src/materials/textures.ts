@@ -138,7 +138,9 @@ function asphaltAlbedo(name: string, base: string, wear: number): THREE.Texture 
 }
 
 function cobbleMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
-  const size = 256
+  // one tile covers ROAD_TILE_M (6 m): 32 setts per side ≈ 19 cm stones. The
+  // previous 8-per-side (75 cm) read as giant pillows at street level.
+  const size = 512
   const [c, ctx] = makeCanvas(size)
   const [hc, hctx] = makeCanvas(size)
   const r = rng('cobble')
@@ -146,27 +148,28 @@ function cobbleMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
   ctx.fillRect(0, 0, size, size)
   hctx.fillStyle = '#404040'
   hctx.fillRect(0, 0, size, size)
-  const cell = 32
+  const cell = 16
   for (let y = 0; y < size / cell; y++) {
     for (let x = 0; x < size / cell; x++) {
-      const jx = (r() - 0.5) * 4
-      const jy = (r() - 0.5) * 4
+      const jx = (r() - 0.5) * 2
+      const jy = (r() - 0.5) * 2
       const shade = 150 + r() * 60
       ctx.fillStyle = `rgb(${shade},${shade * 0.97},${shade * 0.9})`
       hctx.fillStyle = `rgb(${170 + r() * 60},0,0)`
-      const pad = 2.5
-      roundRect(ctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 7)
-      roundRect(hctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 7)
+      const pad = 1.2
+      roundRect(ctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 3.5)
+      roundRect(hctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 3.5)
     }
   }
   return {
     albedo: register('cobble_albedo', 'albedo', c, true),
-    normal: register('cobble_normal', 'normal', heightToNormal(hc, 2.2), false),
+    normal: register('cobble_normal', 'normal', heightToNormal(hc, 1.4), false),
   }
 }
 
 function paversMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
-  const size = 256
+  // one tile covers ROAD_TILE_M (6 m): 32 rows ≈ 19 cm × 37 cm bricks
+  const size = 512
   const [c, ctx] = makeCanvas(size)
   const [hc, hctx] = makeCanvas(size)
   const r = rng('pavers')
@@ -174,20 +177,21 @@ function paversMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
   ctx.fillRect(0, 0, size, size)
   hctx.fillStyle = '#383838'
   hctx.fillRect(0, 0, size, size)
-  const rowH = 32
+  const rowH = 16
+  const brickW = 32
   for (let y = 0; y < size / rowH; y++) {
-    const offset = (y % 2) * 32
-    for (let x = -1; x < size / 64 + 1; x++) {
+    const offset = (y % 2) * (brickW / 2)
+    for (let x = -1; x < size / brickW + 1; x++) {
       const shade = 165 + r() * 45
       ctx.fillStyle = `rgb(${shade},${shade * 0.98},${shade * 0.93})`
       hctx.fillStyle = `rgb(${180 + r() * 50},0,0)`
-      ctx.fillRect(x * 64 + offset + 1.5, y * rowH + 1.5, 61, rowH - 3)
-      hctx.fillRect(x * 64 + offset + 1.5, y * rowH + 1.5, 61, rowH - 3)
+      ctx.fillRect(x * brickW + offset + 1, y * rowH + 1, brickW - 2, rowH - 2)
+      hctx.fillRect(x * brickW + offset + 1, y * rowH + 1, brickW - 2, rowH - 2)
     }
   }
   return {
     albedo: register('pavers_albedo', 'albedo', c, true),
-    normal: register('pavers_normal', 'normal', heightToNormal(hc, 1.8), false),
+    normal: register('pavers_normal', 'normal', heightToNormal(hc, 1.2), false),
   }
 }
 
