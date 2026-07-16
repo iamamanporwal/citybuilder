@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/v1/maps/index.ts": { "maxDuration": 300, "memory": 2048 },
-    "api/v1/maps/[id].ts": { "maxDuration": 30 }
+    "api/v1/maps/index.mjs": { "maxDuration": 300, "memory": 2048 },
+    "api/v1/maps/[id].mjs": { "maxDuration": 30 }
   }
 }

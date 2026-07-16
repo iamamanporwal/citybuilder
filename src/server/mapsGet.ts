@@ -1,7 +1,9 @@
 // GET /api/v1/maps/:id — poll a map job. Ready responses embed the manifest,
 // whose file URLs point straight at the CDN-cached Blob artifacts.
+//
+// Bundled to api/v1/maps/[id].mjs by tools/build-api.mjs.
 
-import { authorized, corsHeaders, json, jobStatus } from '../../_lib/world'
+import { authorized, corsHeaders, json, jobStatus } from './world'
 
 export async function OPTIONS(): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders() })

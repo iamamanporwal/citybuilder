@@ -13,7 +13,7 @@
 
 import { list, put } from '@vercel/blob'
 import { createHash } from 'node:crypto'
-import type { BBox } from '../../src/ingest/overpassFetch'
+import type { BBox } from '../ingest/overpassFetch'
 
 // Bump when the output contract changes so cached maps regenerate.
 // w = world-api manifest, s = semanticsVersion, c = collider formatVersion.

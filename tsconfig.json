@@ -16,5 +16,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "api", "tools/generate-city.ts"]
+  "include": ["src", "tools/generate-city.ts"]
 }

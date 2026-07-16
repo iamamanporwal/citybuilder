@@ -1,9 +1,13 @@
 // POST /api/v1/maps — request a map for a bbox. Returns the job id (a
 // deterministic cache key) immediately; generation runs in the background via
 // waitUntil. Re-POSTing the same bbox+options returns the cached result.
+//
+// Bundled to api/v1/maps/index.mjs by tools/build-api.mjs — Vercel's per-file
+// TS transpile can't follow this repo's extensionless ESM imports, so each
+// endpoint ships as one self-contained esbuild bundle.
 
 import { waitUntil } from '@vercel/functions'
-import { validateBBox } from '../../../src/headless/generate'
+import { validateBBox } from '../headless/generate'
 import {
   authorized,
   corsHeaders,
@@ -14,8 +18,8 @@ import {
   mapId,
   normalizeRequest,
   putJson,
-} from '../../_lib/world'
-import { runJob } from '../../_lib/runJob'
+} from './world'
+import { runJob } from './runJob'
 
 export const maxDuration = 300 // Overpass fetch + build + bake + upload
 

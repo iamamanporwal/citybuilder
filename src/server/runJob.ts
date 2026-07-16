@@ -1,8 +1,8 @@
 // The generation worker: runs the headless pipeline, uploads artifacts to
 // Blob, writes the manifest last (its existence IS the "ready" signal).
 
-import { generateCity } from '../../src/headless/generate'
-import { bakeBundle } from '../../src/headless/bake'
+import { generateCity } from '../headless/generate'
+import { bakeBundle } from '../headless/bake'
 import {
   CONTRACT,
   MANIFEST_VERSION,
