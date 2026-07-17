@@ -1,0 +1,13 @@
+# The curated GLB binaries (~481 MB, uncompressed) are NOT committed — too heavy.
+# They are reproducible from the CC0 source via the curation script:
+#   git clone --depth 1 https://github.com/ToxSam/cc0-models-Polygonal-Mind.git asset-library/toxsam-polygonal-mind
+#   node asset-library/build-manifest.mjs        # rebuild asset-library/manifest.json
+#   node tools/curate-toxsam.mjs                 # re-curate into this folder
+#   node tools/build-asset-manifest.mjs          # fold into assets/manifest.json
+# Phase 3 (Draco + texture downscale) will produce a committable web-optimized set.
+glb/*.glb
+
+# Tracked (do NOT ignore): labels.json, LICENSE.txt, NOTICE.md
+!labels.json
+!LICENSE.txt
+!NOTICE.md

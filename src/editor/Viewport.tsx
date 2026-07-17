@@ -8,6 +8,7 @@ import { CameraRig } from './CameraRig'
 import { SceneContent } from './SceneContent'
 import { lastOrbitTarget } from './bus'
 import { DEPTH_CONFIG } from './depthConfig'
+import { QUALITY_PRESETS } from '../types'
 
 // physics drive preview: code-split so the rapier wasm loads on first use only
 const DriveSim = lazy(() => import('./driving/DriveSim'))
@@ -67,25 +68,53 @@ function DebugBridge() {
   return null
 }
 
+// On-demand rendering: in orbit mode the viewport only renders when something
+// changes (camera damping self-invalidates via MapControls). MapControls covers
+// camera motion; this bridges the imperative/store-driven changes that alter the
+// scene without a camera move — selection highlight, sun/time, FX toggle, and any
+// object edit (transform/swap/delete/visibility, which replace the objects map).
+// Fly/drive keep frameloop="always" (continuous integration), so this is a no-op
+// there. Extra invalidations are harmless; a missed one would freeze the view.
+function Invalidator() {
+  const invalidate = useThree((s) => s.invalidate)
+  const selection = useEditor((s) => s.selection)
+  const selectedInstance = useEditor((s) => s.selectedInstance)
+  const sunTime = useEditor((s) => s.sunTime)
+  const fxPreview = useEditor((s) => s.fxPreview)
+  const objectOrder = useEditor((s) => s.objectOrder)
+  const objects = useEditor((s) => s.objects)
+  const cameraMode = useEditor((s) => s.cameraMode)
+  const gizmoMode = useEditor((s) => s.gizmoMode)
+  useEffect(() => {
+    invalidate()
+  }, [invalidate, selection, selectedInstance, sunTime, fxPreview, objectOrder, objects, cameraMode, gizmoMode])
+  return null
+}
+
 // Drive mode renders an eye-level view down long streets (deep frustum, many
 // buildings). Drop the render resolution there to keep 60fps; orbit/fly stay at
 // full retina. Slightly softer while driving, big fill-rate win.
 function DprController() {
   const mode = useEditor((s) => s.cameraMode)
+  const quality = useEditor((s) => s.quality3d)
   const setDpr = useThree((s) => s.setDpr)
   useEffect(() => {
-    const max = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 2
-    setDpr(mode === 'drive' ? Math.min(max, 1.25) : max)
-  }, [mode, setDpr])
+    const devCap = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 2
+    const cap = Math.min(devCap, QUALITY_PRESETS[quality].dprCap)
+    setDpr(mode === 'drive' ? Math.min(cap, 1.25) : cap)
+  }, [mode, quality, setDpr])
   return null
 }
 
 function Lighting() {
   const mode = useEditor((s) => s.cameraMode)
   const sunTime = useEditor((s) => s.sunTime)
-  // half-res shadow map while driving halves the shadow pass; keyed so the
-  // change actually recreates the shadow map.
-  const shadowRes = mode === 'drive' ? 1024 : 2048
+  const quality = useEditor((s) => s.quality3d)
+  const preset = QUALITY_PRESETS[quality]
+  // Shadow map resolution comes from the quality preset; driving still caps it at
+  // 1024 to keep the eye-level frustum cheap. Keyed so the change recreates the
+  // shadow map. Performance preset disables shadow casting entirely.
+  const shadowRes = mode === 'drive' ? Math.min(preset.shadowRes, 1024) : preset.shadowRes
   const sun = useMemo(() => {
     const a = ((sunTime - 6) / 12) * Math.PI // 6:00 -> sunrise, 18:00 -> sunset
     const elev = Math.sin(a)
@@ -134,10 +163,10 @@ function Lighting() {
       <ambientLight intensity={0.18} />
       <directionalLight
         ref={lightRef}
-        key={shadowRes}
+        key={`${shadowRes}-${preset.shadows}`}
         position={sun.pos}
         intensity={sun.intensity}
-        castShadow
+        castShadow={preset.shadows}
         shadow-mapSize={[shadowRes, shadowRes]}
         shadow-camera-left={-650}
         shadow-camera-right={650}
@@ -155,8 +184,14 @@ function Lighting() {
 export function Viewport() {
   const clearSelection = useEditor((s) => s.clearSelection)
   const mode = useEditor((s) => s.cameraMode)
+  const gizmoDragging = useEditor((s) => s.gizmoDragging)
+  // Render only when needed while orbiting a static city (the common case) — the
+  // single biggest FPS/thermal win. Fly/drive integrate every frame, and a live
+  // gizmo drag needs continuous frames, so those stay "always".
+  const frameloop = mode === 'orbit' && !gizmoDragging ? 'demand' : 'always'
   return (
     <Canvas
+      frameloop={frameloop}
       shadows
       camera={{ position: [-340, 300, 340], fov: 55, near: DEPTH_CONFIG.near, far: DEPTH_CONFIG.far }}
       // logarithmicDepthBuffer is load-bearing: with standard perspective depth
@@ -173,6 +208,7 @@ export function Viewport() {
       dpr={[1, 2]}
     >
       <DebugBridge />
+      <Invalidator />
       <DprController />
       <Lighting />
       <SceneContent />

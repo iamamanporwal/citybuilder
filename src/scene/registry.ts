@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { AssetInfo, BuildingFeature, CityGraph, RoadSegment, SceneObject } from '../types'
-import type { BuildingResolution, ResolvedContext, RoadResolution } from '../resolver/types'
+import type { BuildingResolution, FacadeSet, ResolvedContext, RoadResolution, RoofSet } from '../resolver/types'
 import { resolveRoad } from '../resolver/resolve'
 import { buildRoads } from '../procgen/roads'
 import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCentroid } from '../procgen/buildings'
@@ -12,7 +12,7 @@ import { curbsideDevicePosition, deviceHeading, nearestRoadInfo } from '../procg
 import { buildRoadElevation } from '../procgen/corridor'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
-import { buildingSceneFor, cloneTemplate, getTemplate, isLibraryEnabled } from './libraryTemplates'
+import { buildingSceneFor, cloneTemplate, collectProtectedResources, getTemplate, isLibraryEnabled } from './libraryTemplates'
 import { clearRecognizerCache, recognizeBuilding } from '../recognizer/recognizer'
 import type { AppearancePlan } from '../recognizer/types'
 
@@ -59,6 +59,41 @@ export function getVariant(id: string, asset: AssetInfo): THREE.Object3D | undef
   return variants.get(id)?.get(variantKey(asset))
 }
 
+export interface BuildingMaterial { facade: FacadeSet; roof: RoofSet; tint: string }
+
+/** The editable material of a procedural building (null if not a known building). */
+export function currentBuildingMaterial(id: string): BuildingMaterial | null {
+  const r = buildingResolutions.get(id)
+  return r ? { facade: r.facade, roof: r.roof, tint: r.tint } : null
+}
+
+/**
+ * Re-skin a procedural building in place: patch its BuildingResolution's facade /
+ * roof / tint, rebuild just that mesh, and swap the variant. Returns false for
+ * buildings that aren't procedural-facade (library/generated GLBs carry their own
+ * materials and aren't re-skinnable this way). The old geometry is disposed.
+ */
+export function applyBuildingMaterial(id: string, mat: BuildingMaterial, asset: AssetInfo): boolean {
+  const b = buildingFeatures.get(id)
+  const res = buildingResolutions.get(id)
+  const plan = buildingPlans.get(id)
+  if (!b || !res || !plan) return false
+  const newRes: BuildingResolution = { ...res, facade: mat.facade, roof: mat.roof, tint: mat.tint }
+  buildingResolutions.set(id, newRes)
+  const key = variantKey(asset)
+  const old = variants.get(id)?.get(key)
+  const mesh = buildProceduralBuilding(b, newRes, plan.roofForm)
+  mesh.name = b.name ?? 'Building'
+  mesh.userData.objectId = id
+  registerVariant(id, key, mesh)
+  if (old && old !== mesh)
+    old.traverse((n) => {
+      const m = n as THREE.Mesh
+      if (m.geometry) m.geometry.dispose()
+    })
+  return true
+}
+
 function mapUrls(lat: number, lng: number) {
   return {
     mapUrl: `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`,
@@ -80,8 +115,60 @@ const IDENTITY = {
 
 const NON_DRIVE = new Set(['pedestrian', 'service', 'footway', 'cycleway'])
 
+/** Collect every geometry/material reachable from the given variant map. */
+function collectResources(
+  source: Map<string, Map<string, THREE.Object3D>>,
+  geoms: Set<THREE.BufferGeometry>,
+  mats: Set<THREE.Material>,
+) {
+  for (const m of source.values())
+    for (const obj of m.values())
+      obj.traverse((n) => {
+        const mesh = n as THREE.Mesh
+        if (mesh.geometry) geoms.add(mesh.geometry)
+        const mat = mesh.material
+        if (Array.isArray(mat)) mat.forEach((x) => mats.add(x))
+        else if (mat) mats.add(mat)
+      })
+}
+
+/**
+ * Free GPU resources orphaned by a rebuild. Safe by construction: we dispose a
+ * geometry/material from the OLD scene only if the freshly built NEW scene does
+ * not reference it AND it isn't owned by a persistent library template / cached
+ * generation. Reused module-singletons (procedural textures, shared materials)
+ * therefore survive automatically because they reappear in `newGeoms/newMats`.
+ * Textures are intentionally left alone — they are shared singletons whose
+ * lifetime we don't track, and a stale material's map is cheap to keep.
+ */
+function disposeOrphaned(oldGeoms: Set<THREE.BufferGeometry>, oldMats: Set<THREE.Material>) {
+  const keepGeoms = new Set<THREE.BufferGeometry>()
+  const keepMats = new Set<THREE.Material>()
+  collectResources(variants, keepGeoms, keepMats)
+  for (const o of generationCache.values())
+    o.traverse((n) => {
+      const mesh = n as THREE.Mesh
+      if (mesh.geometry) keepGeoms.add(mesh.geometry)
+      const mat = mesh.material
+      if (Array.isArray(mat)) mat.forEach((x) => keepMats.add(x))
+      else if (mat) keepMats.add(mat)
+    })
+  collectProtectedResources(keepGeoms, keepMats)
+  let freed = 0
+  for (const g of oldGeoms) if (!keepGeoms.has(g)) { g.dispose(); freed++ }
+  for (const m of oldMats) if (!keepMats.has(m)) m.dispose()
+  return freed
+}
+
 /** Build the full base scene from the City Graph. Fills registries, returns object records. */
 export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[] {
+  // Snapshot the outgoing scene's GPU resources so we can free the ones the new
+  // build orphans (fixes a per-rebuild leak: the registry was cleared but never
+  // disposed). Disposal happens at the end, after the new scene exists.
+  const oldGeoms = new Set<THREE.BufferGeometry>()
+  const oldMats = new Set<THREE.Material>()
+  collectResources(variants, oldGeoms, oldMats)
+
   variants.clear()
   buildingFeatures.clear()
   roadSegments.clear()
@@ -425,5 +512,6 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     )
   }
 
+  disposeOrphaned(oldGeoms, oldMats)
   return objects
 }

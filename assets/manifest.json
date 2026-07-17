@@ -3,10 +3,10 @@
   "generated": "run: node tools/build-asset-manifest.mjs",
   "pickContract": "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   "counts": {
-    "assets": 161,
-    "pooled": 161,
-    "flaggedForReview": 4,
-    "pools": 44
+    "assets": 278,
+    "pooled": 278,
+    "flaggedForReview": 10,
+    "pools": 54
   },
   "assets": [
     {
@@ -8355,6 +8355,5183 @@
       "flags": [
         "oversized"
       ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/bench_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bench_01.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.182,
+        "y": 1.001,
+        "z": 0.928
+      },
+      "bbox": {
+        "min": [
+          -0.579,
+          0.001,
+          -0.43
+        ],
+        "max": [
+          0.603,
+          1.002,
+          0.498
+        ]
+      },
+      "groundOffsetY": -0.001,
+      "triangles": 300,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Seat_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Seat.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/bench_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bench_02.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.92,
+        "y": 0.55,
+        "z": 0.72
+      },
+      "bbox": {
+        "min": [
+          -0.96,
+          0,
+          -0.36
+        ],
+        "max": [
+          0.96,
+          0.55,
+          0.36
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 136,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Launch_Atlas_2_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/bench_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bench_03.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.054,
+        "y": 0.751,
+        "z": 0.72
+      },
+      "bbox": {
+        "min": [
+          -1.054,
+          0,
+          -0.36
+        ],
+        "max": [
+          1,
+          0.751,
+          0.36
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 154,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Launch_Atlas_2_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/bench_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bench_04.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.136,
+        "y": 0.892,
+        "z": 0.946
+      },
+      "bbox": {
+        "min": [
+          -1.068,
+          0,
+          -0.627
+        ],
+        "max": [
+          1.068,
+          0.892,
+          0.319
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 152,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Tower_Station_PropSet_01_Mat "
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Bench_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/bench_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bench_05.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.038,
+        "y": 0.805,
+        "z": 1.5
+      },
+      "bbox": {
+        "min": [
+          -2.019,
+          -0.041,
+          -0.775
+        ],
+        "max": [
+          2.019,
+          0.764,
+          0.725
+        ]
+      },
+      "groundOffsetY": 0.041,
+      "triangles": 452,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BlackOutline",
+        "Rock01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bench_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/bench_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bench_06.glb",
+      "semantic": "street_furniture",
+      "role": "bench",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=bench"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.974,
+        "y": 0.55,
+        "z": 0.774
+      },
+      "bbox": {
+        "min": [
+          -0.987,
+          0,
+          -0.387
+        ],
+        "max": [
+          0.987,
+          0.55,
+          0.387
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 26,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Bench_01_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/bin_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/bin_01.glb",
+      "semantic": "street_furniture",
+      "role": "bin",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=waste_basket"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1,
+        "y": 0,
+        "z": 1
+      },
+      "bbox": {
+        "min": [
+          -0.5,
+          0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0,
+          0.5
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Computer_01_Blend"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Icon_TrashBin_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_01.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.144,
+        "y": 1.481,
+        "z": 0.648
+      },
+      "bbox": {
+        "min": [
+          -1.572,
+          0,
+          -0.648
+        ],
+        "max": [
+          1.572,
+          1.481,
+          0
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 6,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Fence"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/Fence.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_02.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.202,
+        "y": 1.047,
+        "z": 0.12
+      },
+      "bbox": {
+        "min": [
+          -1.042,
+          0,
+          -0.06
+        ],
+        "max": [
+          1.16,
+          1.047,
+          0.06
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 100,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Tower_Station_PropSet_01_Mat "
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Tower_Station_Fence_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_03.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.895,
+        "y": 1.126,
+        "z": 1.794
+      },
+      "bbox": {
+        "min": [
+          -1.949,
+          0,
+          -0.749
+        ],
+        "max": [
+          1.946,
+          1.126,
+          1.045
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 652,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Tower_Station_PropSet_01_Mat "
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Tower_Ornamental_Fence_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_04.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.452,
+        "y": 0.815,
+        "z": 0.096
+      },
+      "bbox": {
+        "min": [
+          -1.226,
+          -0.002,
+          -0.048
+        ],
+        "max": [
+          1.226,
+          0.813,
+          0.048
+        ]
+      },
+      "groundOffsetY": 0.002,
+      "triangles": 384,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "WoodClean",
+        "BlackOutline"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Fence_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_05.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.726,
+        "y": 1.364,
+        "z": 0.722
+      },
+      "bbox": {
+        "min": [
+          -0.363,
+          -0.025,
+          -0.361
+        ],
+        "max": [
+          0.363,
+          1.339,
+          0.361
+        ]
+      },
+      "groundOffsetY": 0.025,
+      "triangles": 324,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BlackOutline",
+        "WoodClean",
+        "Mushroom02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Fence_01_Post_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_06.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 6.105,
+        "y": 1.858,
+        "z": 0.584
+      },
+      "bbox": {
+        "min": [
+          -3.053,
+          0,
+          -0.292
+        ],
+        "max": [
+          3.052,
+          1.858,
+          0.292
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 108,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim01",
+        "Trim02",
+        "Trim03"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Fence01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_07.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 15.465,
+        "y": 1.858,
+        "z": 22.755
+      },
+      "bbox": {
+        "min": [
+          -7.725,
+          -0.004,
+          -11.396
+        ],
+        "max": [
+          7.74,
+          1.854,
+          11.359
+        ]
+      },
+      "groundOffsetY": 0.004,
+      "triangles": 498,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim01",
+        "Trim02",
+        "Trim03"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Fence02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_08",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_08.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4,
+        "y": 1.081,
+        "z": 0.385
+      },
+      "bbox": {
+        "min": [
+          -2,
+          0,
+          -0.205
+        ],
+        "max": [
+          2,
+          1.081,
+          0.18
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 730,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Railing"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Railing_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_09",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_09.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.266,
+        "y": 1.116,
+        "z": 2.001
+      },
+      "bbox": {
+        "min": [
+          -0.133,
+          0,
+          -0.139
+        ],
+        "max": [
+          0.133,
+          1.116,
+          1.862
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 60,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BC_Wood_Bare_Mat",
+        "Colony_Marbres_01_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/LoveDeath_Fence_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_10",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_10.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.6,
+        "y": 1.412,
+        "z": 0.182
+      },
+      "bbox": {
+        "min": [
+          -1.3,
+          0,
+          -0.091
+        ],
+        "max": [
+          1.3,
+          1.412,
+          0.091
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 44,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Launch_Iron_Mat",
+        "Launch_Atlas_2_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Railing_02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fence_11",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fence_11.glb",
+      "semantic": "barrier",
+      "role": "fence",
+      "style": "stylized",
+      "osmTags": [
+        "barrier=fence"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.466,
+        "y": 1.193,
+        "z": 0.36
+      },
+      "bbox": {
+        "min": [
+          -0.18,
+          0,
+          -0.18
+        ],
+        "max": [
+          1.286,
+          1.193,
+          0.18
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 748,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Spooky_Stone_01_Mat",
+        "Shared_Metal_01_Steel_Mat",
+        "Shared_Emissive_Orange_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/Spooky_Fence_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_01.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 5.118,
+        "y": 14.871,
+        "z": 2.774
+      },
+      "bbox": {
+        "min": [
+          -2.52,
+          -14.873,
+          -1.815
+        ],
+        "max": [
+          2.598,
+          -0.002,
+          0.959
+        ]
+      },
+      "groundOffsetY": 14.873,
+      "triangles": 10,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Water"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_01_Art.glb",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_02.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.591,
+        "y": 14.871,
+        "z": 3.38
+      },
+      "bbox": {
+        "min": [
+          -1.303,
+          -14.859,
+          -2.59
+        ],
+        "max": [
+          1.288,
+          0.012,
+          0.79
+        ]
+      },
+      "groundOffsetY": 14.859,
+      "triangles": 10,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Water"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_02_Art.glb",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_03.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 5.118,
+        "y": 14.871,
+        "z": 2.774
+      },
+      "bbox": {
+        "min": [
+          -2.52,
+          -14.873,
+          -1.815
+        ],
+        "max": [
+          2.598,
+          -0.002,
+          0.959
+        ]
+      },
+      "groundOffsetY": 14.873,
+      "triangles": 10,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Water"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_01_Art.001.glb",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_04.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.5,
+        "y": 0,
+        "z": 4
+      },
+      "bbox": {
+        "min": [
+          -0.75,
+          0,
+          -2
+        ],
+        "max": [
+          0.75,
+          0,
+          2
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "WaterFX"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_FX_2_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_05.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 6.734,
+        "y": 1.521,
+        "z": 6.747
+      },
+      "bbox": {
+        "min": [
+          -3.367,
+          -0.042,
+          -3.365
+        ],
+        "max": [
+          3.367,
+          1.479,
+          3.382
+        ]
+      },
+      "groundOffsetY": 0.042,
+      "triangles": 1112,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Path01",
+        "Water"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Str_Fountain_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_06.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 17.343,
+        "y": 5.34,
+        "z": 7.431
+      },
+      "bbox": {
+        "min": [
+          -7.526,
+          -0.575,
+          -3.238
+        ],
+        "max": [
+          9.817,
+          4.765,
+          4.193
+        ]
+      },
+      "groundOffsetY": 0.575,
+      "triangles": 1800,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Foam"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/WaterfallFoam01.glb",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/fountain_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/fountain_07.glb",
+      "semantic": "street_furniture",
+      "role": "fountain",
+      "style": "stylized",
+      "osmTags": [
+        "amenity=fountain"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 17.7,
+        "y": 6.519,
+        "z": 15.688
+      },
+      "bbox": {
+        "min": [
+          -8.85,
+          0,
+          -9.5
+        ],
+        "max": [
+          8.85,
+          6.519,
+          6.188
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 5226,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Water_01_Mat",
+        "Launch_Stairs_Mat",
+        "Launch_Iron_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Stairs_Hall_01_Fountain_Water.glb",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_01.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.069,
+        "y": 1.839,
+        "z": 1.007
+      },
+      "bbox": {
+        "min": [
+          -0.522,
+          0,
+          -0.332
+        ],
+        "max": [
+          0.547,
+          1.839,
+          0.675
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1792,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Trans_Mat",
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_02.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.758,
+        "y": 1.21,
+        "z": 0.724
+      },
+      "bbox": {
+        "min": [
+          -0.355,
+          0,
+          -0.361
+        ],
+        "max": [
+          0.403,
+          1.21,
+          0.363
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1800,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Mat",
+        "Atlas_01_Trans_Mat",
+        "Seam_Sand_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_03.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.851,
+        "y": 1.514,
+        "z": 1.193
+      },
+      "bbox": {
+        "min": [
+          -0.449,
+          0,
+          -0.664
+        ],
+        "max": [
+          0.402,
+          1.514,
+          0.529
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1800,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Mat",
+        "Atlas_01_Trans_Mat",
+        "Seam_Sand_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_04.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.586,
+        "y": 2.428,
+        "z": 1.484
+      },
+      "bbox": {
+        "min": [
+          -0.745,
+          -0.017,
+          -0.691
+        ],
+        "max": [
+          0.841,
+          2.411,
+          0.793
+        ]
+      },
+      "groundOffsetY": 0.017,
+      "triangles": 106,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Plants_01_Albedo",
+        "Atlas_Pot_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_01_Art.001_Vapor.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_05.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.586,
+        "y": 2.428,
+        "z": 1.484
+      },
+      "bbox": {
+        "min": [
+          -0.745,
+          -0.017,
+          -0.691
+        ],
+        "max": [
+          0.841,
+          2.411,
+          0.793
+        ]
+      },
+      "groundOffsetY": 0.017,
+      "triangles": 106,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Plants_01_Albedo1",
+        "Atlas_Pot_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Vapor_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_06.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.37,
+        "y": 4.425,
+        "z": 2.552
+      },
+      "bbox": {
+        "min": [
+          -0.58,
+          0,
+          -1.182
+        ],
+        "max": [
+          0.79,
+          4.425,
+          1.37
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 113,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Plants_01_Albedo2",
+        "Atlas_Pot_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Retro_03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_07.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.088,
+        "y": 2.987,
+        "z": 2.102
+      },
+      "bbox": {
+        "min": [
+          -0.986,
+          0.03,
+          -1.063
+        ],
+        "max": [
+          1.102,
+          3.017,
+          1.039
+        ]
+      },
+      "groundOffsetY": -0.03,
+      "triangles": 132,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Pot_03",
+        "Atlas_Plants_01_Albedo2"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Vapor_02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_08",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_08.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.441,
+        "y": 1.171,
+        "z": 0.446
+      },
+      "bbox": {
+        "min": [
+          -0.227,
+          0,
+          -0.223
+        ],
+        "max": [
+          0.214,
+          1.171,
+          0.223
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 352,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Pot_Plant_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Pot_Plant.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_09",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_09.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.047,
+        "y": 4.323,
+        "z": 2.07
+      },
+      "bbox": {
+        "min": [
+          -2.029,
+          -3.05,
+          -0.873
+        ],
+        "max": [
+          2.018,
+          1.273,
+          1.197
+        ]
+      },
+      "groundOffsetY": 3.05,
+      "triangles": 7530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_10",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_10.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.35,
+        "y": 4.47,
+        "z": 2.227
+      },
+      "bbox": {
+        "min": [
+          -1.941,
+          -2.989,
+          -0.965
+        ],
+        "max": [
+          2.409,
+          1.481,
+          1.262
+        ]
+      },
+      "groundOffsetY": 2.989,
+      "triangles": 7530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_11",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_11.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.815,
+        "y": 4.322,
+        "z": 4.047
+      },
+      "bbox": {
+        "min": [
+          -1.146,
+          -3.049,
+          -2.029
+        ],
+        "max": [
+          0.669,
+          1.273,
+          2.018
+        ]
+      },
+      "groundOffsetY": 3.049,
+      "triangles": 7530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Narrow_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/planter_12",
+      "path": "assets/library/toxsam-polygonal-mind/glb/planter_12.glb",
+      "semantic": "street_furniture",
+      "role": "planter",
+      "style": "stylized",
+      "osmTags": [
+        "man_made=planter"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.027,
+        "y": 3.931,
+        "z": 2.13
+      },
+      "bbox": {
+        "min": [
+          -2.082,
+          -2.474,
+          -1.293
+        ],
+        "max": [
+          1.945,
+          1.457,
+          0.837
+        ]
+      },
+      "groundOffsetY": 2.474,
+      "triangles": 7530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_01.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.374,
+        "y": 0.188,
+        "z": 0.062
+      },
+      "bbox": {
+        "min": [
+          -0.187,
+          0,
+          -0.031
+        ],
+        "max": [
+          0.187,
+          0.188,
+          0.031
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 10,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Sign_07_Exit_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Sign_07_Exit.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_02.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 5.51,
+        "y": 1.004,
+        "z": 0.531
+      },
+      "bbox": {
+        "min": [
+          -2.755,
+          -0.001,
+          -0.263
+        ],
+        "max": [
+          2.755,
+          1.003,
+          0.268
+        ]
+      },
+      "groundOffsetY": 0.001,
+      "triangles": 26,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Wood"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/StoreCartel.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_03.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.884,
+        "y": 2.084,
+        "z": 0.764
+      },
+      "bbox": {
+        "min": [
+          -0.442,
+          0,
+          -0.382
+        ],
+        "max": [
+          0.442,
+          2.084,
+          0.382
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 346,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Launch_SignBook_Grid_Mat",
+        "Launch_Signbook_Mat",
+        "Launch_Floor_d_light_on_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Sign_book.001.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_04.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.996,
+        "y": 3.325,
+        "z": 0.229
+      },
+      "bbox": {
+        "min": [
+          -0.503,
+          0,
+          -0.097
+        ],
+        "max": [
+          0.493,
+          3.325,
+          0.132
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 496,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_05",
+        "Atlas_02",
+        "Atlas_03",
+        "Lettering"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/SignPost.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_05.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.248,
+        "y": 1.827,
+        "z": 0.965
+      },
+      "bbox": {
+        "min": [
+          -0.624,
+          0,
+          -0.505
+        ],
+        "max": [
+          0.624,
+          1.827,
+          0.46
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 124,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_05",
+        "Atlas_02",
+        "Atlas_04",
+        "Atlas_01",
+        "Glass",
+        "Logo_Polygonal"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/EntranceBoard.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_06.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.382,
+        "y": 0.878,
+        "z": 0.108
+      },
+      "bbox": {
+        "min": [
+          -0.045,
+          -0.433,
+          -0.054
+        ],
+        "max": [
+          1.337,
+          0.445,
+          0.054
+        ]
+      },
+      "groundOffsetY": 0.433,
+      "triangles": 168,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_13.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_07.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.095,
+        "y": 0.676,
+        "z": 0.126
+      },
+      "bbox": {
+        "min": [
+          -0.291,
+          -0.189,
+          -0.068
+        ],
+        "max": [
+          0.804,
+          0.487,
+          0.058
+        ]
+      },
+      "groundOffsetY": 0.189,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_09.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_08",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_08.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.523,
+        "y": 1.729,
+        "z": 0.127
+      },
+      "bbox": {
+        "min": [
+          -0.093,
+          -0.504,
+          -0.069
+        ],
+        "max": [
+          0.43,
+          1.225,
+          0.058
+        ]
+      },
+      "groundOffsetY": 0.504,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_10.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_09",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_09.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.779,
+        "y": 1.066,
+        "z": 0.126
+      },
+      "bbox": {
+        "min": [
+          -0.124,
+          -0.368,
+          -0.068
+        ],
+        "max": [
+          1.655,
+          0.698,
+          0.058
+        ]
+      },
+      "groundOffsetY": 0.368,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "SciFi_Trim",
+        "Atlas_Sign"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_06.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_10",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_10.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.599,
+        "y": 0.676,
+        "z": 0.126
+      },
+      "bbox": {
+        "min": [
+          -0.133,
+          -0.194,
+          -0.067
+        ],
+        "max": [
+          1.466,
+          0.482,
+          0.059
+        ]
+      },
+      "groundOffsetY": 0.194,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_08.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_11",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_11.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.859,
+        "y": 0.611,
+        "z": 0.126
+      },
+      "bbox": {
+        "min": [
+          -0.621,
+          -0.578,
+          -0.064
+        ],
+        "max": [
+          0.238,
+          0.033,
+          0.062
+        ]
+      },
+      "groundOffsetY": 0.578,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_05.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_12",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_12.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.947,
+        "y": 1.319,
+        "z": 0.127
+      },
+      "bbox": {
+        "min": [
+          -0.164,
+          -0.377,
+          -0.069
+        ],
+        "max": [
+          0.783,
+          0.942,
+          0.058
+        ]
+      },
+      "groundOffsetY": 0.377,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "SciFi_Trim",
+        "Atlas_Sign"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_07.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_13",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_13.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.898,
+        "y": 1.319,
+        "z": 0.127
+      },
+      "bbox": {
+        "min": [
+          -0.744,
+          -0.374,
+          -0.071
+        ],
+        "max": [
+          0.154,
+          0.945,
+          0.056
+        ]
+      },
+      "groundOffsetY": 0.374,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_16.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_14",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_14.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.284,
+        "y": 0.476,
+        "z": 0.284
+      },
+      "bbox": {
+        "min": [
+          -0.144,
+          -0.131,
+          -0.143
+        ],
+        "max": [
+          0.14,
+          0.345,
+          0.141
+        ]
+      },
+      "groundOffsetY": 0.131,
+      "triangles": 72,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_15",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_15.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.531,
+        "y": 0.74,
+        "z": 0.049
+      },
+      "bbox": {
+        "min": [
+          -2.422,
+          -0.345,
+          -0.024
+        ],
+        "max": [
+          0.109,
+          0.395,
+          0.025
+        ]
+      },
+      "groundOffsetY": 0.345,
+      "triangles": 628,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "SciFi_Trim",
+        "Atlas_Sign"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_16",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_16.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.449,
+        "y": 2.094,
+        "z": 0.056
+      },
+      "bbox": {
+        "min": [
+          -0.224,
+          0.001,
+          -0.03
+        ],
+        "max": [
+          0.225,
+          2.095,
+          0.026
+        ]
+      },
+      "groundOffsetY": -0.001,
+      "triangles": 36,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Urban_Trim"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_04.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_17",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_17.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.669,
+        "y": 0.883,
+        "z": 0.094
+      },
+      "bbox": {
+        "min": [
+          -0.583,
+          -0.439,
+          -0.051
+        ],
+        "max": [
+          0.086,
+          0.444,
+          0.043
+        ]
+      },
+      "groundOffsetY": 0.439,
+      "triangles": 66,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Eclipse"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_14.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_18",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_18.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.67,
+        "y": 0.888,
+        "z": 0.094
+      },
+      "bbox": {
+        "min": [
+          -0.6,
+          -0.437,
+          -0.049
+        ],
+        "max": [
+          0.07,
+          0.451,
+          0.045
+        ]
+      },
+      "groundOffsetY": 0.437,
+      "triangles": 68,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Urban_Trim",
+        "Eclipse"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_15.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_19",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_19.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.379,
+        "y": 0.384,
+        "z": 0.094
+      },
+      "bbox": {
+        "min": [
+          -1.362,
+          -0.188,
+          -0.049
+        ],
+        "max": [
+          0.017,
+          0.196,
+          0.045
+        ]
+      },
+      "groundOffsetY": 0.188,
+      "triangles": 68,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "SciFi_Trim",
+        "Urban_Trim",
+        "Eclipse",
+        "Atlas_Sign"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/sign_20",
+      "path": "assets/library/toxsam-polygonal-mind/glb/sign_20.glb",
+      "semantic": "street_furniture",
+      "role": "sign",
+      "style": "stylized",
+      "osmTags": [],
+      "internalTags": [
+        "street_sign"
+      ],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.669,
+        "y": 0.712,
+        "z": 0.094
+      },
+      "bbox": {
+        "min": [
+          -0.602,
+          -0.354,
+          -0.049
+        ],
+        "max": [
+          0.067,
+          0.358,
+          0.045
+        ]
+      },
+      "groundOffsetY": 0.354,
+      "triangles": 70,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Urban_Trim",
+        "Eclipse"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_12.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_01.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.808,
+        "y": 1.749,
+        "z": 1.442
+      },
+      "bbox": {
+        "min": [
+          -0.404,
+          -0.139,
+          -0.512
+        ],
+        "max": [
+          0.404,
+          1.61,
+          0.93
+        ]
+      },
+      "groundOffsetY": 0.139,
+      "triangles": 1222,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "GodsEyes",
+        "Gods"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodBastet_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_02.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.284,
+        "y": 2.285,
+        "z": 1.803
+      },
+      "bbox": {
+        "min": [
+          -0.642,
+          -0.251,
+          -0.594
+        ],
+        "max": [
+          0.642,
+          2.034,
+          1.209
+        ]
+      },
+      "groundOffsetY": 0.251,
+      "triangles": 1468,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "GodsEyes",
+        "Gods"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodAnubis_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_03.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.14,
+        "y": 2.676,
+        "z": 1.551
+      },
+      "bbox": {
+        "min": [
+          -0.57,
+          -0.233,
+          -0.505
+        ],
+        "max": [
+          0.57,
+          2.443,
+          1.046
+        ]
+      },
+      "groundOffsetY": 0.233,
+      "triangles": 1650,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Gods",
+        "GodsEyes"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodRa_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_04.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.724,
+        "y": 6.05,
+        "z": 2.724
+      },
+      "bbox": {
+        "min": [
+          -1.362,
+          0,
+          -1.362
+        ],
+        "max": [
+          1.362,
+          6.05,
+          1.362
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 236,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Obelisk"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/Obelisk_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_05.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.654,
+        "y": 1.949,
+        "z": 0.474
+      },
+      "bbox": {
+        "min": [
+          -0.327,
+          -0.015,
+          -0.242
+        ],
+        "max": [
+          0.327,
+          1.934,
+          0.232
+        ]
+      },
+      "groundOffsetY": 0.015,
+      "triangles": 1982,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Rockdark01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Statue_greek_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_06.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.726,
+        "y": 1.998,
+        "z": 0.512
+      },
+      "bbox": {
+        "min": [
+          -0.389,
+          -0.009,
+          -0.281
+        ],
+        "max": [
+          0.337,
+          1.989,
+          0.231
+        ]
+      },
+      "groundOffsetY": 0.009,
+      "triangles": 2482,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Rockdark01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Statue_greek_02_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_07.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.357,
+        "y": 3.741,
+        "z": 2.644
+      },
+      "bbox": {
+        "min": [
+          -1.704,
+          -0.018,
+          -0.92
+        ],
+        "max": [
+          1.653,
+          3.723,
+          1.724
+        ]
+      },
+      "groundOffsetY": 0.018,
+      "triangles": 2366,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim_Retro_Ramp_01",
+        "Trim_Retro_Ramp_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/David_Retro.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_08",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_08.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.485,
+        "y": 3.679,
+        "z": 2.796
+      },
+      "bbox": {
+        "min": [
+          -1.187,
+          0.008,
+          -1.17
+        ],
+        "max": [
+          1.298,
+          3.687,
+          1.626
+        ]
+      },
+      "groundOffsetY": -0.008,
+      "triangles": 5486,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim_Retro_Ramp_01",
+        "Trim_Retro_Ramp_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Venus_Retro.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/statue_09",
+      "path": "assets/library/toxsam-polygonal-mind/glb/statue_09.glb",
+      "semantic": "landmark_prop",
+      "role": "statue",
+      "style": "stylized",
+      "osmTags": [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.513,
+        "y": 3.422,
+        "z": 3.328
+      },
+      "bbox": {
+        "min": [
+          -1.257,
+          -0.479,
+          -1.15
+        ],
+        "max": [
+          1.256,
+          2.943,
+          2.178
+        ]
+      },
+      "groundOffsetY": 0.479,
+      "triangles": 5742,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim_Retro_Ramp_02",
+        "Trim_Computer_01",
+        "Trim_Retro_Ramp_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Venus_01_Floating.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_01.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 6.324,
+        "y": 8.21,
+        "z": 6.563
+      },
+      "bbox": {
+        "min": [
+          -3.162,
+          0,
+          -0.801
+        ],
+        "max": [
+          3.162,
+          8.21,
+          5.762
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 486,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Aero_Light_Mat",
+        "Aero_Glow_01_Mat",
+        "Aero_Floor_01_Mat",
+        "Aero_Wall_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/aero-system/Aero_Lampost_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_02.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.739,
+        "y": 3.456,
+        "z": 0.64
+      },
+      "bbox": {
+        "min": [
+          -0.382,
+          -0.005,
+          -0.32
+        ],
+        "max": [
+          0.357,
+          3.451,
+          0.32
+        ]
+      },
+      "groundOffsetY": 0.005,
+      "triangles": 262,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Atlas02",
+        "LampChain"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/Lamp01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_03.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.47,
+        "y": 1.872,
+        "z": 0.424
+      },
+      "bbox": {
+        "min": [
+          -0.219,
+          0,
+          -0.212
+        ],
+        "max": [
+          0.251,
+          1.872,
+          0.212
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 160,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Lamp_Stand_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Lamp_Stand.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_04.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.4,
+        "y": 1.78,
+        "z": 1.27
+      },
+      "bbox": {
+        "min": [
+          -0.7,
+          -0.001,
+          -0.636
+        ],
+        "max": [
+          0.7,
+          1.779,
+          0.634
+        ]
+      },
+      "groundOffsetY": 0.001,
+      "triangles": 221,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_05.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.399,
+        "y": 1.779,
+        "z": 1.271
+      },
+      "bbox": {
+        "min": [
+          -0.699,
+          -0.001,
+          -0.636
+        ],
+        "max": [
+          0.7,
+          1.778,
+          0.635
+        ]
+      },
+      "groundOffsetY": 0.001,
+      "triangles": 221,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp04.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_06.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.28,
+        "y": 1.85,
+        "z": 1.1
+      },
+      "bbox": {
+        "min": [
+          -0.64,
+          0.007,
+          -0.55
+        ],
+        "max": [
+          0.64,
+          1.857,
+          0.55
+        ]
+      },
+      "groundOffsetY": -0.007,
+      "triangles": 194,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_07.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.284,
+        "y": 1.847,
+        "z": 1.095
+      },
+      "bbox": {
+        "min": [
+          -0.643,
+          0.002,
+          -0.548
+        ],
+        "max": [
+          0.641,
+          1.849,
+          0.547
+        ]
+      },
+      "groundOffsetY": -0.002,
+      "triangles": 197,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_08",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_08.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.194,
+        "y": 0.401,
+        "z": 0.194
+      },
+      "bbox": {
+        "min": [
+          -0.097,
+          0,
+          -0.097
+        ],
+        "max": [
+          0.097,
+          0.401,
+          0.097
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 544,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Shared_Emissive_Orange_Mat",
+        "Shared_Black_Matte_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/Spooky_Tower_Lantern_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_09",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_09.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 7.204,
+        "y": 4.98,
+        "z": 7.205
+      },
+      "bbox": {
+        "min": [
+          -3.601,
+          0,
+          -3.602
+        ],
+        "max": [
+          3.603,
+          4.98,
+          3.603
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 733,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BoardCutout",
+        "Atlas_03",
+        "Atlas_FX"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/Lamp.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_10",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_10.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.748,
+        "y": 2.345,
+        "z": 1.662
+      },
+      "bbox": {
+        "min": [
+          -0.874,
+          0,
+          -0.831
+        ],
+        "max": [
+          0.874,
+          2.345,
+          0.831
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 578,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Trim03",
+        "LunarYearBricks"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/OutterLamp.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_11",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_11.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 6.659,
+        "y": 2.149,
+        "z": 0.82
+      },
+      "bbox": {
+        "min": [
+          -3.518,
+          0.001,
+          -0.412
+        ],
+        "max": [
+          3.141,
+          2.15,
+          0.408
+        ]
+      },
+      "groundOffsetY": -0.001,
+      "triangles": 625,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "AlphaTrim01",
+        "Atlas",
+        "Trim04"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/LampWreath.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_12",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_12.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.612,
+        "y": 2.207,
+        "z": 0.56
+      },
+      "bbox": {
+        "min": [
+          -0.306,
+          0,
+          -0.28
+        ],
+        "max": [
+          0.306,
+          2.207,
+          0.28
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 134,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Launch_Iron_Mat",
+        "Launch_Light_Emissive_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Light_Streetlight_01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_13",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_13.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.516,
+        "y": 0.516,
+        "z": 0.128
+      },
+      "bbox": {
+        "min": [
+          -0.258,
+          -0.258,
+          -0.067
+        ],
+        "max": [
+          0.258,
+          0.258,
+          0.061
+        ]
+      },
+      "groundOffsetY": 0.258,
+      "triangles": 80,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Iron_02",
+        "Yellow_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Lamp_Wall.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_14",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_14.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.09,
+        "y": 0.395,
+        "z": 0.318
+      },
+      "bbox": {
+        "min": [
+          -0.045,
+          0,
+          -0.159
+        ],
+        "max": [
+          0.045,
+          0.395,
+          0.159
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 166,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Iron_02",
+        "Yellow_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/TableLamp.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/street_lamp_15",
+      "path": "assets/library/toxsam-polygonal-mind/glb/street_lamp_15.glb",
+      "semantic": "street_furniture",
+      "role": "street_lamp",
+      "style": "stylized",
+      "osmTags": [
+        "highway=street_lamp"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.887,
+        "y": 1.299,
+        "z": 1.248
+      },
+      "bbox": {
+        "min": [
+          -0.443,
+          0,
+          -0.784
+        ],
+        "max": [
+          0.444,
+          1.299,
+          0.464
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 226,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Iron_01",
+        "Yellow_01",
+        "Iron_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Studio_Lamp.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_01",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_01.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.088,
+        "y": 0.803,
+        "z": 0
+      },
+      "bbox": {
+        "min": [
+          -0.544,
+          -0.029,
+          0
+        ],
+        "max": [
+          0.544,
+          0.774,
+          0
+        ]
+      },
+      "groundOffsetY": 0.029,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "HoloBush"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_02",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_02.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.809,
+        "y": 0.598,
+        "z": 0
+      },
+      "bbox": {
+        "min": [
+          -0.419,
+          -0.005,
+          0
+        ],
+        "max": [
+          0.39,
+          0.593,
+          0
+        ]
+      },
+      "groundOffsetY": 0.005,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "HoloBush"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush02_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_03",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_03.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.232,
+        "y": 0.69,
+        "z": 0
+      },
+      "bbox": {
+        "min": [
+          -0.616,
+          0,
+          0
+        ],
+        "max": [
+          0.616,
+          0.69,
+          0
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 2,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "HoloBush"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush03_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_04",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_04.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.928,
+        "y": 1.323,
+        "z": 1.162
+      },
+      "bbox": {
+        "min": [
+          -0.464,
+          -0.001,
+          -0.436
+        ],
+        "max": [
+          0.464,
+          1.322,
+          0.726
+        ]
+      },
+      "groundOffsetY": 0.001,
+      "triangles": 620,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "007_Starplant"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/xyz/007_Starplant_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_05",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_05.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.198,
+        "y": 2.934,
+        "z": 3.198
+      },
+      "bbox": {
+        "min": [
+          -1.601,
+          -0.001,
+          -1.601
+        ],
+        "max": [
+          1.597,
+          2.933,
+          1.597
+        ]
+      },
+      "groundOffsetY": 0.001,
+      "triangles": 56,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BC_Code_Bush_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/BlockChain_CodeBush_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_06",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_06.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.116,
+        "y": 2.598,
+        "z": 3.446
+      },
+      "bbox": {
+        "min": [
+          -1.753,
+          -0.013,
+          -2.258
+        ],
+        "max": [
+          1.363,
+          2.585,
+          1.188
+        ]
+      },
+      "groundOffsetY": 0.013,
+      "triangles": 184,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Plant_01_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Plant_02_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_07",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_07.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.699,
+        "y": 1.544,
+        "z": 1.375
+      },
+      "bbox": {
+        "min": [
+          -1.112,
+          -0.212,
+          -1.014
+        ],
+        "max": [
+          1.587,
+          1.332,
+          0.361
+        ]
+      },
+      "groundOffsetY": 0.212,
+      "triangles": 32,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Meme_Bridge_Light_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/LoveDeath_Plant_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_08",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_08.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.379,
+        "y": 5.066,
+        "z": 4.213
+      },
+      "bbox": {
+        "min": [
+          -2.276,
+          -0.075,
+          -2.04
+        ],
+        "max": [
+          2.103,
+          4.991,
+          2.173
+        ]
+      },
+      "groundOffsetY": 0.075,
+      "triangles": 1698,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "PalmTree"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/PalmTree_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_09",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_09.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.398,
+        "y": 1.36,
+        "z": 1.592
+      },
+      "bbox": {
+        "min": [
+          -1.181,
+          -0.335,
+          -0.859
+        ],
+        "max": [
+          1.217,
+          1.025,
+          0.733
+        ]
+      },
+      "groundOffsetY": 0.335,
+      "triangles": 472,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BlackOutline",
+        "TreeLeaves"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_10",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_10.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.853,
+        "y": 1.356,
+        "z": 1.573
+      },
+      "bbox": {
+        "min": [
+          -1.428,
+          -0.362,
+          -0.72
+        ],
+        "max": [
+          1.425,
+          0.994,
+          0.853
+        ]
+      },
+      "groundOffsetY": 0.362,
+      "triangles": 696,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "TreeLeaves",
+        "BlackOutline"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_02_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_11",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_11.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 15.933,
+        "y": 12.098,
+        "z": 9.755
+      },
+      "bbox": {
+        "min": [
+          -8.158,
+          -0.756,
+          -4.747
+        ],
+        "max": [
+          7.775,
+          11.342,
+          5.008
+        ]
+      },
+      "groundOffsetY": 0.756,
+      "triangles": 882,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "TreeLeaves",
+        "TreeWood"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_12",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_12.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 12.795,
+        "y": 11.77,
+        "z": 14.031
+      },
+      "bbox": {
+        "min": [
+          -6.56,
+          -0.362,
+          -6.648
+        ],
+        "max": [
+          6.235,
+          11.408,
+          7.383
+        ]
+      },
+      "groundOffsetY": 0.362,
+      "triangles": 928,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "TreeLeaves",
+        "TreeWood"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_02_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_13",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_13.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 15.934,
+        "y": 12.099,
+        "z": 9.755
+      },
+      "bbox": {
+        "min": [
+          -7.482,
+          -0.309,
+          -4.278
+        ],
+        "max": [
+          8.452,
+          11.79,
+          5.477
+        ]
+      },
+      "groundOffsetY": 0.309,
+      "triangles": 802,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Aero_Wall_Mat",
+        "Aero_Leaves_02_Mat",
+        "Aero_Tree_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/aero-system/Tree_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_14",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_14.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.418,
+        "y": 3.022,
+        "z": 3.255
+      },
+      "bbox": {
+        "min": [
+          -1.658,
+          -0.194,
+          -1.884
+        ],
+        "max": [
+          1.76,
+          2.828,
+          1.371
+        ]
+      },
+      "groundOffsetY": 0.194,
+      "triangles": 892,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BlackOutline",
+        "TreeWood",
+        "Mushroom02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_Trunk_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_15",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_15.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.797,
+        "y": 1.679,
+        "z": 1.403
+      },
+      "bbox": {
+        "min": [
+          -1.427,
+          -0.089,
+          -0.765
+        ],
+        "max": [
+          1.37,
+          1.59,
+          0.638
+        ]
+      },
+      "groundOffsetY": 0.089,
+      "triangles": 744,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BlackOutline",
+        "TreeLeaves",
+        "WoodClean"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_03_art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_16",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_16.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 8.572,
+        "y": 14.522,
+        "z": 6.639
+      },
+      "bbox": {
+        "min": [
+          -3.8,
+          -0.425,
+          -3.431
+        ],
+        "max": [
+          4.772,
+          14.097,
+          3.208
+        ]
+      },
+      "groundOffsetY": 0.425,
+      "triangles": 616,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "TreeLeaves",
+        "TreeWood",
+        "BlackOutline"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_04_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_17",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_17.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.524,
+        "y": 2.76,
+        "z": 2.309
+      },
+      "bbox": {
+        "min": [
+          -1.237,
+          -0.009,
+          -1.167
+        ],
+        "max": [
+          1.287,
+          2.751,
+          1.142
+        ]
+      },
+      "groundOffsetY": 0.009,
+      "triangles": 692,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "BlackOutline",
+        "TreeLeaves",
+        "TreeWood"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_03_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_18",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_18.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.328,
+        "y": 1.194,
+        "z": 2.28
+      },
+      "bbox": {
+        "min": [
+          -1.224,
+          -0.007,
+          -1.123
+        ],
+        "max": [
+          1.104,
+          1.187,
+          1.157
+        ]
+      },
+      "groundOffsetY": 0.007,
+      "triangles": 216,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leaves_Atlas_0"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush04.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_19",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_19.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 58.629,
+        "y": 84.126,
+        "z": 64.796
+      },
+      "bbox": {
+        "min": [
+          -26.68,
+          -1.987,
+          -32.705
+        ],
+        "max": [
+          31.949,
+          82.139,
+          32.091
+        ]
+      },
+      "groundOffsetY": 1.987,
+      "triangles": 5794,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Roots",
+        "Branches01",
+        "Branches02",
+        "Trunk01",
+        "Trunk02",
+        "Trunk03",
+        "BioLights"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/Tree01_Art.glb",
+      "flags": [
+        "oversized"
+      ]
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_20",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_20.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.952,
+        "y": 0.786,
+        "z": 1.96
+      },
+      "bbox": {
+        "min": [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        "max": [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      "groundOffsetY": 0.176,
+      "triangles": 530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leaves_Atlas_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_21",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_21.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.952,
+        "y": 0.786,
+        "z": 1.96
+      },
+      "bbox": {
+        "min": [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        "max": [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      "groundOffsetY": 0.176,
+      "triangles": 530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leaves_Atlas_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush07.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_22",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_22.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.952,
+        "y": 0.786,
+        "z": 1.96
+      },
+      "bbox": {
+        "min": [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        "max": [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      "groundOffsetY": 0.176,
+      "triangles": 530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leaves_Atlas_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush08.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_23",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_23.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.952,
+        "y": 0.786,
+        "z": 1.96
+      },
+      "bbox": {
+        "min": [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        "max": [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      "groundOffsetY": 0.176,
+      "triangles": 530,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leaves_Atlas_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush09.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_24",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_24.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.116,
+        "y": 3.082,
+        "z": 3.446
+      },
+      "bbox": {
+        "min": [
+          -1.753,
+          0,
+          -2.258
+        ],
+        "max": [
+          1.363,
+          3.082,
+          1.188
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 298,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Plant_01_Mat",
+        "Tower_Station_Iron_01_Mat",
+        "Train_Tower_Dirt_Mat"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Plant_01_Art.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_25",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_25.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 2.449,
+        "y": 1.342,
+        "z": 1.936
+      },
+      "bbox": {
+        "min": [
+          -1.162,
+          0,
+          -1.055
+        ],
+        "max": [
+          1.287,
+          1.342,
+          0.881
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 130,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Bush"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_26",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_26.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 10.824,
+        "y": 25.277,
+        "z": 11.083
+      },
+      "bbox": {
+        "min": [
+          -6.044,
+          0.012,
+          -5.657
+        ],
+        "max": [
+          4.78,
+          25.289,
+          5.426
+        ]
+      },
+      "groundOffsetY": -0.012,
+      "triangles": 1632,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "PalmTree_Tree",
+        "Leaves_Atlas_0"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/BasePalmTree01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_27",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_27.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 11.1,
+        "y": 9.693,
+        "z": 10.349
+      },
+      "bbox": {
+        "min": [
+          -5.583,
+          -0.009,
+          -5.142
+        ],
+        "max": [
+          5.517,
+          9.684,
+          5.207
+        ]
+      },
+      "groundOffsetY": 0.009,
+      "triangles": 1482,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leaves_Atlas_03",
+        "PalmTree_Tree"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree02.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_28",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_28.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 11,
+        "y": 11.582,
+        "z": 17.829
+      },
+      "bbox": {
+        "min": [
+          -5.391,
+          -0.026,
+          -2.609
+        ],
+        "max": [
+          5.609,
+          11.556,
+          15.22
+        ]
+      },
+      "groundOffsetY": 0.026,
+      "triangles": 1558,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "PalmTree_Tree",
+        "Leaves_Atlas_03"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_29",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_29.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 9.219,
+        "y": 34.412,
+        "z": 8.755
+      },
+      "bbox": {
+        "min": [
+          -4.806,
+          -0.027,
+          -3.89
+        ],
+        "max": [
+          4.413,
+          34.385,
+          4.865
+        ]
+      },
+      "groundOffsetY": 0.027,
+      "triangles": 1944,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "PalmTree_Tree",
+        "Leaves_Atlas_03"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree04.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_30",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_30.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.286,
+        "y": 2.509,
+        "z": 0.973
+      },
+      "bbox": {
+        "min": [
+          -0.687,
+          0,
+          -0.46
+        ],
+        "max": [
+          0.599,
+          2.509,
+          0.513
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 2010,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Leave_Atlas_0",
+        "Emisive_Fruit",
+        "Tree_Atlas_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_31",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_31.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 4.041,
+        "y": 6.737,
+        "z": 4.346
+      },
+      "bbox": {
+        "min": [
+          -1.989,
+          0,
+          -1.887
+        ],
+        "max": [
+          2.052,
+          6.737,
+          2.459
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1200,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Tree_Topper01",
+        "Trunk_Atlas"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree01.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_32",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_32.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 5.88,
+        "y": 6.069,
+        "z": 5.567
+      },
+      "bbox": {
+        "min": [
+          -3.858,
+          0,
+          -2.118
+        ],
+        "max": [
+          2.022,
+          6.069,
+          3.449
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1876,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "PalmTree_Tree",
+        "Tree_Topper01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree03.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_33",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_33.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 3.842,
+        "y": 9.504,
+        "z": 3.914
+      },
+      "bbox": {
+        "min": [
+          -1.94,
+          0,
+          -2.289
+        ],
+        "max": [
+          1.902,
+          9.504,
+          1.625
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1768,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Bush_Atlas_01",
+        "Trunk_Atlas"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree04.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_34",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_34.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 0.798,
+        "y": 1.6,
+        "z": 0.917
+      },
+      "bbox": {
+        "min": [
+          -0.381,
+          0,
+          -0.417
+        ],
+        "max": [
+          0.417,
+          1.6,
+          0.5
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 792,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Bush_Atlas_01",
+        "Tree_Atlas_01"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush06.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_35",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_35.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 1.997,
+        "y": 1.289,
+        "z": 0.786
+      },
+      "bbox": {
+        "min": [
+          -1.025,
+          0,
+          -0.375
+        ],
+        "max": [
+          0.972,
+          1.289,
+          0.411
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 516,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "Bush_Atlas_01",
+        "Tree_Atlas_02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush05.glb",
+      "flags": []
+    },
+    {
+      "id": "toxsam-polygonal-mind/tree_36",
+      "path": "assets/library/toxsam-polygonal-mind/glb/tree_36.glb",
+      "semantic": "vegetation",
+      "role": "tree",
+      "style": "stylized",
+      "osmTags": [
+        "natural=tree"
+      ],
+      "internalTags": [],
+      "referenceOnly": false,
+      "sizeMeters": {
+        "x": 5.88,
+        "y": 6.069,
+        "z": 5.567
+      },
+      "bbox": {
+        "min": [
+          -3.858,
+          0,
+          -2.118
+        ],
+        "max": [
+          2.022,
+          6.069,
+          3.449
+        ]
+      },
+      "groundOffsetY": 0,
+      "triangles": 1876,
+      "lods": [
+        "LOD0"
+      ],
+      "materials": [
+        "PalmTree_Tree",
+        "Tree_Topper02"
+      ],
+      "textures": [],
+      "source": "ToxSam / Polygonal Mind — CC0",
+      "license": "CC0-1.0",
+      "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree02.glb",
+      "flags": []
     }
   ],
   "pools": {
@@ -9883,6 +15060,596 @@
           "id": "sketchfab-curated/tree_pine_tree_proto_series_free_08014e",
           "weight": 1,
           "normalizeScale": true
+        }
+      ]
+    },
+    "amenity=bench|stylized": {
+      "osmTag": "amenity=bench",
+      "style": "stylized",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/bench_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/bench_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/bench_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/bench_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/bench_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/bench_06",
+          "weight": 1
+        }
+      ]
+    },
+    "amenity=waste_basket|stylized": {
+      "osmTag": "amenity=waste_basket",
+      "style": "stylized",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/bin_01",
+          "weight": 1
+        }
+      ]
+    },
+    "barrier=fence|stylized": {
+      "osmTag": "barrier=fence",
+      "style": "stylized",
+      "semantic": "barrier",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/fence_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_09",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_10",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fence_11",
+          "weight": 1
+        }
+      ]
+    },
+    "amenity=fountain|stylized": {
+      "osmTag": "amenity=fountain",
+      "style": "stylized",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/fountain_01",
+          "weight": 1,
+          "normalizeScale": true
+        },
+        {
+          "id": "toxsam-polygonal-mind/fountain_02",
+          "weight": 1,
+          "normalizeScale": true
+        },
+        {
+          "id": "toxsam-polygonal-mind/fountain_03",
+          "weight": 1,
+          "normalizeScale": true
+        },
+        {
+          "id": "toxsam-polygonal-mind/fountain_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fountain_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/fountain_06",
+          "weight": 1,
+          "normalizeScale": true
+        },
+        {
+          "id": "toxsam-polygonal-mind/fountain_07",
+          "weight": 1,
+          "normalizeScale": true
+        }
+      ]
+    },
+    "man_made=planter|stylized": {
+      "osmTag": "man_made=planter",
+      "style": "stylized",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/planter_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_09",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_10",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_11",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/planter_12",
+          "weight": 1
+        }
+      ]
+    },
+    "street_sign|stylized": {
+      "osmTag": "street_sign",
+      "style": "stylized",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/sign_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_09",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_10",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_11",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_12",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_13",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_14",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_15",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_16",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_17",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_18",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_19",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/sign_20",
+          "weight": 1
+        }
+      ]
+    },
+    "historic=memorial|stylized": {
+      "osmTag": "historic=memorial",
+      "style": "stylized",
+      "semantic": "landmark_prop",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/statue_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_09",
+          "weight": 1
+        }
+      ]
+    },
+    "tourism=artwork|stylized": {
+      "osmTag": "tourism=artwork",
+      "style": "stylized",
+      "semantic": "landmark_prop",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/statue_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/statue_09",
+          "weight": 1
+        }
+      ]
+    },
+    "highway=street_lamp|stylized": {
+      "osmTag": "highway=street_lamp",
+      "style": "stylized",
+      "semantic": "street_furniture",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_09",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_10",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_11",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_12",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_13",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_14",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/street_lamp_15",
+          "weight": 1
+        }
+      ]
+    },
+    "natural=tree|stylized": {
+      "osmTag": "natural=tree",
+      "style": "stylized",
+      "semantic": "vegetation",
+      "referenceOnly": false,
+      "entries": [
+        {
+          "id": "toxsam-polygonal-mind/tree_01",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_02",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_03",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_04",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_05",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_06",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_07",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_08",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_09",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_10",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_11",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_12",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_13",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_14",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_15",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_16",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_17",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_18",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_19",
+          "weight": 1,
+          "normalizeScale": true
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_20",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_21",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_22",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_23",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_24",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_25",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_26",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_27",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_28",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_29",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_30",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_31",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_32",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_33",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_34",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_35",
+          "weight": 1
+        },
+        {
+          "id": "toxsam-polygonal-mind/tree_36",
+          "weight": 1
         }
       ]
     }

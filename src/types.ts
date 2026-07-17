@@ -190,5 +190,14 @@ export interface GenerationJob {
 
 export type CameraMode = 'orbit' | 'fly' | 'drive'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
+// Viewport render-quality preset. 'balanced' ≈ the original fixed settings, so
+// existing behaviour is preserved by default. Drives DPR, shadow map resolution,
+// shadow casting, and texture anisotropy (see Viewport).
+export type Quality3d = 'performance' | 'balanced' | 'high'
+export const QUALITY_PRESETS: Record<Quality3d, { dprCap: number; shadowRes: number; shadows: boolean; anisotropy: number }> = {
+  performance: { dprCap: 1.0, shadowRes: 1024, shadows: false, anisotropy: 1 },
+  balanced:    { dprCap: 2.0, shadowRes: 2048, shadows: true, anisotropy: 4 },
+  high:        { dprCap: 2.0, shadowRes: 4096, shadows: true, anisotropy: 8 },
+}
 
 export const DEG2RAD = Math.PI / 180

@@ -147,6 +147,7 @@ function ExportMenu() {
 function SettingsMenu() {
   const sunTime = useEditor((s) => s.sunTime)
   const fxPreview = useEditor((s) => s.fxPreview)
+  const quality3d = useEditor((s) => s.quality3d)
   const useLibraryAssets = useEditor((s) => s.useLibraryAssets)
   const useCorridorElevation = useEditor((s) => s.useCorridorElevation)
   const roadScale = useEditor((s) => s.roadScale)
@@ -184,6 +185,25 @@ function SettingsMenu() {
       {open && (
         <div className="tb-settings-panel">
           <div className="tb-settings-title">Scene &amp; view</div>
+
+          <div className="tb-setting-seg">
+            <div className="tb-setting-seg-head">
+              <b>🎚️ 3D quality</b>
+              <em>{quality3d === 'performance' ? 'Fast, no shadows' : quality3d === 'high' ? 'Crisp, 4K shadows' : 'Default'}</em>
+            </div>
+            <div className="tb-setting-seg-btns">
+              {(['performance', 'balanced', 'high'] as const).map((q) => (
+                <button
+                  key={q}
+                  className={quality3d === q ? 'active' : ''}
+                  onClick={() => s().setQuality3d(q)}
+                  title={`Render quality: ${q}`}
+                >
+                  {q === 'performance' ? 'Perf' : q === 'balanced' ? 'Balanced' : 'High'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="tb-setting-row">
             <input type="checkbox" checked={fxPreview} onChange={() => s().setFxPreview(!fxPreview)} />

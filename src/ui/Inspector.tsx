@@ -1,10 +1,79 @@
 import { useEffect, useState } from 'react'
 import type { SceneObject, Transform } from '../types'
+import type { FacadeSet, RoofSet } from '../resolver/types'
 import { useEditor } from '../state/store'
 import { ReplacePanel } from './ReplacePanel'
 import { frameObjects } from '../editor/actions'
-import { buildingResolutions, replaceables, roadResolutions } from '../scene/registry'
+import { buildingResolutions, currentBuildingMaterial, replaceables, roadResolutions } from '../scene/registry'
 import { matrixToJSON } from '../resolver/matrix'
+
+const FACADE_SETS: { id: FacadeSet; label: string }[] = [
+  { id: 'brick-red', label: 'Brick red' },
+  { id: 'brick-brown', label: 'Brick brown' },
+  { id: 'stucco-warm', label: 'Stucco warm' },
+  { id: 'stucco-cool', label: 'Stucco cool' },
+  { id: 'concrete-panel', label: 'Concrete' },
+  { id: 'office-glass', label: 'Office glass' },
+  { id: 'curtainwall-dark', label: 'Curtainwall' },
+  { id: 'storefront-mixed', label: 'Storefront' },
+]
+const ROOF_SETS: { id: RoofSet; label: string }[] = [
+  { id: 'bitumen-dark', label: 'Bitumen' },
+  { id: 'tile-red', label: 'Tile red' },
+  { id: 'metal-pale', label: 'Metal' },
+  { id: 'concrete-pale', label: 'Concrete' },
+]
+
+/**
+ * Live material/texture changer for a procedural building — swap its facade set,
+ * roof set, and tint and watch the mesh re-skin instantly. Undoable (a 'material'
+ * command). Only shown for procedural-facade buildings; library/generated GLBs
+ * carry their own baked materials and aren't re-skinnable here.
+ */
+function MaterialChanger({ obj }: { obj: SceneObject }) {
+  const setBuildingMaterial = useEditor((s) => s.setBuildingMaterial)
+  // objects[id] is subscribed by the parent, so this re-renders after each change
+  // and currentBuildingMaterial reflects the latest resolution.
+  const mat = currentBuildingMaterial(obj.id)
+  if (obj.type !== 'building' || obj.asset.state !== 'procedural' || !mat) return null
+  return (
+    <div className="section">
+      <div className="section-title">🎨 Material</div>
+      <div className="mat-label">Facade</div>
+      <div className="mat-grid">
+        {FACADE_SETS.map((f) => (
+          <button
+            key={f.id}
+            className={mat.facade === f.id ? 'active' : ''}
+            onClick={() => setBuildingMaterial(obj.id, { ...mat, facade: f.id })}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <div className="mat-label">Roof</div>
+      <div className="mat-grid">
+        {ROOF_SETS.map((r) => (
+          <button
+            key={r.id}
+            className={mat.roof === r.id ? 'active' : ''}
+            onClick={() => setBuildingMaterial(obj.id, { ...mat, roof: r.id })}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <div className="mat-tint">
+        <span className="mat-label">Tint</span>
+        <input
+          type="color"
+          value={mat.tint}
+          onChange={(e) => setBuildingMaterial(obj.id, { ...mat, tint: e.target.value })}
+        />
+      </div>
+    </div>
+  )
+}
 
 function downloadMatrix() {
   const blob = new Blob([JSON.stringify(matrixToJSON(), null, 2)], { type: 'application/json' })
@@ -331,6 +400,7 @@ export function Inspector() {
       <ResolutionSection obj={obj} />
       <ReferenceSection obj={obj} />
       {!obj.locked && <TransformEditor obj={obj} />}
+      {!obj.deleted && <MaterialChanger obj={obj} />}
       {(obj.type === 'building' || replaceables.has(obj.id)) && !obj.deleted && (
         <ReplacePanel obj={obj} />
       )}

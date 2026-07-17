@@ -92,6 +92,30 @@ export function clearLibraryTemplates() {
   buildingScenes.clear()
 }
 
+/**
+ * Geometries/materials owned by the persistent library templates + raw building
+ * scenes. These are loaded once and reused across every scene rebuild (instanced
+ * meshes reference template geometry directly; building scenes are `.clone()`d,
+ * which shares geometry). buildScene's disposal pass MUST protect them so a
+ * rebuild that doesn't happen to reference a template can't free a buffer the
+ * next rebuild still needs.
+ */
+export function collectProtectedResources(
+  geoms: Set<THREE.BufferGeometry>,
+  mats: Set<THREE.Material>,
+) {
+  for (const t of templates.values())
+    for (const p of t.parts) { geoms.add(p.geometry); mats.add(p.material) }
+  for (const scene of buildingScenes.values())
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (mesh.geometry) geoms.add(mesh.geometry)
+      const m = mesh.material
+      if (Array.isArray(m)) m.forEach((x) => mats.add(x))
+      else if (m) mats.add(m)
+    })
+}
+
 function assetUrl(a: LibraryAsset): string {
   // repo assets/library/<rest>  →  served by the dev middleware at /assetlib/<rest>
   return '/assetlib/' + a.path.replace(/^assets\/library\//, '')

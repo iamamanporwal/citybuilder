@@ -6,10 +6,12 @@ import type {
   GenerationJob,
   GizmoMode,
   ProviderId,
+  Quality3d,
   SceneObject,
   Transform,
 } from '../types'
-import { buildScene } from '../scene/registry'
+import { applyBuildingMaterial, buildScene, currentBuildingMaterial } from '../scene/registry'
+import type { BuildingMaterial } from '../scene/registry'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
 import { clampRoadScale } from '../procgen/roadScale'
 import type { ResolvedContext } from '../resolver/types'
@@ -30,6 +32,7 @@ type Command =
   | { kind: 'transform'; id: string; before: Transform; after: Transform }
   | { kind: 'asset'; id: string; before: AssetInfo; after: AssetInfo }
   | { kind: 'delete'; ids: string[]; deleted: boolean }
+  | { kind: 'material'; id: string; before: BuildingMaterial; after: BuildingMaterial }
 
 export type AppPhase = 'picker' | 'building' | 'editor'
 
@@ -51,6 +54,7 @@ interface EditorState {
   gizmoDragging: boolean
   sunTime: number
   fxPreview: boolean
+  quality3d: Quality3d
   useLibraryAssets: boolean
   useCorridorElevation: boolean
   roadScale: number
@@ -69,6 +73,7 @@ interface EditorState {
   setBuilding: (message: string) => void
   setLoadError: (e: string) => void
   setFxPreview: (v: boolean) => void
+  setQuality3d: (v: Quality3d) => void
   setUseLibraryAssets: (v: boolean) => void
   setUseCorridorElevation: (v: boolean) => void
   setRoadScale: (v: number) => void
@@ -89,6 +94,7 @@ interface EditorState {
   commitTransform: (id: string, before: Transform, after: Transform) => void
   setTransformDirect: (id: string, t: Transform) => void
   swapAsset: (id: string, after: AssetInfo, opts?: { skipUndo?: boolean }) => void
+  setBuildingMaterial: (id: string, mat: BuildingMaterial) => void
   setApproved: (id: string, approved: boolean) => void
   deleteSelected: () => void
   toggleVisible: (id: string) => void
@@ -117,6 +123,16 @@ function applyCommand(state: EditorState, cmd: Command, reverse: boolean): Parti
       for (const id of cmd.ids) objects[id] = { ...objects[id], deleted: del }
       break
     }
+    case 'material': {
+      const mat = reverse ? cmd.before : cmd.after
+      // side effect: rebuild the building's mesh with the target material set
+      applyBuildingMaterial(cmd.id, mat, objects[cmd.id].asset)
+      objects[cmd.id] = {
+        ...objects[cmd.id],
+        meta: { ...objects[cmd.id].meta, facade: mat.facade, roof: mat.roof },
+      }
+      break
+    }
   }
   return { objects }
 }
@@ -139,6 +155,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   gizmoDragging: false,
   sunTime: 14,
   fxPreview: false,
+  // Viewport render quality. 'balanced' matches the original fixed DPR/shadow
+  // settings, so the default look is unchanged; Performance/High trade fidelity
+  // for framerate (see QUALITY_PRESETS + Viewport).
+  quality3d: 'balanced',
   // Local asset library is OFF by default — the Building Recognizer drives
   // appearance. The toggle (and every library function) stays intact so it can
   // be re-enabled and improved later (PRD §7F). See also isLibraryEnabled().
@@ -200,6 +220,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setLoadError: (e) => set({ loadError: e, appPhase: 'picker' }),
   setFxPreview: (v) => set({ fxPreview: v }),
+  setQuality3d: (v) => set({ quality3d: v }),
   setUseLibraryAssets: (v) => set({ useLibraryAssets: v }),
   setUseCorridorElevation: (v) => {
     setCorridorElevationEnabled(v)
@@ -261,6 +282,18 @@ export const useEditor = create<EditorState>((set, get) => ({
       ...applyCommand(s, cmd, false),
       undoStack: opts?.skipUndo ? s.undoStack : [...s.undoStack, cmd].slice(-100),
       redoStack: opts?.skipUndo ? s.redoStack : [],
+    }))
+  },
+
+  setBuildingMaterial: (id, mat) => {
+    const before = currentBuildingMaterial(id)
+    if (!before) return // not a re-skinnable procedural building
+    if (before.facade === mat.facade && before.roof === mat.roof && before.tint === mat.tint) return
+    const cmd: Command = { kind: 'material', id, before, after: mat }
+    set((s) => ({
+      ...applyCommand(s, cmd, false),
+      undoStack: [...s.undoStack, cmd].slice(-100),
+      redoStack: [],
     }))
   },
 

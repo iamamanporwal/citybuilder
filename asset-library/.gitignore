@@ -1,0 +1,6 @@
+# The downloaded model binaries are large (~2.2 GB) — do NOT commit them to git.
+# They are reproducible: re-clone from the CC0 source, then `node build-manifest.mjs`.
+#   git clone --depth 1 https://github.com/ToxSam/cc0-models-Polygonal-Mind.git toxsam-polygonal-mind
+toxsam-polygonal-mind/
+
+# Keep tracked: README.md, .gitignore, build-manifest.mjs, manifest.json, .registry/
