@@ -1,5 +1,5 @@
 import { useEditor } from '../state/store'
-import { buildExportBundle } from './bundle'
+import { buildExportBundle, buildDesignerGlb } from './bundle'
 
 // Export (PRD §14, MVP scope): visual GLB + separate lightweight collision GLB
 // + the semantic road/provenance data the game runtime consumes. The artifact
@@ -37,5 +37,25 @@ export async function exportCity(): Promise<void> {
       )
   } catch (e) {
     useEditor.getState().showToast(`Export failed: ${e}`)
+  }
+}
+
+/** Single-file hand-off for a 3D designer: one GLB with visual geometry,
+ *  textures, materials AND colliders combined (see buildDesignerGlb). */
+export async function exportDesignerGlb(): Promise<void> {
+  const s = useEditor.getState()
+  s.showToast('Building single designer GLB…')
+  try {
+    const glb = await buildDesignerGlb()
+    download(new Blob([glb.data], { type: glb.contentType }), glb.name)
+    const warn = glb.warnings.length ? ` (${glb.warnings.length} geometry warning(s) — see Inspector)` : ''
+    useEditor
+      .getState()
+      .showToast(
+        `Designer GLB ready: ${glb.name} — ${glb.stats.meshes} meshes, ${glb.stats.materials} materials, ` +
+          `${glb.stats.colliderNodes} collider node(s) in one file.${warn}`,
+      )
+  } catch (e) {
+    useEditor.getState().showToast(`Designer export failed: ${e}`)
   }
 }

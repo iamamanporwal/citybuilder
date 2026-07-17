@@ -67,6 +67,14 @@ body {
 .tb-setting-row span { display: flex; flex-direction: column; gap: 2px; }
 .tb-setting-row b { font-weight: 600; font-size: 12.5px; }
 .tb-setting-row em { font-style: normal; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.tb-menu-item {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; white-space: normal;
+  padding: 8px 6px; border-radius: 7px; cursor: pointer; width: 100%;
+  background: none; border: none; color: inherit; font: inherit;
+}
+.tb-menu-item:hover { background: var(--panel-2); }
+.tb-menu-item b { font-weight: 600; font-size: 12.5px; }
+.tb-menu-item em { font-style: normal; color: var(--muted); font-size: 11px; line-height: 1.35; white-space: normal; }
 .tb-setting-slider { padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; }
 .tb-setting-slider-head { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
 .tb-setting-slider-head b { font-weight: 600; }

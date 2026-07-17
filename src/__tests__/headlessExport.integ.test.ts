@@ -12,7 +12,7 @@ import type { ResolvedContext } from '../resolver/types'
 import { REGION_PACKS, MATRIX_VERSION, CLIMATE_TREES } from '../resolver/matrix'
 import { ingestOverpass } from '../ingest/overpass'
 import { useEditor } from '../state/store'
-import { buildExportBundle } from '../export/bundle'
+import { buildExportBundle, buildDesignerGlb } from '../export/bundle'
 
 const praguePath = fileURLToPath(new URL('../../public/data/prague_osm.json', import.meta.url))
 
@@ -88,5 +88,25 @@ describe('headless export bundle (Prague sample, shimmed DOM)', () => {
     const spawn = JSON.parse(bundle.files.find((f) => f.role === 'spawn')!.data as string)
     expect(spawn.spawnVersion).toBe(1)
     expect(spawn.spawn).toBeTruthy()
+  }, 60_000)
+
+  it('single designer GLB combines visual scene + colliders + textures in one file', async () => {
+    const graph = ingestOverpass(raw, 'Staré Město, Prague')
+    useEditor.getState().initScene(graph, euCentralCtx())
+    const glb = await buildDesignerGlb()
+
+    expect(glb.name).toBe('city_designer.glb')
+    const head = Buffer.from(glb.data, 0, 4).toString('latin1')
+    expect(head, 'designer GLB magic').toBe('glTF')
+
+    // one file, both layers present (node names live in the GLB JSON chunk)
+    const text = Buffer.from(glb.data).toString('latin1')
+    expect(text).toContain('citybuilder_scene')
+    expect(text).toContain('citybuilder_colliders')
+
+    // textures are embedded (not sidecar) so the designer opens one self-contained file
+    expect(distinctPngs(glb.data).size, 'distinct embedded textures').toBeGreaterThan(5)
+    expect(glb.stats.colliderNodes).toBeGreaterThan(0)
+    expect(glb.stats.meshes).toBeGreaterThan(0)
   }, 60_000)
 })

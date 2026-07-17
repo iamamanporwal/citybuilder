@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
-import { exportCity } from '../export/exporter'
+import { exportCity, exportDesignerGlb } from '../export/exporter'
 import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale } from '../app/buildCity'
 
 export function Toolbar() {
@@ -67,11 +67,78 @@ export function Toolbar() {
       <SettingsMenu />
 
       <div className="tb-group">
-        <button className="primary" onClick={() => exportCity()} title="Export scene GLB + collision GLB + semantics JSON">
-          ⬇ Export
-        </button>
+        <ExportMenu />
         <button onClick={() => s().setHelpOpen(true)} title="Help & shortcuts">?</button>
       </div>
+    </div>
+  )
+}
+
+/** Export as a split button: the primary click runs the game bundle export;
+ *  the caret opens a dropdown to pick the single designer GLB instead. */
+function ExportMenu() {
+  const s = useEditor.getState
+  const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onEsc)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [open])
+
+  return (
+    <div className="tb-settings-wrap" ref={wrap}>
+      <button
+        className="primary"
+        onClick={() => exportCity()}
+        title="Export the game bundle: scene GLB + collision GLB + surface + minimap + semantics/spawn JSON"
+      >
+        ⬇ Export
+      </button>
+      <button
+        className={open ? 'active' : ''}
+        onClick={() => setOpen((o) => !o)}
+        title="More export options"
+        style={{ padding: '0 6px' }}
+      >
+        ▾
+      </button>
+      {open && (
+        <div className="tb-settings-panel">
+          <div className="tb-settings-title">Export</div>
+
+          <button
+            className="tb-menu-item"
+            onClick={() => {
+              setOpen(false)
+              exportCity()
+            }}
+          >
+            <b>📦 Game bundle</b>
+            <em>Multi-file: scene + collision + surface + minimap GLBs, semantics &amp; spawn JSON. For the game runtime.</em>
+          </button>
+
+          <button
+            className="tb-menu-item"
+            onClick={() => {
+              setOpen(false)
+              exportDesignerGlb()
+            }}
+          >
+            <b>🎨 Single designer GLB</b>
+            <em>One file: geometry + textures + colliders combined. For hand-off to a 3D designer (Blender/Maya).</em>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

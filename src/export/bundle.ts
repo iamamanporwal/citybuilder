@@ -17,7 +17,7 @@ import type { ColliderSet } from '../physics/types'
 import { colliderGroupMerged } from './colliderGlb'
 import { buildRoadSemantics, buildTrafficAudit, buildTrafficDevices } from './semantics'
 import type { SceneObject } from '../types'
-import { optimizeSceneForExport } from './optimizeScene'
+import { optimizeSceneForExport, type OptimizeStats } from './optimizeScene'
 import { buildMinimapGroup, deriveSpawn } from './spawn'
 import type { LintWarning } from '../resolver/varietyLint'
 
@@ -61,13 +61,16 @@ export interface ExportBundle {
   attribution: string
 }
 
-export function glbBuffer(root: THREE.Object3D): Promise<ArrayBuffer> {
+export function glbBuffer(
+  root: THREE.Object3D,
+  opts: { onlyVisible?: boolean } = {},
+): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     new GLTFExporter().parse(
       root,
       (result) => resolve(result as ArrayBuffer),
       (err) => reject(err),
-      { binary: true },
+      { binary: true, onlyVisible: opts.onlyVisible ?? true },
     )
   })
 }
@@ -92,18 +95,10 @@ function surfaceGroup(set: ColliderSet): THREE.Group {
   return g
 }
 
-/**
- * Build the full export bundle from the current scene registries + store.
- * Requires a built scene (store.initScene has run). Pure aside from updating
- * the store's lint report; safe in browser and Node.
- */
-export async function buildExportBundle(): Promise<ExportBundle> {
-  const s = useEditor.getState()
-
-  // build the collider set BEFORE the gate so lint and GLB share one set
-  const colliderSet = buildCollidersFromRegistry()
-
-  // export gate: re-run geometry linters on the current (possibly edited) scene
+/** Re-run the geometry/collider linters on the current (possibly edited) scene
+ *  and fold the result into the store's lint report. Shared by every export
+ *  path so a hand-off never ships un-gated. */
+function runExportGate(s: ReturnType<typeof useEditor.getState>, colliderSet: ColliderSet | null): LintWarning[] {
   const gate = [
     ...flickerLint(),
     ...roadConsistencyLint(),
@@ -111,9 +106,13 @@ export async function buildExportBundle(): Promise<ExportBundle> {
     ...(colliderSet && cityGraph ? colliderLint(cityGraph, colliderSet) : []),
   ]
   s.setLintReport([...gate, ...s.lintReport.filter((w) => !gate.some((g) => g.message === w.message))])
-  const warnings = gate.filter((w) => w.severity === 'warn')
+  return gate.filter((w) => w.severity === 'warn')
+}
 
-  // ---- visual scene
+/** Build the optimized visual scene group (dedup materials + batch-merge
+ *  geometry so the game gets a few dozen draw calls / materials instead of
+ *  thousands — game engine review §2). Shared by every GLB export path. */
+function buildVisualGroup(s: ReturnType<typeof useEditor.getState>): { group: THREE.Group; stats: OptimizeStats } {
   const rawVisual = new THREE.Group()
   rawVisual.name = 'citybuilder_scene'
   for (const id of s.objectOrder) {
@@ -128,9 +127,23 @@ export async function buildExportBundle(): Promise<ExportBundle> {
     clone.name = `${obj.type}__${obj.id}`
     rawVisual.add(clone)
   }
-  // dedup materials + batch-merge geometry so the game gets a few dozen draw
-  // calls / materials instead of thousands (game engine review §2)
-  const { group: visual, stats: optStats } = optimizeSceneForExport(rawVisual)
+  return optimizeSceneForExport(rawVisual)
+}
+
+/**
+ * Build the full export bundle from the current scene registries + store.
+ * Requires a built scene (store.initScene has run). Pure aside from updating
+ * the store's lint report; safe in browser and Node.
+ */
+export async function buildExportBundle(): Promise<ExportBundle> {
+  const s = useEditor.getState()
+
+  // build the collider set BEFORE the gate so lint and GLB share one set
+  const colliderSet = buildCollidersFromRegistry()
+  const warnings = runExportGate(s, colliderSet)
+
+  // ---- visual scene
+  const { group: visual, stats: optStats } = buildVisualGroup(s)
 
   // ---- collision layer: pre-merged into a handful of nodes grouped by physics
   //      behaviour (review §3), extras preserved — plus the drivable-only
@@ -220,6 +233,71 @@ export async function buildExportBundle(): Promise<ExportBundle> {
     bounds,
     city: s.cityName,
     attribution: s.attribution,
+  }
+}
+
+export interface DesignerGlb {
+  name: string
+  contentType: string
+  data: ArrayBuffer
+  warnings: LintWarning[]
+  stats: { meshes: number; materials: number; colliderNodes: number }
+}
+
+/**
+ * Build ONE self-contained GLB for hand-off to a 3D designer: the optimized
+ * visual scene (geometry + PBR materials + embedded textures) AND the merged
+ * colliders in a single file. Unlike buildExportBundle (which splits artifacts
+ * for the game runtime's conform set), this composes everything under one root
+ * so a designer can open it in Blender/Maya, edit, and re-export as one file.
+ *
+ * Colliders live in a clearly-named `citybuilder_colliders` group (so the
+ * designer can hide/lock that collection) with their machine-readable physics
+ * truth on each node's glTF `extras` — which round-trips through Blender as
+ * Custom Properties, so the collider metadata survives a manual edit pass.
+ */
+export async function buildDesignerGlb(): Promise<DesignerGlb> {
+  const s = useEditor.getState()
+
+  const colliderSet = buildCollidersFromRegistry()
+  const warnings = runExportGate(s, colliderSet)
+
+  const { group: visual, stats: optStats } = buildVisualGroup(s)
+
+  const collision = colliderSet ? colliderGroupMerged(colliderSet) : new THREE.Group()
+  collision.name = 'citybuilder_colliders'
+
+  const root = new THREE.Group()
+  root.name = 'citybuilder_designer'
+  root.userData = {
+    generator: 'CityBuilder MVP',
+    kind: 'designer-handoff',
+    formatVersion: 1,
+    city: s.cityName,
+    attribution: s.attribution,
+    exportedAt: new Date().toISOString(),
+    note:
+      'Single-file hand-off. "citybuilder_scene" = visual geometry + PBR materials + textures. ' +
+      '"citybuilder_colliders" = physics colliders (per-node glTF extras carry kind/friction/sensor/drivable). ' +
+      'Edit visuals freely; keep the colliders group intact if the map is still headed back into the game.',
+  }
+  root.add(visual)
+  root.add(collision)
+
+  // onlyVisible: false so the collider group exports even if a designer-facing
+  // convention ever hides it; it stays authored/visible here by default.
+  const data = await glbBuffer(root, { onlyVisible: false })
+
+  return {
+    name: 'city_designer.glb',
+    contentType: GLB,
+    data,
+    warnings,
+    stats: {
+      meshes: optStats.meshesAfter,
+      materials: optStats.materialsAfter,
+      colliderNodes: collision.children.length,
+    },
   }
 }
 
