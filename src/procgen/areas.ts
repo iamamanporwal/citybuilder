@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import polygonClipping from 'polygon-clipping'
 import type { AreaFeature, Vec2 } from '../types'
 import { clipRingToRect, mergeGeometries, pointInRing, ringAreaM2, ringIsSimple, wallGeometry, type Rect } from './geometry'
+import { generateLandTextures } from '../materials/textures'
 
 // Rendered land-cover polygons (parks, grass, sand, forest floor) plus the
 // terrain/water system. Land is the default base: the ground plane covers the
@@ -22,6 +23,28 @@ const AREA_STYLE: Record<string, { y: number; mat: THREE.MeshStandardMaterial } 
 }
 
 const GROUND_MAT = new THREE.MeshStandardMaterial({ color: '#4d5545', roughness: 1 }) // land: mossy green
+
+// Ground-cover textures are attached lazily on the first render (browser only).
+// areas.ts stays canvas-free at module load so node tests that import it (they
+// call buildTerrain/waterRings, never render) never touch a CanvasTexture.
+let landTexturesApplied = false
+export function applyLandTextures(): void {
+  if (landTexturesApplied) return
+  landTexturesApplied = true
+  const tex = generateLandTextures()
+  const attach = (mat: THREE.MeshStandardMaterial, t: { albedo: THREE.Texture; normal: THREE.Texture }, tileM: number) => {
+    mat.map = t.albedo
+    mat.normalMap = t.normal
+    mat.color.set('#ffffff') // let the albedo drive the hue; color would otherwise multiply it down
+    for (const m of [t.albedo, t.normal]) m.repeat.set(1 / tileM, 1 / tileM)
+    mat.needsUpdate = true
+  }
+  attach(AREA_STYLE.grass!.mat, tex.grass, 8)
+  attach(AREA_STYLE.park!.mat, tex.park, 8)
+  attach(AREA_STYLE.forest!.mat, tex.forest, 8)
+  attach(AREA_STYLE.sand!.mat, tex.sand, 7)
+  attach(GROUND_MAT, tex.ground, 9)
+}
 
 // Animated ocean surface. It stays a MeshStandardMaterial so it keeps scene
 // lighting, shadows and the logarithmic depth buffer (see editor/depthConfig);

@@ -212,27 +212,152 @@ function gravelAlbedo(): THREE.Texture {
   return register('gravel_albedo', 'albedo', c, true)
 }
 
-function sidewalkAlbedo(): THREE.Texture {
-  const size = 256
+const clampByte = (v: number) => Math.max(0, Math.min(255, Math.round(v)))
+
+// Concrete-slab sidewalk: aggregate-fleck concrete with recessed expansion
+// joints (a slab grid), subtle staining, and a matching height→normal so the
+// joints catch a shadow line. Tiles over SIDEWALK_TILE_M (see library.ts).
+function sidewalkMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
+  const size = 512
   const [c, ctx] = makeCanvas(size)
+  const [hc, hctx] = makeCanvas(size)
   const r = rng('sidewalk')
-  ctx.fillStyle = '#a7a59d'
+  ctx.fillStyle = '#adaba2'
   ctx.fillRect(0, 0, size, size)
-  speckle(ctx, size, r, 1500, 0.06, false)
-  speckle(ctx, size, r, 900, 0.06, true)
-  ctx.strokeStyle = 'rgba(0,0,0,0.28)'
-  ctx.lineWidth = 2
-  for (let i = 0; i <= 2; i++) {
-    ctx.beginPath()
-    ctx.moveTo(0, i * 128)
-    ctx.lineTo(size, i * 128)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(i * 128, 0)
-    ctx.lineTo(i * 128, size)
-    ctx.stroke()
+  hctx.fillStyle = '#b0b0b0'
+  hctx.fillRect(0, 0, size, size)
+  // slab-to-slab tonal variation (each slab casts slightly differently)
+  const cells = 2 // 2×2 slabs per tile
+  const cell = size / cells
+  for (let gy = 0; gy < cells; gy++) {
+    for (let gx = 0; gx < cells; gx++) {
+      const v = (r() - 0.5) * 18
+      ctx.fillStyle = `rgba(${v > 0 ? 255 : 0},${v > 0 ? 255 : 0},${v > 0 ? 255 : 0},${Math.abs(v) / 255})`
+      ctx.fillRect(gx * cell, gy * cell, cell, cell)
+    }
   }
-  return register('sidewalk_albedo', 'albedo', c, true)
+  // aggregate + fine grit
+  speckle(ctx, size, r, 3200, 0.05, false)
+  speckle(ctx, size, r, 2000, 0.05, true)
+  // soft grime blotches
+  for (let i = 0; i < 10; i++) {
+    const g = ctx.createRadialGradient(r() * size, r() * size, 2, r() * size, r() * size, size * (0.05 + r() * 0.12))
+    g.addColorStop(0, `rgba(40,38,34,${0.06 + r() * 0.08})`)
+    g.addColorStop(1, 'rgba(40,38,34,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, size, size)
+  }
+  // recessed expansion joints (slab grid) — dark in albedo, low in height
+  for (let i = 0; i <= cells; i++) {
+    const p = i * cell
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+    ctx.lineWidth = 3
+    hctx.strokeStyle = '#3a3a3a'
+    hctx.lineWidth = 4
+    for (const [a, b, c2, d] of [[0, p, size, p], [p, 0, p, size]] as const) {
+      ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c2, d); ctx.stroke()
+      hctx.beginPath(); hctx.moveTo(a, b); hctx.lineTo(c2, d); hctx.stroke()
+    }
+  }
+  return {
+    albedo: register('sidewalk_albedo', 'albedo', c, true),
+    normal: register('sidewalk_normal', 'normal', heightToNormal(hc, 1.1), false),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ground cover — grass / park / forest floor / bare ground / sand.
+// A blade-field albedo + height→normal so vegetation reads as vegetation, not
+// a flat tinted plane. Tiled in world meters (repeat set in areas.ts).
+// ---------------------------------------------------------------------------
+
+interface GrassOpts {
+  base: string // soil/thatch fill under the blades
+  blade: [number, number, number] // mean blade RGB
+  spread: number // tonal spread of the blades
+  density: number // blades per tile
+  dryness: number // 0..1 dry/dirt fleck amount
+}
+
+function grassMaps(name: string, o: GrassOpts): { albedo: THREE.Texture; normal: THREE.Texture } {
+  const size = 512
+  const [c, ctx] = makeCanvas(size)
+  const [hc, hctx] = makeCanvas(size)
+  const r = rng(name)
+  ctx.fillStyle = o.base
+  ctx.fillRect(0, 0, size, size)
+  hctx.fillStyle = '#787878'
+  hctx.fillRect(0, 0, size, size)
+  // low-frequency mottling so a large lawn isn't one flat hue
+  for (let i = 0; i < 46; i++) {
+    const cx = r() * size
+    const cy = r() * size
+    const rad = size * (0.07 + r() * 0.16)
+    const light = (r() - 0.5) * 40
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad)
+    const w = light > 0 ? 255 : 0
+    g.addColorStop(0, `rgba(${w},${w},${w},${Math.abs(light) / 255})`)
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  // blades: short strokes in varied greens, wrapping across the tile edge
+  const [br, bg, bb] = o.blade
+  for (let i = 0; i < o.density; i++) {
+    const x = r() * size
+    const y = r() * size
+    const len = 2.5 + r() * 6.5
+    const ang = -Math.PI / 2 + (r() - 0.5) * 1.05
+    const v = (r() - 0.5) * o.spread
+    const ex = x + Math.cos(ang) * len
+    const ey = y + Math.sin(ang) * len
+    ctx.strokeStyle = `rgb(${clampByte(br + v * 0.5)},${clampByte(bg + v)},${clampByte(bb + v * 0.4)})`
+    ctx.lineWidth = 0.7 + r() * 0.9
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke()
+    const hv = r() > 0.5 ? 150 + r() * 70 : 60 + r() * 55
+    hctx.strokeStyle = `rgb(${hv},${hv},${hv})`
+    hctx.lineWidth = ctx.lineWidth
+    hctx.beginPath(); hctx.moveTo(x, y); hctx.lineTo(ex, ey); hctx.stroke()
+  }
+  // dry/dirt flecks
+  for (let i = 0; i < o.dryness * 1100; i++) {
+    const shade = 120 + r() * 70
+    ctx.fillStyle = `rgba(${clampByte(shade)},${clampByte(shade * 0.85)},${clampByte(shade * 0.58)},0.5)`
+    const s = 1 + r() * 2
+    ctx.fillRect(r() * size, r() * size, s, s)
+  }
+  return {
+    albedo: register(name, 'albedo', c, true),
+    normal: register(name + '_n', 'normal', heightToNormal(hc, 1.0), false),
+  }
+}
+
+function sandMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
+  const size = 512
+  const [c, ctx] = makeCanvas(size)
+  const [hc, hctx] = makeCanvas(size)
+  const r = rng('sand')
+  ctx.fillStyle = '#cbb98f'
+  ctx.fillRect(0, 0, size, size)
+  hctx.fillStyle = '#808080'
+  hctx.fillRect(0, 0, size, size)
+  for (let i = 0; i < 9000; i++) {
+    const shade = 150 + r() * 80
+    ctx.fillStyle = `rgba(${clampByte(shade)},${clampByte(shade * 0.9)},${clampByte(shade * 0.68)},0.5)`
+    const s = 1 + r() * 2
+    const x = r() * size
+    const y = r() * size
+    ctx.fillRect(x, y, s, s)
+    const hv = 90 + r() * 90
+    hctx.fillStyle = `rgb(${hv},${hv},${hv})`
+    hctx.fillRect(x, y, s, s)
+  }
+  return {
+    albedo: register('sand_albedo', 'albedo', c, true),
+    normal: register('sand_normal', 'normal', heightToNormal(hc, 0.8), false),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -472,7 +597,20 @@ export function generateSurfaceTextures() {
     cobble: { ...cobbleMaps(), mr: mrTexture('cobble_mr', 0.85, 0.12, 0, 'cb') },
     pavers: { ...paversMaps(), mr: mrTexture('pavers_mr', 0.88, 0.1, 0, 'pv') },
     gravel: { albedo: gravelAlbedo(), mr: mrTexture('gravel_mr', 0.98, 0.04, 0, 'gv') },
-    sidewalk: { albedo: sidewalkAlbedo(), mr: mrTexture('sidewalk_mr', 0.93, 0.08, 0, 'sw') },
+    sidewalk: { ...sidewalkMaps(), mr: mrTexture('sidewalk_mr', 0.93, 0.08, 0, 'sw') },
+  }
+}
+
+// Ground-cover materials (grass, park, forest floor, bare ground, sand). Built
+// lazily by areas.ts on the first render so node tests that import areas.ts
+// (no DOM) never touch a canvas.
+export function generateLandTextures() {
+  return {
+    grass: grassMaps('grass', { base: '#4f6240', blade: [104, 132, 74], spread: 70, density: 9000, dryness: 0.35 }),
+    park: grassMaps('park', { base: '#465a3a', blade: [90, 122, 66], spread: 62, density: 10500, dryness: 0.18 }),
+    forest: grassMaps('forest', { base: '#3a4a34', blade: [74, 100, 58], spread: 54, density: 8000, dryness: 0.5 }),
+    ground: grassMaps('ground', { base: '#525a44', blade: [96, 116, 74], spread: 66, density: 6000, dryness: 0.6 }),
+    sand: sandMaps(),
   }
 }
 

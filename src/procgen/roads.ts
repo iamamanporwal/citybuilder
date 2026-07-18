@@ -558,6 +558,27 @@ export function buildRoads(
     for (const d of discs) keptDiscs.push({ x: d.x, z: d.z, rad: d.rad, elev: zc })
   }
 
+  // Arms meeting each node (drivable, at-grade): direction pointing AWAY from the
+  // node into the road, plus the road half-width. Used to mesh a junction as the
+  // convex hull of its arm mouths — a polygon that hugs the roads — instead of a
+  // fat disc that bulges into the grass as a visible circle.
+  const armsAt = new Map<string, { d: Vec2; h: number }[]>()
+  for (const r of graph.roads) {
+    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
+    const h = r.widthM / 2
+    const ends: [Vec2, Vec2][] = [
+      [r.points[0], r.points[1]],
+      [r.points[r.points.length - 1], r.points[r.points.length - 2]],
+    ]
+    for (const [p, q] of ends) {
+      const l = Math.hypot(q.x - p.x, q.z - p.z) || 1
+      const key = nodeKey(p)
+      let a = armsAt.get(key)
+      if (!a) armsAt.set(key, (a = []))
+      a.push({ d: { x: (q.x - p.x) / l, z: (q.z - p.z) / l }, h })
+    }
+  }
+
   const junctionNodes = [...nodeUse.entries()]
     .filter(([k, info]) => info.count >= 2 && !elevation.clusterOf(k) && !passThrough.has(k))
     .map(([k, info]) => ({ k, info, rad: discRadius(info.maxWidth) }))
@@ -572,11 +593,24 @@ export function buildRoads(
     )
     if (!contained) {
       keptDiscs.push({ x: info.p.x, z: info.p.z, rad, elev: nodeElev })
-      const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
-      const g = new THREE.CircleGeometry(rad, seg)
-      g.rotateX(-Math.PI / 2)
-      g.translate(info.p.x, nodeElev + Y_DISC, info.p.z)
-      discGeoms.push(planarUvXZ(nonIndexedToIndexed(g)))
+      const arms = armsAt.get(k)
+      // convex hull of the arm mouths — a polygon that spans the intersection and
+      // laps a little onto each road end (setback matches the arm surface trim,
+      // junctionRadius*0.72). Falls back to the disc if arms are unavailable.
+      let g: THREE.BufferGeometry | null = null
+      if (arms && arms.length >= 2) {
+        const setback = junctionRadius(info.p) * 0.72 - 0.6
+        const ring = junctionArmHull(info.p, arms, setback)
+        if (ring.length >= 3) g = junctionPatchGeometry([ring.map((p) => [p.x, p.z] as [number, number])], nodeElev + Y_DISC)
+      }
+      if (!g) {
+        const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
+        const cg = new THREE.CircleGeometry(rad, seg)
+        cg.rotateX(-Math.PI / 2)
+        cg.translate(info.p.x, nodeElev + Y_DISC, info.p.z)
+        g = planarUvXZ(nonIndexedToIndexed(cg))
+      }
+      discGeoms.push(g)
     }
     if (info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ':mh') > 0.45) {
       const off = (hash01(k + ':mo') - 0.5) * rad
@@ -826,6 +860,45 @@ function surfaceElevSampler(pts: Vec2[], profile: number[], elevated: boolean): 
 function nearestIndex(cum: number[], d: number): number {
   for (let i = 0; i < cum.length; i++) if (cum[i] >= d) return i
   return cum.length - 1
+}
+
+/**
+ * Junction fill polygon = convex hull of every arm's two mouth corners at the
+ * setback distance from the node, plus the node itself (keeps degenerate 2-arm
+ * cases non-empty). Bounded by the roads, so — unlike the disc it replaces — it
+ * never bulges into the surrounding grass/sidewalk as a circle.
+ */
+function junctionArmHull(center: Vec2, arms: { d: Vec2; h: number }[], setback: number): Vec2[] {
+  const pts: Vec2[] = [center]
+  for (const a of arms) {
+    const perp = { x: a.d.z, z: -a.d.x }
+    const bx = center.x + a.d.x * setback
+    const bz = center.z + a.d.z * setback
+    pts.push({ x: bx + perp.x * a.h, z: bz + perp.z * a.h })
+    pts.push({ x: bx - perp.x * a.h, z: bz - perp.z * a.h })
+  }
+  return convexHull(pts)
+}
+
+/** Andrew's monotone-chain convex hull in the XZ plane (CCW in (x, z)). */
+function convexHull(points: Vec2[]): Vec2[] {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.z - b.z)
+  if (pts.length < 3) return pts
+  const cross = (o: Vec2, a: Vec2, b: Vec2) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x)
+  const lower: Vec2[] = []
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop()
+    lower.push(p)
+  }
+  const upper: Vec2[] = []
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i]
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop()
+    upper.push(p)
+  }
+  lower.pop()
+  upper.pop()
+  return lower.concat(upper)
 }
 
 /** Closed 24-gon ring approximating a junction disc, for the polygon union. */

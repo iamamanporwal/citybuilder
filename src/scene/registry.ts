@@ -4,7 +4,7 @@ import type { BuildingResolution, FacadeSet, ResolvedContext, RoadResolution, Ro
 import { resolveRoad } from '../resolver/resolve'
 import { buildRoads } from '../procgen/roads'
 import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCentroid } from '../procgen/buildings'
-import { buildAreas, buildTerrain } from '../procgen/areas'
+import { applyLandTextures, buildAreas, buildTerrain } from '../procgen/areas'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { buildGenericSign, buildGiveWaySign, buildSpeedLimitSign, buildStopSign, planSpeedLimitSigns } from '../procgen/signs'
@@ -205,6 +205,7 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   if (!isFinite(minX)) { minX = -500; maxX = 500; minZ = -500; maxZ = 500 }
   const pad = 120
   const bounds = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad }
+  applyLandTextures() // attach tileable ground-cover textures on first render
   const terrain = buildTerrain(graph.areas.filter((a) => a.kind === 'water'), bounds)
   add(
     {

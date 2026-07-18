@@ -48,12 +48,13 @@ export function roadMaterial(set: RoadSurfaceSet, uvSeed = 0): THREE.MeshStandar
 
 export const sidewalkMaterial = std({
   map: surf.sidewalk.albedo,
+  normalMap: surf.sidewalk.normal,
   roughnessMap: surf.sidewalk.mr,
   metalnessMap: surf.sidewalk.mr,
   roughness: 1,
   metalness: 1,
 })
-sidewalkMaterial.map!.repeat.set(1 / 2.4, 1 / 2.4)
+for (const t of [sidewalkMaterial.map!, sidewalkMaterial.normalMap!]) t.repeat.set(1 / 2.4, 1 / 2.4)
 
 // ---------- building facades (per-instance tint + seeded UV offset) ----------
 
