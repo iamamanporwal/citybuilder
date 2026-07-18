@@ -1,0 +1,1000 @@
+{
+  "bridge-pillar-wide.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "bridge-pillar.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "construction-barrier.glb": {
+    "semantic": "barrier",
+    "role": "barrier",
+    "style": "kenney",
+    "osmTags": [
+      "barrier=fence"
+    ],
+    "internalTags": [
+      "temporary_barrier"
+    ],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "construction-cone.glb": {
+    "semantic": "street_furniture",
+    "role": "cone",
+    "style": "kenney",
+    "osmTags": [],
+    "internalTags": [
+      "traffic_cone"
+    ],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "construction-light.glb": {
+    "semantic": "street_furniture",
+    "role": "cone",
+    "style": "kenney",
+    "osmTags": [],
+    "internalTags": [
+      "traffic_cone"
+    ],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "light-curved-cross.glb": {
+    "semantic": "street_furniture",
+    "role": "street_lamp",
+    "style": "kenney-modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "internalTags": [],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "light-curved-double.glb": {
+    "semantic": "street_furniture",
+    "role": "street_lamp",
+    "style": "kenney-modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "internalTags": [],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "light-curved.glb": {
+    "semantic": "street_furniture",
+    "role": "street_lamp",
+    "style": "kenney-modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "internalTags": [],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "light-square-cross.glb": {
+    "semantic": "street_furniture",
+    "role": "street_lamp",
+    "style": "kenney-modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "internalTags": [],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "light-square-double.glb": {
+    "semantic": "street_furniture",
+    "role": "street_lamp",
+    "style": "kenney-modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "internalTags": [],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "light-square.glb": {
+    "semantic": "street_furniture",
+    "role": "street_lamp",
+    "style": "kenney-modern",
+    "osmTags": [
+      "highway=street_lamp"
+    ],
+    "internalTags": [],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-bend-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-bend-sidewalk.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-bend-square-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-bend-square.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-bend.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-bridge.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-crossing.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-crossroad-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-crossroad-line.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-crossroad-path.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-crossroad.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-curve-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-curve-intersection-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-curve-intersection.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-curve-pavement.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-curve.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-driveway-double-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-driveway-double.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-driveway-single-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-driveway-single.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-end-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-end-round-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-end-round.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-end.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-intersection-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-intersection-line.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-intersection-path.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-intersection.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-roundabout-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-roundabout.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-side-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-side-entry-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-side-entry.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-side-exit-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-side-exit.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-side.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-curve-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-curve.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-flat-curve.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-flat-high.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-flat.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-high-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant-high.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-slant.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-split-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-split.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-square-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-square.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-straight-barrier-end.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-straight-barrier-half.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-straight-barrier.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-straight-half.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "road-straight.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "sign-highway-detailed.glb": {
+    "semantic": "street_furniture",
+    "role": "sign",
+    "style": "kenney",
+    "osmTags": [],
+    "internalTags": [
+      "street_sign"
+    ],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "sign-highway-wide.glb": {
+    "semantic": "street_furniture",
+    "role": "sign",
+    "style": "kenney",
+    "osmTags": [],
+    "internalTags": [
+      "street_sign"
+    ],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "sign-highway.glb": {
+    "semantic": "street_furniture",
+    "role": "sign",
+    "style": "kenney",
+    "osmTags": [],
+    "internalTags": [
+      "street_sign"
+    ],
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "tile-high.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "tile-low.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "tile-slant.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  },
+  "tile-slantHigh.glb": {
+    "semantic": "road_module",
+    "role": "road-tile",
+    "style": "kenney-asphalt",
+    "osmTags": [
+      "highway=residential"
+    ],
+    "internalTags": [],
+    "referenceOnly": true,
+    "license": "CC0-1.0",
+    "attribution": "Kenney (kenney.nl)",
+    "source": "Kenney — City Kit Roads (CC0)",
+    "sourceUrl": "https://kenney.nl/assets/city-kit-roads"
+  }
+}

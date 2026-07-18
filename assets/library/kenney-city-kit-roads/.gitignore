@@ -1,0 +1,4 @@
+glb/*.glb
+!labels.json
+!LICENSE.txt
+!NOTICE.md

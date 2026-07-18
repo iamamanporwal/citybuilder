@@ -168,6 +168,7 @@ const KIND_META: Record<string, { label: string; procedural: string }> = {
   fire_hydrant: { label: '🧯 Fire hydrants', procedural: 'Procedural hydrant' },
   manhole: { label: '🕳️ Manholes / drains', procedural: 'Procedural cover decal' },
   hvac: { label: '🌀 Rooftop HVAC', procedural: 'Procedural rooftop unit' },
+  cone: { label: '🔶 Cones / temporary', procedural: 'Procedural traffic cone' },
   building: { label: '🏢 Buildings', procedural: 'Procedural extrusion + recognizer facade' },
 }
 // merge role-string variants across packs into one canonical kind.
@@ -179,6 +180,7 @@ const ROLE_ALIAS: Record<string, string> = {
   hydrant: 'fire_hydrant',
   drain: 'manhole',
   complete: 'building',
+  barrier: 'fence',
 }
 
 export interface CurationCandidate {
