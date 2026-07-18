@@ -167,6 +167,7 @@ export function uploadModel(objectId: string, file: File): void {
       '',
       (gltf) => {
         const fitted = fitToSlot(gltf.scene, feature)
+        if (!fitted) { store.showToast('That model has no renderable mesh — export as .glb and retry'); return }
         const asset = {
           state: 'uploaded' as const,
           provider: 'upload' as const,

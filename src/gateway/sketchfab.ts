@@ -211,12 +211,12 @@ export async function replaceWithSketchfab(objectId: string, model: SketchfabMod
     '',
     (gltf) => {
       const feature = buildingFeatures.get(objectId)
-      const fitted = feature
-        ? fitToSlot(gltf.scene, feature)
-        : (() => {
-            const ref = getVariant(objectId, useEditor.getState().objects[objectId].asset)
-            return ref ? fitToObjectBounds(gltf.scene, ref) : gltf.scene
-          })()
+      const fitted =
+        (feature ? fitToSlot(gltf.scene, feature) : null) ??
+        (() => {
+          const ref = getVariant(objectId, useEditor.getState().objects[objectId].asset)
+          return ref ? fitToObjectBounds(gltf.scene, ref) : gltf.scene
+        })()
 
       generationCache.set(cacheKey, fitted)
       registerVariant(objectId, key, fitted)

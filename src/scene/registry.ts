@@ -12,7 +12,7 @@ import { curbsideDevicePosition, deviceHeading, nearestRoadInfo } from '../procg
 import { buildRoadElevation } from '../procgen/corridor'
 import { hash01 } from '../resolver/resolve'
 import { drivableRoads } from '../editor/bus'
-import { buildingSceneFor, cloneTemplate, collectProtectedResources, getTemplate, isLibraryEnabled } from './libraryTemplates'
+import { buildingSceneFor, cloneTemplateFor, collectProtectedResources, isLibraryEnabled } from './libraryTemplates'
 import { clearRecognizerCache, recognizeBuilding } from '../recognizer/recognizer'
 import type { AppearancePlan } from '../recognizer/types'
 
@@ -333,10 +333,11 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     // (only when the flag is on AND the plan chose it), else the descriptor-
     // driven procedural mass with its roof-form cap.
     const libScene = plan.buildPath === 'library-match' ? buildingSceneFor(b) : null
-    const mesh = libScene
-      ? fitToSlot(libScene, b)
-      : buildProceduralBuilding(b, plan.resolution, plan.roofForm)
-    if (libScene) { mesh.name = b.name ?? 'Building'; mesh.userData.objectId = b.id }
+    // fitToSlot returns null for a degenerate GLB → fall back to procedural (so the
+    // building never vanishes when the library toggle is on).
+    const fitted = libScene ? fitToSlot(libScene, b) : null
+    const mesh = fitted ?? buildProceduralBuilding(b, plan.resolution, plan.roofForm)
+    if (fitted) { fitted.name = b.name ?? 'Building'; fitted.userData.objectId = b.id }
     const c = footprintCentroid(b.footprint)
     add(
       {
@@ -402,10 +403,10 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   for (const p of graph.points) {
     const builder = PROP_BUILDERS[p.kind]
     if (!builder) continue
-    // library GLB for this kind if pooled + loaded, else the procedural builder
-    const tmpl = getTemplate(p.kind)
-    const g = tmpl ? cloneTemplate(tmpl) : builder(p)
-    g.name = tmpl ? tmpl.name : g.name
+    // library GLB variant for this feature if pooled + loaded, else the procedural
+    // builder (per-feature pick → variety across signals/bus-stops/fountains/statues)
+    const libG = cloneTemplateFor(p.kind, p.id)
+    const g = libG ?? builder(p)
     // OSM maps traffic devices ON the highway way — move them to the curb and
     // onto the road's solved elevation (§8.1); other props keep their position.
     let pos: { x: number; z: number } = p.position

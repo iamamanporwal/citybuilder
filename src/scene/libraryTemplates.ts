@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BuildingFeature, PointFeature } from '../types'
-import { libraryAsset, pickAssetFor, pooledAssetsOfSemantic, type LibraryAsset } from '../resolver/assetPools'
+import { libraryAsset, pickAssetFor, pooledAssetsForTag, pooledAssetsOfSemantic, type LibraryAsset } from '../resolver/assetPools'
+import { hash01 } from '../resolver/resolve'
 
 // Bridges the asset library into the procedural 2D→3D build. Library GLBs are
 // pre-loaded (async) into per-kind templates BEFORE buildScene runs, then the
@@ -53,7 +54,9 @@ export interface AssetTemplate {
   sizeMeters: { x: number; y: number; z: number }
 }
 
-const templates = new Map<PropKind, AssetTemplate>()
+// Many templates per kind (all the pooled/curated variants), so props vary across
+// the city instead of every instance sharing one model.
+const templates = new Map<PropKind, AssetTemplate[]>()
 // raw building GLB scenes (assetId → scene), cloned + fit-to-slot per footprint
 const buildingScenes = new Map<string, THREE.Object3D>()
 let loadFlag = false
@@ -69,8 +72,24 @@ export function isLibraryEnabled(): boolean {
   return loadFlag
 }
 
-export function getTemplate(kind: PropKind): AssetTemplate | undefined {
-  return loadFlag ? templates.get(kind) : undefined
+/** All loaded template variants for a kind (empty when the library is off / none pooled). */
+export function getTemplates(kind: PropKind): AssetTemplate[] {
+  return loadFlag ? templates.get(kind) ?? [] : []
+}
+
+/**
+ * Deterministically pick one template variant for a feature. Same featureId →
+ * same variant (so a rebuild is stable), but neighbouring features vary. Uses the
+ * resolver's pool pick, falling back to a hash over the loaded variants.
+ */
+export function pickTemplateFor(kind: PropKind, featureId: string): AssetTemplate | undefined {
+  const variants = getTemplates(kind)
+  if (!variants.length) return undefined
+  if (variants.length === 1) return variants[0]
+  const tag = KIND_TAG[kind]
+  const picked = tag ? pickAssetFor(tag, featureId) : undefined
+  const byId = picked && variants.find((t) => t.assetId === picked.id)
+  return byId ?? variants[Math.floor(hash01(featureId + '|' + kind) * variants.length) % variants.length]
 }
 
 /** A cloned library building scene for this footprint, or null (→ procedural). */
@@ -84,7 +103,7 @@ export function buildingSceneFor(b: BuildingFeature): THREE.Object3D | null {
 }
 
 export function librarySummary(): { kind: string; name: string; license: string }[] {
-  return [...templates.values()].map((t) => ({ kind: t.kind, name: t.name, license: t.license }))
+  return [...templates.values()].flat().map((t) => ({ kind: t.kind, name: t.name, license: t.license }))
 }
 
 export function clearLibraryTemplates() {
@@ -104,8 +123,9 @@ export function collectProtectedResources(
   geoms: Set<THREE.BufferGeometry>,
   mats: Set<THREE.Material>,
 ) {
-  for (const t of templates.values())
-    for (const p of t.parts) { geoms.add(p.geometry); mats.add(p.material) }
+  for (const variants of templates.values())
+    for (const t of variants)
+      for (const p of t.parts) { geoms.add(p.geometry); mats.add(p.material) }
   for (const scene of buildingScenes.values())
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh
@@ -157,28 +177,41 @@ function normalize(parts: TemplatePart[], canonicalH: number): { x: number; y: n
   return { x: size.x * scale, y: size.y * scale, z: size.z * scale }
 }
 
-async function loadOne(kind: PropKind, loader: GLTFLoader): Promise<void> {
+// Load ALL pooled/curated variants for a kind (not just one), so the prop builders
+// can vary the model per instance. Each variant is normalized to the same canonical
+// height so they instance at consistent street scale.
+async function loadKind(kind: PropKind, loader: GLTFLoader): Promise<void> {
   const tag = KIND_TAG[kind]
   if (!tag) return // procedural-only kind (e.g. regulatory signs) — no library pool
-  // deterministic single representative asset per kind (so instancing groups cleanly)
-  const picked = pickAssetFor(tag, `libtemplate:${kind}`)
-  if (!picked) return
-  const asset = libraryAsset(picked.id)!
-  // GLTFLoader resolves .bin/textures relative to the .gltf URL, which the
-  // /assetlib dev middleware serves — so both self-contained .glb and
-  // multi-file .gltf load.
-  const gltf = await loader.loadAsync(assetUrl(asset))
-  const parts = flatten(gltf.scene)
-  if (!parts.length) return
-  const sizeMeters = normalize(parts, CANONICAL_HEIGHT[kind] ?? 4)
-  templates.set(kind, {
-    kind,
-    assetId: asset.id,
-    name: asset.id.split('/').pop() ?? asset.id,
-    license: asset.license,
-    parts,
-    sizeMeters,
-  })
+  const assets = pooledAssetsForTag(tag)
+  if (!assets.length) return
+  const variants: AssetTemplate[] = []
+  await Promise.all(
+    assets.map(async (asset) => {
+      try {
+        // GLTFLoader resolves .bin/textures relative to the .gltf URL, which the
+        // /assetlib dev middleware serves — so both self-contained .glb and
+        // multi-file .gltf load.
+        const gltf = await loader.loadAsync(assetUrl(asset))
+        const parts = flatten(gltf.scene)
+        if (!parts.length) return
+        const sizeMeters = normalize(parts, CANONICAL_HEIGHT[kind] ?? 4)
+        variants.push({
+          kind,
+          assetId: asset.id,
+          name: asset.id.split('/').pop() ?? asset.id,
+          license: asset.license,
+          parts,
+          sizeMeters,
+        })
+      } catch (e) {
+        console.warn(`[library] ${kind} variant ${asset.id} load failed:`, (e as Error).message)
+      }
+    }),
+  )
+  // stable order (by assetId) so per-feature picks are deterministic across runs
+  variants.sort((a, b) => a.assetId.localeCompare(b.assetId))
+  if (variants.length) templates.set(kind, variants)
 }
 
 // Load every placeable building GLB once (kept raw — fitToSlot handles scaling
@@ -214,7 +247,7 @@ export async function loadLibraryTemplates(kinds: Iterable<PropKind>, enabled: b
   const unique = [...new Set(kinds)]
   await Promise.all([
     ...unique.map((k) =>
-      loadOne(k, loader).catch((e) => {
+      loadKind(k, loader).catch((e) => {
         console.warn(`[library] ${k} template load failed, using procedural:`, (e as Error).message)
       }),
     ),
@@ -263,4 +296,44 @@ export function cloneTemplate(tmpl: AssetTemplate): THREE.Group {
     g.add(mesh)
   }
   return g
+}
+
+/** Clone a per-feature-picked variant for a kind (individually-selectable props). */
+export function cloneTemplateFor(kind: PropKind, featureId: string): THREE.Group | null {
+  const tmpl = pickTemplateFor(kind, featureId)
+  return tmpl ? cloneTemplate(tmpl) : null
+}
+
+export interface VariedPlacement {
+  seed: string // deterministic per-feature key → which variant this instance uses
+  x: number
+  y?: number
+  z: number
+  rotY: number
+  scale?: number
+}
+
+/**
+ * Instance a kind across placements WITH VARIETY: each placement is assigned a
+ * variant by its seed, placements are grouped by chosen variant, and one set of
+ * InstancedMeshes is emitted per variant. Returns null when the kind has no loaded
+ * templates (caller falls back to procedural).
+ */
+export function instanceKindVaried(
+  kind: PropKind,
+  placements: VariedPlacement[],
+  objectId: string,
+): THREE.InstancedMesh[] | null {
+  const variants = getTemplates(kind)
+  if (!variants.length || !placements.length) return null
+  const groups = new Map<string, { tmpl: AssetTemplate; pls: VariedPlacement[] }>()
+  for (const pl of placements) {
+    const tmpl = pickTemplateFor(kind, pl.seed)!
+    let g = groups.get(tmpl.assetId)
+    if (!g) { g = { tmpl, pls: [] }; groups.set(tmpl.assetId, g) }
+    g.pls.push(pl)
+  }
+  const out: THREE.InstancedMesh[] = []
+  for (const { tmpl, pls } of groups.values()) out.push(...instanceTemplate(tmpl, pls, objectId))
+  return out
 }

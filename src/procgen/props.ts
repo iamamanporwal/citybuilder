@@ -4,7 +4,7 @@ import type { ResolvedContext, TreeSpecies } from '../resolver/types'
 import { hash01, propRulesFor, resolveTree } from '../resolver/resolve'
 import { mats } from './materials'
 import { mergeGeometries } from './geometry'
-import { getTemplate, instanceTemplate } from '../scene/libraryTemplates'
+import { instanceKindVaried } from '../scene/libraryTemplates'
 import { buildRoadElevation } from './corridor'
 import { NON_DRIVABLE } from './roadNetwork'
 import { nearestRoadInfo } from './signMath'
@@ -69,21 +69,22 @@ export function buildTrees(trees: PointFeature[], ctx: ResolvedContext): THREE.G
   group.userData.objectId = 'veg_trees'
   if (!trees.length) return group
 
-  // Library GLB tree, if one is pooled + loaded: instance it across every tree
-  // with the resolver's per-tree scale and a seeded yaw. Falls through to the
-  // procedural multi-species pools otherwise.
-  const tmpl = getTemplate('tree')
-  if (tmpl) {
-    const placements = trees
-      .filter((t) => ctx.landCoverAt(t.position) !== 'water')
-      .map((t) => ({
-        x: t.position.x,
-        z: t.position.z,
-        rotY: hash01(t.id) * Math.PI * 2,
-        scale: resolveTree(t.id, ctx).scale,
-      }))
-    if (placements.length) group.add(...instanceTemplate(tmpl, placements, 'veg_trees'))
-    group.userData.librarySource = tmpl.name
+  // Library GLB trees, if pooled + loaded: each tree picks a VARIANT by its id
+  // (so a curated set of trees varies across the city) with the resolver's per-tree
+  // scale and a seeded yaw. Falls through to the procedural multi-species pools.
+  const treePlacements = trees
+    .filter((t) => ctx.landCoverAt(t.position) !== 'water')
+    .map((t) => ({
+      seed: t.id,
+      x: t.position.x,
+      z: t.position.z,
+      rotY: hash01(t.id) * Math.PI * 2,
+      scale: resolveTree(t.id, ctx).scale,
+    }))
+  const treeMeshes = instanceKindVaried('tree', treePlacements, 'veg_trees')
+  if (treeMeshes) {
+    group.add(...treeMeshes)
+    group.userData.librarySource = 'library trees'
     return group
   }
 
@@ -442,11 +443,16 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
     name: string,
   ) => {
     if (!list.length) return
-    const tmpl = getTemplate(kind)
-    if (tmpl) {
-      const im = instanceTemplate(tmpl, list.map((e) => ({ x: e.p.x, y: e.y, z: e.p.z, rotY: e.rotY })), 'furn_all')
-      im.forEach((mesh, i) => { mesh.name = i === 0 ? name : `${name} #${i}` })
-      group.add(...im)
+    // per-instance variant pick keyed by position (generated props have no id),
+    // so a curated set of lamps/benches/bins varies down the street.
+    const placements = list.map((e) => ({
+      seed: `${kind}:${e.p.x.toFixed(1)},${e.p.z.toFixed(1)}`,
+      x: e.p.x, y: e.y, z: e.p.z, rotY: e.rotY,
+    }))
+    const meshes = instanceKindVaried(kind, placements, 'furn_all')
+    if (meshes) {
+      meshes.forEach((mesh, i) => { mesh.name = i === 0 ? name : `${name} #${i}` })
+      group.add(...meshes)
     } else {
       addInstanced(geo, mat, list, name)
     }

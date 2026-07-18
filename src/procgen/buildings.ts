@@ -230,7 +230,10 @@ export function buildEnhancedBuilding(b: BuildingFeature, res: BuildingResolutio
  * Fit an arbitrary imported model into a building slot: uniform-scale to the
  * footprint extent, ground it at y=0, center it on the footprint centroid.
  */
-export function fitToSlot(model: THREE.Object3D, b: BuildingFeature): THREE.Group {
+// Fit a library GLB into a building's footprint slot. Returns null for a
+// degenerate model (no renderable mesh) so the caller falls back to procedural
+// instead of placing an invisible building at y=-Infinity.
+export function fitToSlot(model: THREE.Object3D, b: BuildingFeature): THREE.Group | null {
   const c = footprintCentroid(b.footprint)
   let minX = Infinity
   let maxX = -Infinity
@@ -246,16 +249,25 @@ export function fitToSlot(model: THREE.Object3D, b: BuildingFeature): THREE.Grou
 
   const bbox = new THREE.Box3().setFromObject(model)
   const size = bbox.getSize(new THREE.Vector3())
-  const modelExtent = Math.max(size.x, size.z) || 1
-  const scale = slotExtent / modelExtent
-  const center = bbox.getCenter(new THREE.Vector3())
+  // Guard: an empty/degenerate bbox (GLB with no mesh) → bail to procedural.
+  if (![size.x, size.y, size.z].every((v) => Number.isFinite(v) && v > 1e-3)) return null
 
+  // Height-aware fit: scale the footprint (XZ) to the slot AND the height (Y) to
+  // the building's REAL height, so a tall building stays tall instead of
+  // collapsing to the model's own squat proportions (the "buildings disappear"
+  // bug). Clamp the vertical:horizontal ratio so we don't stretch windows absurdly.
+  const modelExtent = Math.max(size.x, size.z) || 1
+  const scaleXZ = slotExtent / modelExtent
+  const targetH = b.heightM > 1 ? b.heightM : size.y * scaleXZ
+  const ratio = Math.min(Math.max(targetH / size.y / scaleXZ, 0.4), 3)
+  const scaleY = scaleXZ * ratio
+
+  const center = bbox.getCenter(new THREE.Vector3())
   const wrapper = new THREE.Group()
-  model.position.sub(center) // center at origin
-  model.position.y += size.y / 2 - (center.y - bbox.min.y) + (bbox.min.y - center.y) // will re-ground below
+  model.position.set(-center.x, -center.y, -center.z) // center at origin
   const inner = new THREE.Group()
   inner.add(model)
-  inner.scale.setScalar(scale)
+  inner.scale.set(scaleXZ, scaleY, scaleXZ)
   wrapper.add(inner)
 
   // re-ground precisely after scaling, then sink the base below grade by the
