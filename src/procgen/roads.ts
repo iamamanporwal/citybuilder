@@ -30,6 +30,9 @@ const Y_MARK = 0.055
 const Y_DECAL = 0.06
 const Y_DISC = 0.065
 const Y_CROSSWALK = 0.07
+// Pedestrian plazas/streets sit on a raised slab (curb ~14 cm above grade) so
+// they read as an uplifted pedestrian area rather than flush pavement.
+const PLAZA_CURB_H = 0.14
 
 // Stop lines sit on through-classes only (residential/service/living_street
 // junctions in a dense old town would otherwise get a painted bar at every arm),
@@ -331,8 +334,21 @@ export function buildRoads(
     const layerProfile = (line: Vec2[], layerY: number): number | number[] =>
       elevated ? line.map((p) => surfElev(p) + layerY) : layerY
 
-    const surface = ribbonGeometry(left, right, profile)
-    if (isPath) planarUvXZ(surface)
+    // Pedestrian ways (plazas / pedestrian streets) render as a RAISED slab with
+    // a curb skirt — like a sidewalk — instead of a flush ribbon, so they read
+    // as an uplifted pedestrian area, not pavement at road level. A raised slab
+    // (bbox height > 0.1 m) is exempt from the flat-layer coplanar flicker check
+    // (see resolver/lints.ts), so overlapping plaza ways stay safe. Footways/
+    // cycleways/crossings stay flush (they cross carriageways untrimmed). Only
+    // flat (non-elevated) pedestrian ways are raised; elevated ones stay flush.
+    const isPlaza = r.roadClass === 'pedestrian' && !elevated
+    let surface: THREE.BufferGeometry
+    if (isPlaza) {
+      surface = raisedRibbonGeometry(left, right, PLAZA_CURB_H, 0)
+    } else {
+      surface = ribbonGeometry(left, right, profile)
+      if (isPath) planarUvXZ(surface)
+    }
     const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ':uv')))
     mesh.name = r.name ?? `${r.roadClass} road`
     mesh.userData.objectId = r.id
