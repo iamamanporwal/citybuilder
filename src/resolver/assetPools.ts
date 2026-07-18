@@ -44,6 +44,19 @@ const assetsById = new Map<string, LibraryAsset>(
 )
 const pools = manifest.pools as Record<string, Pool>
 
+// Runtime curation allowlist (set by the app from the in-editor Curate studio).
+// null  → no filter, every pooled asset is usable (default; used by tests + when
+//         curation hasn't been applied).
+// Set   → only these asset ids are usable; an empty set means "use nothing"
+//         (all procedural). Per-kind on/off is expressed by which ids are in here.
+let activeIds: Set<string> | null = null
+export function setActiveCuration(ids: Set<string> | null): void {
+  activeIds = ids
+}
+export function isAssetActive(id: string): boolean {
+  return activeIds === null || activeIds.has(id)
+}
+
 export function libraryAsset(id: string): LibraryAsset | undefined {
   return assetsById.get(id)
 }
@@ -62,7 +75,7 @@ export function pooledAssetsForTag(osmTag: string): LibraryAsset[] {
   for (const { pool } of poolsForTag(osmTag)) {
     if (pool.referenceOnly) continue
     for (const e of pool.entries) {
-      if (seen.has(e.id)) continue
+      if (seen.has(e.id) || !isAssetActive(e.id)) continue
       seen.add(e.id)
       const a = assetsById.get(e.id)
       if (a) out.push(a)
@@ -78,7 +91,7 @@ export function pooledAssetsOfSemantic(semantic: string): LibraryAsset[] {
   for (const pool of Object.values(pools)) {
     if (pool.semantic !== semantic || pool.referenceOnly) continue
     for (const e of pool.entries) {
-      if (seen.has(e.id)) continue
+      if (seen.has(e.id) || !isAssetActive(e.id)) continue
       seen.add(e.id)
       const a = assetsById.get(e.id)
       if (a) out.push(a)
@@ -98,14 +111,16 @@ export function pickAssetFor(
   featureId: string,
   style?: string,
 ): LibraryAsset | null {
-  const candidates = poolsForTag(osmTag).filter(
-    ({ pool }) => !pool.referenceOnly && (!style || pool.style === style),
-  )
+  const candidates = poolsForTag(osmTag)
+    .filter(({ pool }) => !pool.referenceOnly && (!style || pool.style === style))
+    // honor the runtime curation allowlist — drop entries the user didn't enable
+    .map(({ key, pool }) => ({ key, entries: pool.entries.filter(e => isAssetActive(e.id)) }))
+    .filter(c => c.entries.length)
   if (!candidates.length) return null
-  const { key, pool } =
+  const { key, entries } =
     candidates[Math.floor(hash01(featureId + '|style') * candidates.length)]
-  const entries = pool.entries.map(e => ({ value: e.id, weight: e.weight }))
-  const id = pickWeighted(entries, hash01(featureId + '|' + key))
+  const weighted = entries.map(e => ({ value: e.id, weight: e.weight }))
+  const id = pickWeighted(weighted, hash01(featureId + '|' + key))
   return assetsById.get(id) ?? null
 }
 

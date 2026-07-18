@@ -18,17 +18,9 @@ const LIB_DIR = join(ROOT, 'assets', 'library')
 const OUT_MANIFEST = join(ROOT, 'assets', 'manifest.json')
 const OUT_COVERAGE = join(ROOT, 'assets', 'coverage-report.md')
 
-// Optional human curation allowlist (from the Curate studio's Apply export). When
-// present, ONLY these placeable assets are pooled — the city draws from exactly
-// the picked variants. Reference-only assets (roads) are unaffected. Delete the
-// file to un-curate. See assets/curation-selection.json.
-const curatedIds = (() => {
-  try {
-    const sel = JSON.parse(readFileSync(join(ROOT, 'assets', 'curation-selection.json'), 'utf8'))
-    const ids = new Set(Object.values(sel.byKind ?? {}).flat())
-    return ids.size ? ids : null
-  } catch { return null }
-})()
+// NOTE: curation is applied at RUNTIME now (in-editor Curate studio → live
+// allowlist via assets/curation-selection.json seed → localStorage). The manifest
+// therefore pools EVERY placeable asset; the app decides what's actually used.
 
 // ---------------------------------------------------------------------------
 // Classification lexicon — ordered; first match wins.
@@ -295,9 +287,6 @@ for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).i
       attribution: label?.attribution,
       sourceUrl: label?.sourceUrl,
       flags,
-      // whether this asset is in the active curation allowlist (true when no
-      // curation file exists — everything is "in" by default)
-      curated: curatedIds ? curatedIds.has(`${pack}/${name}`) : true,
     }
     assets.push(asset)
     if (flags.length) reviewFlags.push({ id: asset.id, flags, sizeMeters: asset.sizeMeters, triangles: geo.tris })
@@ -327,8 +316,9 @@ const isPoolable = (a) => !a.flags.some(f => POOL_EXCLUDING.includes(f))
 const pools = {}
 for (const a of assets) {
   if (!isPoolable(a)) continue
-  // curation allowlist gates PLACEABLE assets only (roads/reference stay as-is)
-  if (curatedIds && !a.referenceOnly && !curatedIds.has(a.id)) continue
+  // NOTE: curation is now applied at RUNTIME (in-editor Curate studio → live
+  // allowlist), so the manifest pools EVERY placeable asset. curation-selection.json
+  // is only the seed for the runtime default (loaded by the app, not here).
   for (const tag of [...a.osmTags, ...a.internalTags]) {
     const key = `${tag}|${a.style}`
     let weight = /noWear/i.test(a.id) ? 0.5 : 1
@@ -344,11 +334,9 @@ const manifest = {
   pickContract: "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   counts: {
     assets: assets.length,
-    pooled: assets.filter(a => isPoolable(a) && (a.osmTags.length || a.internalTags.length) && (!curatedIds || a.referenceOnly || curatedIds.has(a.id))).length,
+    pooled: assets.filter(a => isPoolable(a) && (a.osmTags.length || a.internalTags.length)).length,
     flaggedForReview: reviewFlags.length,
     pools: Object.keys(pools).length,
-    curationActive: !!curatedIds,
-    curatedSelected: curatedIds ? curatedIds.size : null,
   },
   assets,
   pools,

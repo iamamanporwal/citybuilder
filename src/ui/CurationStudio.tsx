@@ -4,6 +4,8 @@ import { Bounds, Center, OrbitControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { useEditor } from '../state/store'
 import { curationCandidates, type CurationCandidate } from '../resolver/assetPools'
+import { rebuildWithCuration } from '../app/buildCity'
+import type { CurationMap } from '../state/curation'
 
 // ---------------------------------------------------------------------------
 // Curate Asset Library — a visual studio to hand-pick the best 3D model
@@ -59,19 +61,26 @@ export function CurationStudio() {
   const kinds = useMemo(() => (open ? curationCandidates() : []), [open])
   const [activeKind, setActiveKind] = useState<string>('')
   const [preview, setPreview] = useState<string | null>(null)
-  // selection: kind → Set<assetId>. Initialized to the recommended (light) picks.
+  // Local edit state, seeded from the committed in-app curation (store). `enabled`
+  // = the per-kind checkbox (use library vs procedural); `selected` = which model
+  // ids when enabled. Committed live on Apply.
+  const curation = useEditor((s) => s.curation)
   const [selected, setSelected] = useState<Map<string, Set<string>>>(new Map())
+  const [enabled, setEnabled] = useState<Map<string, boolean>>(new Map())
 
   useEffect(() => {
     if (!open || !kinds.length) return
     setActiveKind((k) => k || kinds[0].kind)
-    setSelected((prev) => {
-      if (prev.size) return prev
-      const init = new Map<string, Set<string>>()
-      for (const k of kinds) init.set(k.kind, new Set(k.candidates.filter((c) => c.recommended).map((c) => c.id)))
-      return init
-    })
-  }, [open, kinds])
+    const sel = new Map<string, Set<string>>()
+    const en = new Map<string, boolean>()
+    for (const k of kinds) {
+      const c = curation[k.kind]
+      sel.set(k.kind, new Set(c?.ids ?? []))
+      en.set(k.kind, c?.enabled ?? false)
+    }
+    setSelected(sel)
+    setEnabled(en)
+  }, [open, kinds, curation])
 
   useEffect(() => {
     if (!open) return
@@ -83,45 +92,41 @@ export function CurationStudio() {
   if (!open) return null
   const active = kinds.find((k) => k.kind === activeKind) ?? kinds[0]
   const activeSel = selected.get(active?.kind) ?? new Set<string>()
-  const totalSelected = [...selected.values()].reduce((n, s) => n + s.size, 0)
+  const activeEnabled = enabled.get(active?.kind) ?? false
+  // count only kinds that are enabled (their models will actually be used)
+  const enabledKinds = kinds.filter((k) => enabled.get(k.kind))
+  const liveCount = enabledKinds.reduce((n, k) => n + (selected.get(k.kind)?.size ?? 0), 0)
 
-  const toggle = (kind: string, id: string) =>
+  const toggle = (kind: string, id: string) => {
+    const adding = !selected.get(kind)?.has(id)
     setSelected((prev) => {
       const next = new Map(prev)
       const set = new Set(next.get(kind) ?? [])
-      set.has(id) ? set.delete(id) : set.add(id)
+      adding ? set.add(id) : set.delete(id)
       next.set(kind, set)
       return next
     })
+    // picking a model implies you want this thing from the library → auto-enable
+    if (adding) setEnabled((prev) => (prev.get(kind) ? prev : new Map(prev).set(kind, true)))
+  }
 
+  const toggleEnabled = (kind: string) =>
+    setEnabled((prev) => {
+      const next = new Map(prev)
+      next.set(kind, !next.get(kind))
+      return next
+    })
+
+  // Commit live into the app (persisted) and rebuild the scene — no download.
   const apply = () => {
-    const byId = new Map(kinds.flatMap((k) => k.candidates.map((c) => [c.id, { kind: k.kind, c }] as const)))
-    const selections: Record<string, unknown[]> = {}
-    for (const [kind, ids] of selected) {
-      if (!ids.size) continue
-      selections[kind] = [...ids].map((id) => {
-        const c = byId.get(id)!.c
-        return {
-          id: c.id, name: c.name, url: c.url, role: c.role, semantic: c.semantic,
-          osmTags: c.osmTags, triangles: c.triangles, bytes: c.bytes, dims: c.dims,
-          materials: c.materials, textures: c.textures, weightClass: c.weightClass,
-          source: c.source, license: c.license,
-        }
-      })
+    const map: CurationMap = {}
+    for (const k of kinds) {
+      const ids = [...(selected.get(k.kind) ?? [])]
+      const en = enabled.get(k.kind) ?? false
+      if (en || ids.length) map[k.kind] = { enabled: en, ids }
     }
-    const payload = {
-      schema: 'citybuilder.curation/v1',
-      generatedAt: new Date().toISOString(),
-      totalSelected,
-      note: 'Hand back to Claude to bake a curated asset library from exactly these picks.',
-      selections,
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'asset-curation.json'
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    setOpen(false)
+    void rebuildWithCuration(map)
   }
 
   return (
@@ -129,28 +134,38 @@ export function CurationStudio() {
       <div className="cur-header">
         <div>
           <div className="cur-title">🎛️ Curate Asset Library</div>
-          <div className="cur-sub">Pick the best model variant(s) per thing — lighter + engine-compatible wins. {totalSelected} selected.</div>
+          <div className="cur-sub">
+            ✓ a thing on the left to use library models for it; leave it unchecked to keep procedural.
+            Apply updates the map live. {enabledKinds.length} of {kinds.length} kinds on · {liveCount} models.
+          </div>
         </div>
         <div className="cur-header-actions">
-          <button className="cur-apply" onClick={apply} disabled={!totalSelected}>⬇ Apply · export {totalSelected}</button>
-          <button className="cur-close" onClick={() => setOpen(false)} title="Close (Esc)">✕</button>
+          <button className="cur-apply" onClick={apply}>✓ Apply to map</button>
+          <button className="cur-close" onClick={() => setOpen(false)} title="Close without applying (Esc)">✕</button>
         </div>
       </div>
 
       <div className="cur-body">
-        {/* left rail: kinds */}
+        {/* left rail: kinds — checkbox = use library for this thing; row = inspect */}
         <div className="cur-rail">
           {kinds.map((k) => {
             const sel = selected.get(k.kind)?.size ?? 0
+            const on = enabled.get(k.kind) ?? false
             return (
-              <button
-                key={k.kind}
-                className={k.kind === active?.kind ? 'cur-rail-item active' : 'cur-rail-item'}
-                onClick={() => { setActiveKind(k.kind); setPreview(null) }}
-              >
-                <span className="cur-rail-label">{k.label}</span>
-                <span className="cur-rail-count">{sel}/{k.candidates.length}</span>
-              </button>
+              <div key={k.kind} className={k.kind === active?.kind ? 'cur-rail-item active' : 'cur-rail-item'}>
+                <input
+                  type="checkbox"
+                  className="cur-rail-check"
+                  checked={on}
+                  onChange={() => toggleEnabled(k.kind)}
+                  title={on ? 'Using library models — uncheck for procedural' : 'Procedural — check to use library models'}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <button className="cur-rail-btn" onClick={() => { setActiveKind(k.kind); setPreview(null) }}>
+                  <span className="cur-rail-label">{k.label}</span>
+                  <span className="cur-rail-count">{on ? `${sel}/${k.candidates.length}` : 'proc'}</span>
+                </button>
+              </div>
             )
           })}
         </div>
@@ -168,9 +183,16 @@ export function CurationStudio() {
 
         {/* candidates (right) */}
         <div className="cur-candidates">
-          <div className="cur-col-title">
-            Models — choose any ({active?.candidates.length ?? 0} candidates, sorted lightest first)
+          <div className="cur-col-title cur-cand-head">
+            <span>Models — {active?.candidates.length ?? 0} candidates (lightest first)</span>
+            <label className="cur-use-toggle" title="Use library models for this thing in the map">
+              <input type="checkbox" checked={activeEnabled} onChange={() => toggleEnabled(active.kind)} />
+              <span>{activeEnabled ? 'Using library' : 'Procedural (off)'}</span>
+            </label>
           </div>
+          {!activeEnabled && (
+            <div className="cur-cand-hint">This thing is <b>procedural</b>. Check the box above (or pick a model) to use library variants for it.</div>
+          )}
           <div className="cur-grid">
             {active?.candidates.map((c) => {
               const on = activeSel.has(c.id)

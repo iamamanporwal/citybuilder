@@ -12,6 +12,7 @@ import type {
 } from '../types'
 import { applyBuildingMaterial, buildScene, currentBuildingMaterial } from '../scene/registry'
 import type { BuildingMaterial } from '../scene/registry'
+import { loadCuration, saveCuration, type CurationMap } from './curation'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
 import { clampRoadScale } from '../procgen/roadScale'
 import type { ResolvedContext } from '../resolver/types'
@@ -56,6 +57,7 @@ interface EditorState {
   fxPreview: boolean
   quality3d: Quality3d
   useLibraryAssets: boolean
+  curation: CurationMap
   useCorridorElevation: boolean
   roadScale: number
   contextInfo: ContextInfo | null
@@ -76,6 +78,7 @@ interface EditorState {
   setFxPreview: (v: boolean) => void
   setQuality3d: (v: Quality3d) => void
   setUseLibraryAssets: (v: boolean) => void
+  setCuration: (c: CurationMap) => void
   setUseCorridorElevation: (v: boolean) => void
   setRoadScale: (v: number) => void
   setLintReport: (w: LintWarning[]) => void
@@ -139,6 +142,11 @@ function applyCommand(state: EditorState, cmd: Command, reverse: boolean): Parti
   return { objects }
 }
 
+// Loaded once (localStorage or the committed seed). The initial library master
+// switch follows it: if the curation has any enabled kind, the curated props are
+// live on first load (buildings stay procedural per the seed).
+const INITIAL_CURATION = loadCuration()
+
 export const useEditor = create<EditorState>((set, get) => ({
   appPhase: 'picker',
   buildMessage: '',
@@ -161,10 +169,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   // settings, so the default look is unchanged; Performance/High trade fidelity
   // for framerate (see QUALITY_PRESETS + Viewport).
   quality3d: 'balanced',
-  // Local asset library is OFF by default — the Building Recognizer drives
-  // appearance. The toggle (and every library function) stays intact so it can
-  // be re-enabled and improved later (PRD §7F). See also isLibraryEnabled().
+  // Master library switch stays OFF by default (procedural-first, PRD §7F). The
+  // Curate studio pre-checks the seeded/curated kinds and one "Apply" flips this
+  // on and applies the per-kind curation live. Per-kind on/off + model ids live in
+  // `curation` (seeded from assets/curation-selection.json → localStorage).
   useLibraryAssets: false,
+  curation: INITIAL_CURATION,
   // Network elevation solve (Road Corridor Redesign §6a) — ON by default (E3).
   // Kept in sync with the config module flag (procgen/corridor/config.ts), which
   // also defaults on; the toolbar toggle flips both for instant A/B.
@@ -225,6 +235,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   setFxPreview: (v) => set({ fxPreview: v }),
   setQuality3d: (v) => set({ quality3d: v }),
   setUseLibraryAssets: (v) => set({ useLibraryAssets: v }),
+  setCuration: (c) => { saveCuration(c); set({ curation: c }) },
   setUseCorridorElevation: (v) => {
     setCorridorElevationEnabled(v)
     set({ useCorridorElevation: v })

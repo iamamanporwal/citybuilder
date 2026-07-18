@@ -4,6 +4,8 @@ import { resolveContext } from '../resolver/adapters'
 import { lintScene } from '../resolver/varietyLint'
 import { flickerLint, roadConsistencyLint, waterLint } from '../resolver/lints'
 import { loadLibraryTemplates } from '../scene/libraryTemplates'
+import { setActiveCuration } from '../resolver/assetPools'
+import { activeIdsOf } from '../state/curation'
 import { prefetchRecognizerData } from '../recognizer/prepass'
 import { sceneContext } from '../scene/registry'
 import { scaleRoadNetwork } from '../procgen/roadScale'
@@ -65,7 +67,7 @@ async function generateScene(raw: any, name: string) {
   // placeholders (falls back per-kind if an asset is missing).
   s.setBuilding('Loading 3D asset library…')
   t = now()
-  await loadLibraryTemplates(kindsPresent(graph), useEditor.getState().useLibraryAssets)
+  await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
   perf('loadLibraryTemplates', t)
   s.setBuilding('Generating roads, buildings & props…')
   await new Promise((r) => setTimeout(r, 60))
@@ -84,6 +86,19 @@ function kindsPresent(graph: CityGraph) {
 }
 
 /**
+ * Push the current in-app curation into the resolver's runtime allowlist and
+ * return whether any library assets are active. The master `useLibraryAssets`
+ * flag gates everything: off → nothing active (all procedural); on → only the
+ * enabled kinds' selected model ids are usable. Called before every (re)build.
+ */
+function applyCurationToResolver(): boolean {
+  const s = useEditor.getState()
+  const active = s.useLibraryAssets ? activeIdsOf(s.curation) : new Set<string>()
+  setActiveCuration(active)
+  return active.size > 0
+}
+
+/**
  * Toggle library assets on/off and rebuild the current scene in place (reuses
  * the cached City Graph + resolved context — no refetch). Called by the
  * toolbar toggle.
@@ -93,10 +108,28 @@ export async function rebuildWithLibraryAssets(enabled: boolean): Promise<void> 
   s.setUseLibraryAssets(enabled)
   const graph = workingGraph()
   if (!graph || !sceneContext) return
-  await loadLibraryTemplates(kindsPresent(graph), enabled)
+  await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
   s.initScene(graph, sceneContext)
   s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
   s.showToast(enabled ? 'Library 3D assets placed' : 'Reverted to procedural props')
+}
+
+/**
+ * Commit an edited curation from the Curate studio and rebuild the scene live —
+ * no download/re-import. Turns the master switch on when any kind is enabled (off
+ * when the user unchecks everything → all procedural).
+ */
+export async function rebuildWithCuration(curation: import('../state/curation').CurationMap): Promise<void> {
+  const s = useEditor.getState()
+  s.setCuration(curation)
+  s.setUseLibraryAssets(activeIdsOf(curation).size > 0)
+  const graph = workingGraph()
+  if (!graph || !sceneContext) return
+  await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
+  s.initScene(graph, sceneContext)
+  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  const on = activeIdsOf(curation).size > 0
+  s.showToast(on ? 'Asset library updated — applied to the map' : 'All kinds procedural')
 }
 
 /**
@@ -125,7 +158,7 @@ export async function rebuildWithRoadScale(factor: number): Promise<void> {
   s.setRoadScale(factor)
   const graph = workingGraph()
   if (!graph || !sceneContext) return
-  await loadLibraryTemplates(kindsPresent(graph), s.useLibraryAssets)
+  await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
   s.initScene(graph, sceneContext)
   s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
   const pct = Math.round(useEditor.getState().roadScale * 100)
