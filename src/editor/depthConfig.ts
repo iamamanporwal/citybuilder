@@ -38,6 +38,13 @@ export function depthQuantumAt(
 // Vertical layer convention (local ENU meters). Every flat surface class must
 // keep >= MIN_SEPARATION to its neighbors, and MIN_SEPARATION must exceed the
 // worst-case depth quantum (checked by flickerLint).
+// Paint layers sit only a few mm above the road so markings read as paint ON the
+// surface — a car tire (0.35 m radius, contact at the 0.05 road collider) no longer
+// clips through them. The log-depth buffer resolves gaps down to MIN_SEPARATION
+// (4 mm), so the whole paint stack is compressed to the minimum: lane markings +5 mm,
+// then wear, junction, crosswalks each +5 mm. (Previously this stack rose to 175 mm,
+// which made markings float like curbs — the "tires go through the paint" bug.)
+// Sidewalk top stays high: it is a REAL curb, not a z-fight offset.
 export const LAYER_CONVENTION: [string, number][] = [
   ['terrain', 0],
   ['water', 0.012],
@@ -47,10 +54,10 @@ export const LAYER_CONVENTION: [string, number][] = [
   ['forest floor', 0.042],
   ['path surface', 0.046], // footway/cycleway/pedestrian — no junction nodes, so they cross carriageways untrimmed; the layer gap is what prevents the fight
   ['road surface', 0.05],
-  ['wear decals', 0.08],
-  ['junction surface', 0.11],
-  ['lane markings', 0.16],
-  ['crosswalks', 0.175],
-  ['sidewalk top', 0.22],
+  ['lane markings', 0.055], // ~5 mm above the road → visually flush, tires don't clip
+  ['wear decals', 0.06],
+  ['junction surface', 0.065],
+  ['crosswalks', 0.07], // painted on top of the junction disc
+  ['sidewalk top', 0.22], // real curb height, not a paint layer
 ]
 export const MIN_SEPARATION = 0.004

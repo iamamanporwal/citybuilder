@@ -19,14 +19,17 @@ import { buildArchBridge, buildSuspensionBridge, chainCenterlines, type Landmark
 
 // vertical layer convention (see editor/depthConfig.ts LAYER_CONVENTION —
 // linter-enforced, and proven against the depth-buffer quantum):
+// Compressed paint stack (mirrors LAYER_CONVENTION in editor/depthConfig.ts):
 // terrain 0 < water .012 < grass .022 < park .032 < sand .037 < forest .042
-// < path .046 < road .05 < decals .08 < junction discs .11 < markings .16 < crosswalks .175 < sidewalk .22
+// < path .046 < road .05 < markings .055 < decals .06 < junction discs .065 < crosswalks .07 < sidewalk .22
+// Paint sits a few mm above the road so it reads as paint (tires don't clip it);
+// log-depth resolves the 4-5 mm gaps. Keep these in sync with LAYER_CONVENTION.
 const Y_PATH = 0.046 // footway/cycleway/pedestrian: no junction nodes, cross carriageways untrimmed
 const Y_ROAD = 0.05
-const Y_DECAL = 0.08
-const Y_DISC = 0.11
-const Y_MARK = 0.16
-const Y_CROSSWALK = 0.175
+const Y_MARK = 0.055
+const Y_DECAL = 0.06
+const Y_DISC = 0.065
+const Y_CROSSWALK = 0.07
 
 // Stop lines sit on through-classes only (residential/service/living_street
 // junctions in a dense old town would otherwise get a painted bar at every arm),
