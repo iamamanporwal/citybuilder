@@ -38,6 +38,31 @@ function makeFacadeTexture(lit: boolean): THREE.Texture {
 export const facadeTexture = makeFacadeTexture(false)
 export const facadeTextureEnhanced = makeFacadeTexture(true)
 
+// Worn road paint without needing UVs on the (UV-less) merged marking mesh:
+// modulate the paint color by WORLD-position noise so lane lines and crosswalks
+// fade/scuff in patches, reading as aged paint on the asphalt rather than a
+// crisp sticker. World-keyed so wear is continuous across segments.
+function withPaintWear(m: THREE.MeshStandardMaterial, key: string): THREE.MeshStandardMaterial {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCbPaintW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbPaintW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCbPaintW;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float cbW1 = sin(vCbPaintW.x * 0.42 + vCbPaintW.z * 0.31);
+        float cbW2 = sin(vCbPaintW.x * 0.19 - vCbPaintW.z * 0.53);
+        float cbWear = 0.5 + 0.5 * (cbW1 * 0.55 + cbW2 * 0.45);
+        float cbScuff = sin(vCbPaintW.x * 2.3) * sin(vCbPaintW.z * 2.1);
+        diffuseColor.rgb *= mix(0.6, 1.0, smoothstep(0.12, 0.55, cbWear)) * (0.93 + 0.07 * cbScuff);`,
+      )
+  }
+  m.customProgramCacheKey = () => key
+  return m
+}
+
 export const mats = {
   // (terrain/ground material lives in procgen/areas.ts, which stays canvas-free for headless tests)
   roadAsphalt: new THREE.MeshStandardMaterial({ color: '#4a4e55', roughness: 0.95 }),
@@ -47,10 +72,10 @@ export const mats = {
   curb: new THREE.MeshStandardMaterial({ color: '#7d7d78', roughness: 0.9 }),
   // Markings are paint on asphalt, not light sources — lit PBR so they react to
   // the game's day/night sun instead of exporting as KHR_materials_unlit.
-  // brighter, crisper paint (reads as fresh road paint against the new textured
-  // asphalt); worn-paint texturing is a follow-up (needs UVs on the merged mesh)
-  markingWhite: new THREE.MeshStandardMaterial({ color: '#f2f1ea', roughness: 0.75 }),
-  markingYellow: new THREE.MeshStandardMaterial({ color: '#e6c23e', roughness: 0.75 }),
+  // brighter paint, worn/scuffed in patches by a world-position shader so it
+  // reads as aged paint against the textured asphalt (not a crisp sticker)
+  markingWhite: withPaintWear(new THREE.MeshStandardMaterial({ color: '#f2f1ea', roughness: 0.75 }), 'cb-paint-white'),
+  markingYellow: withPaintWear(new THREE.MeshStandardMaterial({ color: '#e6c23e', roughness: 0.75 }), 'cb-paint-yellow'),
   roofDark: new THREE.MeshStandardMaterial({ color: '#4a4640', roughness: 0.95 }),
   roofEnhanced: new THREE.MeshStandardMaterial({ color: '#5a564e', roughness: 0.85 }),
   treeTrunk: new THREE.MeshStandardMaterial({ color: '#5d4a32', roughness: 1 }),
