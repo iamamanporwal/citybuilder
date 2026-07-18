@@ -257,6 +257,46 @@ export function densifyPolyline(pts: Vec2[], maxSpacing: number): Vec2[] {
   return out
 }
 
+/**
+ * Round every vertex of a (convex) ring with a curb-return fillet. Each corner is
+ * cut back by `radius` (auto-clamped to half the shorter adjacent edge so small
+ * junctions shrink their radius instead of folding) and replaced by a quadratic
+ * Bézier arc through the original vertex. For a convex input the Béziers stay
+ * inside the hull, so the result is always a simple polygon — safe to triangulate
+ * as a junction pad. `segs` arc subdivisions per corner. Used to give junction
+ * pads drivable, curvy edges instead of straight polygon chords.
+ */
+export function roundPolygon(ring: Vec2[], radius: number, segs = 4): Vec2[] {
+  const n = ring.length
+  if (n < 3 || radius <= 0) return ring
+  const out: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const prev = ring[(i - 1 + n) % n]
+    const cur = ring[i]
+    const next = ring[(i + 1) % n]
+    const vpx = prev.x - cur.x
+    const vpz = prev.z - cur.z
+    const vnx = next.x - cur.x
+    const vnz = next.z - cur.z
+    const lp = Math.hypot(vpx, vpz) || 1
+    const ln = Math.hypot(vnx, vnz) || 1
+    const cut = Math.min(radius, lp / 2, ln / 2)
+    const a = { x: cur.x + (vpx / lp) * cut, z: cur.z + (vpz / lp) * cut }
+    const b = { x: cur.x + (vnx / ln) * cut, z: cur.z + (vnz / ln) * cut }
+    out.push(a)
+    for (let s = 1; s < segs; s++) {
+      const t = s / segs
+      const mt = 1 - t
+      out.push({
+        x: mt * mt * a.x + 2 * mt * t * cur.x + t * t * b.x,
+        z: mt * mt * a.z + 2 * mt * t * cur.z + t * t * b.z,
+      })
+    }
+    out.push(b)
+  }
+  return out
+}
+
 export function polylineLength(pts: Vec2[]): number {
   let l = 0
   for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)

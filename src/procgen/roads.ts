@@ -6,7 +6,7 @@ import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/lib
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import polygonClipping from 'polygon-clipping'
-import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, roundPolygon, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
 import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, discRadius, nodeKey, NON_DRIVABLE, segCenterline, siblingFootwayBridgeIds } from './roadNetwork'
 import { buildRoadElevation, isCorridorElevationEnabled } from './corridor'
 import { DecalPlanner } from './decalPlan'
@@ -39,6 +39,16 @@ const PLAZA_CURB_H = 0.14
 // just behind the crosswalk (which occupies inward 0.5–2.7 m) on the approach.
 const STOP_LINE_CLASSES = new Set(['trunk', 'primary', 'secondary', 'tertiary'])
 const STOP_LINE_DIST = 3.15
+
+// Junction bell-mouth (network-solve path only). The paved intersection PAD
+// flares wider than the arms (JUNCTION_FLARE) and its corners are rounded with a
+// curb-return radius so turns read as drivable and the pad hugs the roads — vs.
+// the old bare disc / circle-union blob that bulged into the grass. Pad-only
+// geometry: carriageway ribbons, sidewalks and markings are untouched, so the
+// elevation/collider/renderer-parity guarantees all still hold. Flag-off keeps
+// the exact legacy convex-hull/disc pad (byte-identical).
+const JUNCTION_FLARE = 1.3
+const junctionFilletR = (maxWidth: number) => Math.min(7, Math.max(2, maxWidth * 0.45))
 
 export interface RoadBuildResult {
   roadMeshes: Map<string, THREE.Mesh>
@@ -553,6 +563,31 @@ export function buildRoads(
   const discGeoms: THREE.BufferGeometry[] = []
   const keptDiscs: { x: number; z: number; rad: number; elev: number }[] = []
 
+  // External arms entering each consolidated cluster (internal links excluded):
+  // used to mesh ONE rounded, flared junction pad per cluster (the union of the
+  // arm mouths) instead of a blobby union of member discs. Each arm carries its
+  // own node position so a spread-out bridgehead pad still hugs every mouth.
+  const clusterArms = new Map<string, { p: Vec2; d: Vec2; h: number }[]>()
+  if (consolidate) {
+    for (const r of graph.roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
+      if (elevation.isInternal(r.id)) continue
+      const h = r.widthM / 2
+      const ends: [Vec2, Vec2][] = [
+        [r.points[0], r.points[1]],
+        [r.points[r.points.length - 1], r.points[r.points.length - 2]],
+      ]
+      for (const [p, q] of ends) {
+        const c = elevation.clusterOf(nodeKey(p))
+        if (!c) continue
+        const l = Math.hypot(q.x - p.x, q.z - p.z) || 1
+        let a = clusterArms.get(c)
+        if (!a) clusterArms.set(c, (a = []))
+        a.push({ p, d: { x: (q.x - p.x) / l, z: (q.z - p.z) / l }, h })
+      }
+    }
+  }
+
   // ---- consolidated junction patches (§15): ONE merged surface per cluster —
   // the union of its member discs — at the cluster's single solved height,
   // instead of a stack of per-node pancakes at mixed heights. Member discs
@@ -560,16 +595,37 @@ export function buildRoads(
   for (const [canonical, discs] of [...clusterDiscs.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     if (discs.length < 2) continue
     const zc = elevation.nodeElevation(canonical)
-    let mp: [number, number][][][]
-    try {
-      const polys = discs.map((d) => [circleRing(d)])
-      mp = polygonClipping.union(polys[0] as never, ...(polys.slice(1) as never[])) as [number, number][][][]
-    } catch {
-      mp = discs.map((d) => [circleRing(d)])
+
+    // Preferred: ONE rounded, flared pad = the convex hull of every external arm
+    // mouth (flared laterally, pushed out along the arm to meet the trimmed
+    // ribbon) plus the member-node centres, with curb-return-rounded corners.
+    let padded = false
+    const arms = clusterArms.get(canonical)
+    if (arms && arms.length >= 2) {
+      const maxW = Math.max(...discs.map((d) => d.rad)) / 0.58
+      const corners = clusterArmHull(arms, JUNCTION_FLARE, discs.map((d) => ({ x: d.x, z: d.z })))
+      if (corners.length >= 3) {
+        const ring = roundPolygon(corners, junctionFilletR(maxW))
+        const g = junctionPatchGeometry([ring.map((p) => [p.x, p.z] as [number, number])], zc + Y_DISC)
+        if (g) {
+          discGeoms.push(g)
+          padded = true
+        }
+      }
     }
-    for (const poly of mp) {
-      const g = junctionPatchGeometry(poly, zc + Y_DISC)
-      if (g) discGeoms.push(g)
+    // Fallback (degenerate arm set): the previous circle-union blob.
+    if (!padded) {
+      let mp: [number, number][][][]
+      try {
+        const polys = discs.map((d) => [circleRing(d)])
+        mp = polygonClipping.union(polys[0] as never, ...(polys.slice(1) as never[])) as [number, number][][][]
+      } catch {
+        mp = discs.map((d) => [circleRing(d)])
+      }
+      for (const poly of mp) {
+        const g = junctionPatchGeometry(poly, zc + Y_DISC)
+        if (g) discGeoms.push(g)
+      }
     }
     for (const d of discs) keptDiscs.push({ x: d.x, z: d.z, rad: d.rad, elev: zc })
   }
@@ -616,7 +672,10 @@ export function buildRoads(
       let g: THREE.BufferGeometry | null = null
       if (arms && arms.length >= 2) {
         const setback = junctionRadius(info.p) * 0.72 - 0.6
-        const ring = junctionArmHull(info.p, arms, setback)
+        // flag-on: flare the mouths (bell-mouth) and round the corners (curb
+        // returns); flag-off keeps the exact legacy un-flared, straight hull.
+        let ring = junctionArmHull(info.p, arms, setback, consolidate ? JUNCTION_FLARE : 1)
+        if (consolidate && ring.length >= 3) ring = roundPolygon(ring, junctionFilletR(info.maxWidth))
         if (ring.length >= 3) g = junctionPatchGeometry([ring.map((p) => [p.x, p.z] as [number, number])], nodeElev + Y_DISC)
       }
       if (!g) {
@@ -884,14 +943,34 @@ function nearestIndex(cum: number[], d: number): number {
  * cases non-empty). Bounded by the roads, so — unlike the disc it replaces — it
  * never bulges into the surrounding grass/sidewalk as a circle.
  */
-function junctionArmHull(center: Vec2, arms: { d: Vec2; h: number }[], setback: number): Vec2[] {
+function junctionArmHull(center: Vec2, arms: { d: Vec2; h: number }[], setback: number, flare = 1): Vec2[] {
   const pts: Vec2[] = [center]
   for (const a of arms) {
     const perp = { x: a.d.z, z: -a.d.x }
     const bx = center.x + a.d.x * setback
     const bz = center.z + a.d.z * setback
-    pts.push({ x: bx + perp.x * a.h, z: bz + perp.z * a.h })
-    pts.push({ x: bx - perp.x * a.h, z: bz - perp.z * a.h })
+    pts.push({ x: bx + perp.x * a.h * flare, z: bz + perp.z * a.h * flare })
+    pts.push({ x: bx - perp.x * a.h * flare, z: bz - perp.z * a.h * flare })
+  }
+  return convexHull(pts)
+}
+
+/**
+ * Cluster-junction pad boundary: like junctionArmHull but each arm mouth is
+ * anchored at its OWN node (not a shared centre), pushed ~one disc-radius out
+ * along the arm so the pad reaches the trimmed ribbon ends, and flared laterally.
+ * The member-node centres seed the hull so the interior of a spread-out
+ * bridgehead is always covered. Returns the convex hull (always simple).
+ */
+function clusterArmHull(arms: { p: Vec2; d: Vec2; h: number }[], flare: number, centers: Vec2[]): Vec2[] {
+  const pts: Vec2[] = [...centers]
+  for (const a of arms) {
+    const perp = { x: a.d.z, z: -a.d.x }
+    const setback = a.h * 1.16 // ≈ discRadius(width) so the mouth meets the trimmed arm
+    const bx = a.p.x + a.d.x * setback
+    const bz = a.p.z + a.d.z * setback
+    pts.push({ x: bx + perp.x * a.h * flare, z: bz + perp.z * a.h * flare })
+    pts.push({ x: bx - perp.x * a.h * flare, z: bz - perp.z * a.h * flare })
   }
   return convexHull(pts)
 }

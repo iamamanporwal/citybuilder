@@ -117,36 +117,42 @@ describe('idempotent overdraw for same-layer surfaces', () => {
     uvIsWorldPlanar(raisedRibbonGeometry(left, right, 0.22), 0.22)
   })
 
-  it('a junction disc fully contained in a larger one is dropped', async () => {
+  it('a junction fully contained in a larger one adds no extra coplanar pad', async () => {
     const { buildRoads } = await import('../procgen/roads')
-    // wide 4-arm junction at origin (big disc) + narrow 4-arm junction 1 m away
-    // (small disc, fully contained in the big one). Arms meet at endpoints,
-    // matching OSM ways split at intersections.
-    const roads = [
+    // wide 4-arm junction at origin + a narrow 4-arm junction 1 m away, fully
+    // contained in the big one (arms meet at endpoints, like OSM ways split at
+    // intersections). The contained junction must contribute NO separate coplanar
+    // surface — whether it renders through the single-node containment drop or the
+    // cluster arm-hull, the merged intersection geometry is identical to the big
+    // junction alone (robust to the flare/curb-return pad shape, which is what
+    // makes overlapping same-layer pads safe: idempotent world-planar overdraw).
+    const big = [
       road('w_e', [{ x: 0, z: 0 }, { x: 60, z: 0 }], { widthM: 20 }),
       road('w_w', [{ x: 0, z: 0 }, { x: -60, z: 0 }], { widthM: 20 }),
       road('w_n', [{ x: 0, z: 0 }, { x: 0, z: 60 }], { widthM: 20 }),
       road('w_s', [{ x: 0, z: 0 }, { x: 0, z: -60 }], { widthM: 20 }),
+    ]
+    const small = [
       road('n_e', [{ x: 1, z: 1 }, { x: 61, z: 1 }], { widthM: 4 }),
       road('n_w', [{ x: 1, z: 1 }, { x: -59, z: 1 }], { widthM: 4 }),
       road('n_n', [{ x: 1, z: 1 }, { x: 1, z: 61 }], { widthM: 4 }),
       road('n_s', [{ x: 1, z: 1 }, { x: 1, z: -59 }], { widthM: 4 }),
     ]
-    const resolutions = new Map(roads.map((r) => [r.id, resolution]))
-    const graph = { roads, buildings: [], areas: [], pois: [] } as unknown as CityGraph
-    const result = buildRoads(graph, {} as ResolvedContext, resolutions)
-    // only the big disc's ring remains: max XZ extent equals the 20 m-road disc
-    const box = new THREE.Box3().setFromBufferAttribute(
-      result.intersections!.geometry.getAttribute('position') as THREE.BufferAttribute,
-    )
-    const bigRad = 20 * 0.58
-    expect(box.max.x).toBeCloseTo(bigRad, 1)
-    expect(box.min.x).toBeCloseTo(-bigRad, 1)
-    // a kept 1m-offset small disc would push max.x to 1 + 2.32 < bigRad, so
-    // instead prove vertex count matches exactly one disc's ring
-    const rad = bigRad
-    const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
-    expect(result.intersections!.geometry.getAttribute('position').count).toBeLessThanOrEqual(seg + 2)
+    const build = (roads: RoadSegment[]) =>
+      buildRoads(
+        { roads, buildings: [], areas: [], pois: [] } as unknown as CityGraph,
+        {} as ResolvedContext,
+        new Map(roads.map((r) => [r.id, resolution])),
+      )
+    const bigOnly = build(big)
+    const withSmall = build([...big, ...small])
+    const attr = (r: typeof bigOnly) =>
+      r.intersections!.geometry.getAttribute('position') as THREE.BufferAttribute
+    expect(attr(withSmall).count).toBe(attr(bigOnly).count) // no doubled pad
+    const boxA = new THREE.Box3().setFromBufferAttribute(attr(bigOnly))
+    const boxB = new THREE.Box3().setFromBufferAttribute(attr(withSmall))
+    expect(boxB.max.x).toBeCloseTo(boxA.max.x, 3) // identical footprint, not a wider blob
+    expect(boxB.min.x).toBeCloseTo(boxA.min.x, 3)
   })
 
   it('paths render one layer below carriageways with world-planar UVs', async () => {
