@@ -249,6 +249,7 @@ for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).i
     }
 
     const size = geo.bboxMin ? geo.bboxMax.map((v, i) => +(v - geo.bboxMin[i]).toFixed(3)) : null
+    const bytes = (() => { try { return statSync(join(LIB_DIR, pack, dir, file)).size } catch { return 0 } })()
     const flags = []
     if (cls.semantic === 'unclassified') flags.push('unclassified')
     if (!size) flags.push('no-geometry')
@@ -273,6 +274,7 @@ for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).i
       bbox: geo.bboxMin ? { min: geo.bboxMin, max: geo.bboxMax } : null,
       groundOffsetY: geo.bboxMin ? +(-geo.bboxMin[1]).toFixed(3) : 0,
       triangles: geo.tris,
+      bytes,
       lods: geo.lods,
       materials: geo.materials,
       textures: geo.textures,

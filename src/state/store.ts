@@ -61,6 +61,7 @@ interface EditorState {
   contextInfo: ContextInfo | null
   lintReport: LintWarning[]
   helpOpen: boolean
+  curationOpen: boolean
   filterAsset: AssetFilter
   search: string
   toast: string | null
@@ -87,6 +88,7 @@ interface EditorState {
   setGizmoDragging: (v: boolean) => void
   setSunTime: (t: number) => void
   setHelpOpen: (v: boolean) => void
+  setCurationOpen: (v: boolean) => void
   setFilterAsset: (f: AssetFilter) => void
   setSearch: (s: string) => void
   showToast: (msg: string) => void
@@ -172,6 +174,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   contextInfo: null,
   lintReport: [],
   helpOpen: false,
+  curationOpen: false,
   filterAsset: 'all',
   search: '',
   toast: null,
@@ -251,6 +254,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   setGizmoDragging: (v) => set({ gizmoDragging: v }),
   setSunTime: (t) => set({ sunTime: t }),
   setHelpOpen: (v) => set({ helpOpen: v }),
+  setCurationOpen: (v) => set({ curationOpen: v }),
   setFilterAsset: (f) => set({ filterAsset: f }),
   setSearch: (s) => set({ search: s }),
 

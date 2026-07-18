@@ -6,6 +6,7 @@ import { Hierarchy } from './ui/Hierarchy'
 import { Inspector } from './ui/Inspector'
 import { StatusBar } from './ui/StatusBar'
 import { HelpOverlay } from './ui/HelpOverlay'
+import { CurationStudio } from './ui/CurationStudio'
 import { AreaPicker } from './ui/AreaPicker'
 import { LoadingScreen } from './ui/LoadingScreen'
 import { frameObjects } from './editor/actions'
@@ -103,6 +104,7 @@ export default function App() {
       </div>
       <StatusBar />
       <HelpOverlay />
+      <CurationStudio />
     </div>
   )
 }

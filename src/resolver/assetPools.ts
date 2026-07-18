@@ -20,7 +20,10 @@ export interface LibraryAsset {
   sizeMeters: { x: number; y: number; z: number } | null
   groundOffsetY: number
   triangles: number
+  bytes: number
   lods: string[]
+  materials: unknown[]
+  textures: unknown[]
   source: string
   license: string
   flags: string[]
@@ -134,4 +137,123 @@ export function manifestCounts() {
     flaggedForReview: number
     pools: number
   }
+}
+
+// ---------------------------------------------------------------------------
+// Curation studio data: group every placeable (non-reference) library model by
+// a friendly "kind", with the per-model stats the studio shows so a human can
+// pick the best (lightweight + compatible) variants for each thing.
+// ---------------------------------------------------------------------------
+const POOL_EXCLUDING = ['unclassified', 'no-geometry', 'high-poly']
+// per-semantic triangle budget for a dense drivable city (mirrors the scanner's
+// MAX_TRIS) — used to grade a model light / medium / heavy.
+const TRI_BUDGET: Record<string, number> = {
+  vegetation: 8000, street_furniture: 12000, barrier: 8000,
+  landmark_prop: 45000, building: 100000, rooftop_prop: 10000,
+}
+// friendly kind grouping keyed by canonical kind → { label, procedural baseline note }.
+const KIND_META: Record<string, { label: string; procedural: string }> = {
+  tree: { label: '🌳 Trees / vegetation', procedural: 'Seeded procedural tree (species by climate/region)' },
+  street_lamp: { label: '💡 Street lights', procedural: 'Procedural lamp post (region lamp style)' },
+  bench: { label: '🪑 Benches', procedural: 'Procedural slatted bench' },
+  bin: { label: '🚮 Bins', procedural: 'Procedural waste bin' },
+  fountain: { label: '⛲ Fountains', procedural: 'Procedural basin fountain' },
+  statue: { label: '🗿 Statues / memorials', procedural: 'Procedural plinth + figure stand-in' },
+  fence: { label: '🚧 Fences / barriers', procedural: 'Procedural fence/wall run' },
+  sign: { label: '🪧 Signs', procedural: 'Procedural sign panel (regulatory signs stay procedural)' },
+  planter: { label: '🪴 Planters', procedural: 'Procedural concrete planter' },
+  bollard: { label: '🚫 Bollards', procedural: 'Procedural bollard' },
+  traffic_signal: { label: '🚦 Traffic signals', procedural: 'Procedural signal head + mast' },
+  bus_stop: { label: '🚏 Bus stops', procedural: 'Procedural shelter' },
+  fire_hydrant: { label: '🧯 Fire hydrants', procedural: 'Procedural hydrant' },
+  manhole: { label: '🕳️ Manholes / drains', procedural: 'Procedural cover decal' },
+  hvac: { label: '🌀 Rooftop HVAC', procedural: 'Procedural rooftop unit' },
+  building: { label: '🏢 Buildings', procedural: 'Procedural extrusion + recognizer facade' },
+}
+// merge role-string variants across packs into one canonical kind.
+const ROLE_ALIAS: Record<string, string> = {
+  streetlight: 'street_lamp', street_light: 'street_lamp',
+  'traffic-light': 'traffic_signal', traffic_light: 'traffic_signal', traffic_signals: 'traffic_signal',
+  'trash-can': 'bin', trash_can: 'bin',
+  'bus-stop': 'bus_stop',
+  hydrant: 'fire_hydrant',
+  drain: 'manhole',
+  complete: 'building',
+}
+
+export interface CurationCandidate {
+  id: string
+  name: string
+  url: string            // served /assetlib URL for a live preview
+  triangles: number
+  bytes: number
+  dims: { x: number; y: number; z: number } | null
+  materials: number
+  textures: number
+  weightClass: 'light' | 'medium' | 'heavy'
+  recommended: boolean   // light + not oversized → a good default keep
+  flags: string[]
+  source: string
+  license: string
+  semantic: string
+  role: string
+  osmTags: string[]
+}
+export interface CurationKind {
+  kind: string
+  label: string
+  procedural: string
+  candidates: CurationCandidate[]
+}
+
+function assetUrl(path: string): string {
+  return '/assetlib/' + path.replace(/^assets\/library\//, '')
+}
+
+/** All placeable library models grouped by kind, richest-first, with stats. */
+export function curationCandidates(): CurationKind[] {
+  const placeable = (manifest.assets as LibraryAsset[]).filter(
+    (a) =>
+      !a.flags.some((f) => POOL_EXCLUDING.includes(f)) &&
+      !a.referenceOnly &&
+      a.semantic !== 'building_module' &&
+      a.semantic !== 'road_module' &&
+      a.semantic !== 'road_decal' &&
+      a.semantic !== 'sidewalk_module' &&
+      (a.osmTags.length > 0 || a.internalTags.length > 0),
+  )
+  const byKind = new Map<string, CurationCandidate[]>()
+  for (const a of placeable) {
+    const kind = ROLE_ALIAS[a.role] ?? (KIND_META[a.role] ? a.role : a.role || a.semantic)
+    const budget = TRI_BUDGET[a.semantic] ?? 12000
+    const weightClass = a.triangles <= budget * 0.34 ? 'light' : a.triangles <= budget ? 'medium' : 'heavy'
+    const cand: CurationCandidate = {
+      id: a.id,
+      name: a.id.split('/').pop() ?? a.id,
+      url: assetUrl(a.path),
+      triangles: a.triangles,
+      bytes: a.bytes ?? 0,
+      dims: a.sizeMeters,
+      materials: a.materials?.length ?? 0,
+      textures: a.textures?.length ?? 0,
+      weightClass,
+      recommended: weightClass === 'light' && !a.flags.includes('oversized'),
+      flags: a.flags,
+      source: a.source,
+      license: a.license,
+      semantic: a.semantic,
+      role: a.role,
+      osmTags: a.osmTags,
+    }
+    if (!byKind.has(kind)) byKind.set(kind, [])
+    byKind.get(kind)!.push(cand)
+  }
+  return [...byKind.entries()]
+    .map(([kind, candidates]) => ({
+      kind,
+      label: KIND_META[kind]?.label ?? kind,
+      procedural: KIND_META[kind]?.procedural ?? 'Procedural stand-in',
+      candidates: candidates.sort((a, b) => a.triangles - b.triangles), // lightest first
+    }))
+    .sort((a, b) => b.candidates.length - a.candidates.length)
 }

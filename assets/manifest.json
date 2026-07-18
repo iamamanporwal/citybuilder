@@ -44,6 +44,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 18,
+      "bytes": 4650,
       "lods": [
         "LOD0"
       ],
@@ -95,6 +96,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 18,
+      "bytes": 4695,
       "lods": [
         "LOD0"
       ],
@@ -146,6 +148,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 52,
+      "bytes": 6828,
       "lods": [
         "LOD0"
       ],
@@ -201,6 +204,7 @@
       },
       "groundOffsetY": 0.002,
       "triangles": 380,
+      "bytes": 2399,
       "lods": [
         "LOD0"
       ],
@@ -251,6 +255,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 32,
+      "bytes": 2333,
       "lods": [
         "LOD0"
       ],
@@ -301,6 +306,7 @@
       },
       "groundOffsetY": 0.002,
       "triangles": 298,
+      "bytes": 4197,
       "lods": [
         "LOD0"
       ],
@@ -355,6 +361,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 12,
+      "bytes": 4623,
       "lods": [
         "LOD0"
       ],
@@ -406,6 +413,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 80,
+      "bytes": 5016,
       "lods": [
         "LOD0"
       ],
@@ -460,6 +468,7 @@
       },
       "groundOffsetY": -2,
       "triangles": 108,
+      "bytes": 5016,
       "lods": [
         "LOD0"
       ],
@@ -514,6 +523,7 @@
       },
       "groundOffsetY": -2.8,
       "triangles": 60,
+      "bytes": 2781,
       "lods": [
         "LOD0"
       ],
@@ -564,6 +574,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 32,
+      "bytes": 2888,
       "lods": [
         "LOD0"
       ],
@@ -614,6 +625,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 32,
+      "bytes": 2776,
       "lods": [
         "LOD0"
       ],
@@ -664,6 +676,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 80,
+      "bytes": 5008,
       "lods": [
         "LOD0"
       ],
@@ -718,6 +731,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 84,
+      "bytes": 4181,
       "lods": [
         "LOD0"
       ],
@@ -772,6 +786,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 48,
+      "bytes": 2387,
       "lods": [
         "LOD0"
       ],
@@ -822,6 +837,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 84,
+      "bytes": 4189,
       "lods": [
         "LOD0"
       ],
@@ -876,6 +892,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 24,
+      "bytes": 6841,
       "lods": [
         "LOD0"
       ],
@@ -931,6 +948,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 568,
+      "bytes": 10724,
       "lods": [
         "LOD0"
       ],
@@ -988,6 +1006,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 656,
+      "bytes": 9650,
       "lods": [
         "LOD0"
       ],
@@ -1045,6 +1064,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 488,
+      "bytes": 9646,
       "lods": [
         "LOD0"
       ],
@@ -1102,6 +1122,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 72,
+      "bytes": 6854,
       "lods": [
         "LOD0"
       ],
@@ -1157,6 +1178,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 2,
+      "bytes": 2727,
       "lods": [
         "LOD0"
       ],
@@ -1207,6 +1229,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 4,
+      "bytes": 2728,
       "lods": [
         "LOD0"
       ],
@@ -1257,6 +1280,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 4,
+      "bytes": 2728,
       "lods": [
         "LOD0"
       ],
@@ -1307,6 +1331,7 @@
       },
       "groundOffsetY": 0.168,
       "triangles": 312,
+      "bytes": 2370,
       "lods": [
         "LOD0"
       ],
@@ -1357,6 +1382,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 4,
+      "bytes": 4576,
       "lods": [
         "LOD0"
       ],
@@ -1408,6 +1434,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 4171,
       "lods": [
         "LOD0"
       ],
@@ -1459,6 +1486,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 4157,
       "lods": [
         "LOD0"
       ],
@@ -1510,6 +1538,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 8,
+      "bytes": 4599,
       "lods": [
         "LOD0"
       ],
@@ -1561,6 +1590,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 794,
+      "bytes": 13012,
       "lods": [
         "LOD0"
       ],
@@ -1622,6 +1652,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 38,
+      "bytes": 6883,
       "lods": [
         "LOD0"
       ],
@@ -1677,6 +1708,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 38,
+      "bytes": 6877,
       "lods": [
         "LOD0"
       ],
@@ -1732,6 +1764,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 24,
+      "bytes": 6848,
       "lods": [
         "LOD0"
       ],
@@ -1787,6 +1820,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 16,
+      "bytes": 6806,
       "lods": [
         "LOD0"
       ],
@@ -1842,6 +1876,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1137,
+      "bytes": 9758,
       "lods": [
         "LOD0"
       ],
@@ -1899,6 +1934,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 190,
+      "bytes": 10672,
       "lods": [
         "LOD0"
       ],
@@ -1956,6 +1992,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 426,
+      "bytes": 10746,
       "lods": [
         "LOD0"
       ],
@@ -2013,6 +2050,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 652,
+      "bytes": 11678,
       "lods": [
         "LOD0"
       ],
@@ -2072,6 +2110,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 45122,
+      "bytes": 22880,
       "lods": [
         "LOD0"
       ],
@@ -2150,6 +2189,7 @@
       },
       "groundOffsetY": 0.01,
       "triangles": 25612,
+      "bytes": 25244,
       "lods": [
         "LOD0"
       ],
@@ -2225,6 +2265,7 @@
       },
       "groundOffsetY": 0.012,
       "triangles": 18344,
+      "bytes": 27435,
       "lods": [
         "LOD0"
       ],
@@ -2303,6 +2344,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 29,
+      "bytes": 2735,
       "lods": [
         "LOD0"
       ],
@@ -2353,6 +2395,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 29,
+      "bytes": 2735,
       "lods": [
         "LOD0"
       ],
@@ -2403,6 +2446,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 2719,
       "lods": [
         "LOD0"
       ],
@@ -2453,6 +2497,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 2709,
       "lods": [
         "LOD0"
       ],
@@ -2503,6 +2548,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 2709,
       "lods": [
         "LOD0"
       ],
@@ -2553,6 +2599,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 90,
+      "bytes": 2612,
       "lods": [
         "LOD0"
       ],
@@ -2603,6 +2650,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 90,
+      "bytes": 2612,
       "lods": [
         "LOD0"
       ],
@@ -2653,6 +2701,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 30,
+      "bytes": 2595,
       "lods": [
         "LOD0"
       ],
@@ -2703,6 +2752,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 72,
+      "bytes": 2611,
       "lods": [
         "LOD0"
       ],
@@ -2753,6 +2803,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 72,
+      "bytes": 2611,
       "lods": [
         "LOD0"
       ],
@@ -2803,6 +2854,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 160,
+      "bytes": 2327,
       "lods": [
         "LOD0"
       ],
@@ -2853,6 +2905,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 160,
+      "bytes": 2343,
       "lods": [
         "LOD0"
       ],
@@ -2903,6 +2956,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 112,
+      "bytes": 2303,
       "lods": [
         "LOD0"
       ],
@@ -2953,6 +3007,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 116,
+      "bytes": 2310,
       "lods": [
         "LOD0"
       ],
@@ -3003,6 +3058,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 116,
+      "bytes": 2310,
       "lods": [
         "LOD0"
       ],
@@ -3052,6 +3108,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 10,
+      "bytes": 1881,
       "lods": [
         "LOD0"
       ],
@@ -3099,6 +3156,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 10,
+      "bytes": 1883,
       "lods": [
         "LOD0"
       ],
@@ -3146,6 +3204,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 2,
+      "bytes": 1871,
       "lods": [
         "LOD0"
       ],
@@ -3193,6 +3252,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 4,
+      "bytes": 1872,
       "lods": [
         "LOD0"
       ],
@@ -3240,6 +3300,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 4,
+      "bytes": 2082,
       "lods": [
         "LOD0"
       ],
@@ -3287,6 +3348,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 8,
+      "bytes": 1868,
       "lods": [
         "LOD0"
       ],
@@ -3334,6 +3396,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 2,
+      "bytes": 2039,
       "lods": [
         "LOD0"
       ],
@@ -3382,6 +3445,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 4,
+      "bytes": 1929,
       "lods": [
         "LOD0"
       ],
@@ -3430,6 +3494,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 2,
+      "bytes": 1863,
       "lods": [
         "LOD0"
       ],
@@ -3477,6 +3542,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 32,
+      "bytes": 2085,
       "lods": [
         "LOD0"
       ],
@@ -3524,6 +3590,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 48,
+      "bytes": 2094,
       "lods": [
         "LOD0"
       ],
@@ -3571,6 +3638,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 48,
+      "bytes": 2099,
       "lods": [
         "LOD0"
       ],
@@ -3618,6 +3686,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 48,
+      "bytes": 2063,
       "lods": [
         "LOD0"
       ],
@@ -3665,6 +3734,7 @@
       },
       "groundOffsetY": 0.11,
       "triangles": 2,
+      "bytes": 1856,
       "lods": [
         "LOD0"
       ],
@@ -3712,6 +3782,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 2,
+      "bytes": 1852,
       "lods": [
         "LOD0"
       ],
@@ -3759,6 +3830,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 2,
+      "bytes": 1852,
       "lods": [
         "LOD0"
       ],
@@ -3806,6 +3878,7 @@
       },
       "groundOffsetY": 0.13,
       "triangles": 2,
+      "bytes": 1850,
       "lods": [
         "LOD0"
       ],
@@ -3854,6 +3927,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 676,
+      "bytes": 2372,
       "lods": [
         "LOD0"
       ],
@@ -3904,6 +3978,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 186,
+      "bytes": 4722,
       "lods": [
         "LOD0"
       ],
@@ -3955,6 +4030,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 278,
+      "bytes": 4722,
       "lods": [
         "LOD0"
       ],
@@ -4006,6 +4082,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 239,
+      "bytes": 4713,
       "lods": [
         "LOD0"
       ],
@@ -4057,6 +4134,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 860,
+      "bytes": 7990,
       "lods": [
         "LOD0"
       ],
@@ -4113,6 +4191,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 438,
+      "bytes": 3810,
       "lods": [
         "LOD0"
       ],
@@ -4164,6 +4243,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 12,
+      "bytes": 2395,
       "lods": [
         "LOD0"
       ],
@@ -4214,6 +4294,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 12,
+      "bytes": 2391,
       "lods": [
         "LOD0"
       ],
@@ -4264,6 +4345,7 @@
       },
       "groundOffsetY": 0.1,
       "triangles": 4,
+      "bytes": 3641,
       "lods": [
         "LOD0"
       ],
@@ -4318,6 +4400,7 @@
       },
       "groundOffsetY": 0.1,
       "triangles": 16,
+      "bytes": 4043,
       "lods": [
         "LOD0"
       ],
@@ -4372,6 +4455,7 @@
       },
       "groundOffsetY": 0.1,
       "triangles": 8,
+      "bytes": 4098,
       "lods": [
         "LOD0"
       ],
@@ -4426,6 +4510,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 112,
+      "bytes": 2403,
       "lods": [
         "LOD0"
       ],
@@ -4476,6 +4561,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 16,
+      "bytes": 2394,
       "lods": [
         "LOD0"
       ],
@@ -4526,6 +4612,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 112,
+      "bytes": 2417,
       "lods": [
         "LOD0"
       ],
@@ -4576,6 +4663,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 16,
+      "bytes": 2407,
       "lods": [
         "LOD0"
       ],
@@ -4626,6 +4714,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 120,
+      "bytes": 2412,
       "lods": [
         "LOD0"
       ],
@@ -4676,6 +4765,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 120,
+      "bytes": 2400,
       "lods": [
         "LOD0"
       ],
@@ -4726,6 +4816,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 8,
+      "bytes": 4482,
       "lods": [
         "LOD0"
       ],
@@ -4780,6 +4871,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 36,
+      "bytes": 6566,
       "lods": [
         "LOD0"
       ],
@@ -4838,6 +4930,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 156,
+      "bytes": 9945,
       "lods": [
         "LOD0"
       ],
@@ -4898,6 +4991,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 210,
+      "bytes": 6571,
       "lods": [
         "LOD0"
       ],
@@ -4950,6 +5044,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 4978,
       "lods": [
         "LOD0"
       ],
@@ -5004,6 +5099,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 18,
+      "bytes": 5040,
       "lods": [
         "LOD0"
       ],
@@ -5058,6 +5154,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 312,
+      "bytes": 6633,
       "lods": [
         "LOD0"
       ],
@@ -5110,6 +5207,7 @@
       },
       "groundOffsetY": 0.001,
       "triangles": 578,
+      "bytes": 10718,
       "lods": [
         "LOD0"
       ],
@@ -5166,6 +5264,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 136,
+      "bytes": 2376,
       "lods": [
         "LOD0"
       ],
@@ -5215,6 +5314,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 190,
+      "bytes": 2394,
       "lods": [
         "LOD0"
       ],
@@ -5265,6 +5365,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 10,
+      "bytes": 2149,
       "lods": [
         "LOD0"
       ],
@@ -5314,6 +5415,7 @@
       },
       "groundOffsetY": 0.014,
       "triangles": 118,
+      "bytes": 2198,
       "lods": [
         "LOD0"
       ],
@@ -5363,6 +5465,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 118,
+      "bytes": 4132,
       "lods": [
         "LOD0"
       ],
@@ -5417,6 +5520,7 @@
       },
       "groundOffsetY": 0.2,
       "triangles": 2,
+      "bytes": 2143,
       "lods": [
         "LOD0"
       ],
@@ -5467,6 +5571,7 @@
       },
       "groundOffsetY": 0.2,
       "triangles": 6,
+      "bytes": 2118,
       "lods": [
         "LOD0"
       ],
@@ -5517,6 +5622,7 @@
       },
       "groundOffsetY": 0.2,
       "triangles": 6,
+      "bytes": 2118,
       "lods": [
         "LOD0"
       ],
@@ -5567,6 +5673,7 @@
       },
       "groundOffsetY": 0.2,
       "triangles": 2,
+      "bytes": 2096,
       "lods": [
         "LOD0"
       ],
@@ -5617,6 +5724,7 @@
       },
       "groundOffsetY": 0.2,
       "triangles": 8,
+      "bytes": 2105,
       "lods": [
         "LOD0"
       ],
@@ -5667,6 +5775,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 4037,
       "lods": [
         "LOD0"
       ],
@@ -5721,6 +5830,7 @@
       },
       "groundOffsetY": 0.014,
       "triangles": 44,
+      "bytes": 2345,
       "lods": [
         "LOD0"
       ],
@@ -5771,6 +5881,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 10,
+      "bytes": 4146,
       "lods": [
         "LOD0"
       ],
@@ -5825,6 +5936,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 370,
+      "bytes": 8847,
       "lods": [
         "LOD0"
       ],
@@ -5885,6 +5997,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 26,
+      "bytes": 5827,
       "lods": [
         "LOD0"
       ],
@@ -5943,6 +6056,7 @@
       },
       "groundOffsetY": 0.014,
       "triangles": 76,
+      "bytes": 4132,
       "lods": [
         "LOD0"
       ],
@@ -5997,6 +6111,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 42,
+      "bytes": 5984,
       "lods": [
         "LOD0"
       ],
@@ -6055,6 +6170,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 390,
+      "bytes": 8826,
       "lods": [
         "LOD0"
       ],
@@ -6115,6 +6231,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 14,
+      "bytes": 2063,
       "lods": [
         "LOD0"
       ],
@@ -6163,6 +6280,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 97,
+      "bytes": 2630,
       "lods": [
         "LOD0"
       ],
@@ -6213,6 +6331,7 @@
       },
       "groundOffsetY": 0.146,
       "triangles": 24,
+      "bytes": 1905,
       "lods": [
         "LOD0"
       ],
@@ -6261,6 +6380,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 177,
+      "bytes": 2636,
       "lods": [
         "LOD0"
       ],
@@ -6311,6 +6431,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 42,
+      "bytes": 2356,
       "lods": [
         "LOD0"
       ],
@@ -6360,6 +6481,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 598,
+      "bytes": 4215,
       "lods": [
         "LOD0"
       ],
@@ -6414,6 +6536,7 @@
       },
       "groundOffsetY": 0.148,
       "triangles": 2,
+      "bytes": 1856,
       "lods": [
         "LOD0"
       ],
@@ -6462,6 +6585,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 60,
+      "bytes": 2586,
       "lods": [
         "LOD0"
       ],
@@ -6512,6 +6636,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 128,
+      "bytes": 4227,
       "lods": [
         "LOD0"
       ],
@@ -6566,6 +6691,7 @@
       },
       "groundOffsetY": -0.971,
       "triangles": 168,
+      "bytes": 2410,
       "lods": [
         "LOD0"
       ],
@@ -6616,6 +6742,7 @@
       },
       "groundOffsetY": -0.971,
       "triangles": 320,
+      "bytes": 2412,
       "lods": [
         "LOD0"
       ],
@@ -6666,6 +6793,7 @@
       },
       "groundOffsetY": 0.012,
       "triangles": 564,
+      "bytes": 2412,
       "lods": [
         "LOD0"
       ],
@@ -6716,6 +6844,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 16,
+      "bytes": 4301,
       "lods": [
         "LOD0"
       ],
@@ -6768,6 +6897,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 220,
+      "bytes": 6364,
       "lods": [
         "LOD0"
       ],
@@ -6824,6 +6954,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 12,
+      "bytes": 4275,
       "lods": [
         "LOD0"
       ],
@@ -6876,6 +7007,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 252,
+      "bytes": 6307,
       "lods": [
         "LOD0"
       ],
@@ -6931,6 +7063,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 892,
+      "bytes": 6432,
       "lods": [
         "LOD0"
       ],
@@ -6986,6 +7119,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 2,
+      "bytes": 2132,
       "lods": [
         "LOD0"
       ],
@@ -7035,6 +7169,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 2,
+      "bytes": 2136,
       "lods": [
         "LOD0"
       ],
@@ -7085,6 +7220,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 48,
+      "bytes": 2570,
       "lods": [
         "LOD0"
       ],
@@ -7135,6 +7271,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 49,
+      "bytes": 2581,
       "lods": [
         "LOD0"
       ],
@@ -7185,6 +7322,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 224,
+      "bytes": 2654,
       "lods": [
         "LOD0"
       ],
@@ -7235,6 +7373,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 505,
+      "bytes": 6437,
       "lods": [
         "LOD0"
       ],
@@ -7291,6 +7430,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 336,
+      "bytes": 2653,
       "lods": [
         "LOD0"
       ],
@@ -7341,6 +7481,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 634,
+      "bytes": 6433,
       "lods": [
         "LOD0"
       ],
@@ -7396,6 +7537,7 @@
       },
       "groundOffsetY": 0.15,
       "triangles": 858,
+      "bytes": 6406,
       "lods": [
         "LOD0"
       ],
@@ -7452,6 +7594,7 @@
       },
       "groundOffsetY": 0.02,
       "triangles": 10,
+      "bytes": 4918,
       "lods": [
         "LOD0"
       ],
@@ -7506,6 +7649,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 216,
+      "bytes": 2346,
       "lods": [
         "LOD0"
       ],
@@ -7556,6 +7700,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 64,
+      "bytes": 2315,
       "lods": [
         "LOD0"
       ],
@@ -7606,6 +7751,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 216,
+      "bytes": 2354,
       "lods": [
         "LOD0"
       ],
@@ -7656,6 +7802,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 68,
+      "bytes": 4905,
       "lods": [
         "LOD0"
       ],
@@ -7710,6 +7857,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 50,
+      "bytes": 4920,
       "lods": [
         "LOD0"
       ],
@@ -7764,6 +7912,7 @@
       },
       "groundOffsetY": 0.01,
       "triangles": 160,
+      "bytes": 7915,
       "lods": [
         "LOD0"
       ],
@@ -7820,6 +7969,7 @@
       },
       "groundOffsetY": -0.59,
       "triangles": 32,
+      "bytes": 2586,
       "lods": [
         "LOD0"
       ],
@@ -7870,6 +8020,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 34,
+      "bytes": 4904,
       "lods": [
         "LOD0"
       ],
@@ -7924,6 +8075,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 32,
+      "bytes": 2504,
       "lods": [
         "LOD0"
       ],
@@ -7974,6 +8126,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 574,
+      "bytes": 10727,
       "lods": [
         "LOD0"
       ],
@@ -8026,6 +8179,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 224,
+      "bytes": 5147332,
       "lods": [
         "LOD0"
       ],
@@ -8069,6 +8223,7 @@
       },
       "groundOffsetY": 0.014,
       "triangles": 606,
+      "bytes": 2708140,
       "lods": [
         "LOD0"
       ],
@@ -8112,6 +8267,7 @@
       },
       "groundOffsetY": 4.118,
       "triangles": 528,
+      "bytes": 2989244,
       "lods": [
         "LOD0"
       ],
@@ -8157,6 +8313,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 157,
+      "bytes": 19780,
       "lods": [
         "LOD0"
       ],
@@ -8200,6 +8357,7 @@
       },
       "groundOffsetY": 0.015,
       "triangles": 608,
+      "bytes": 3085724,
       "lods": [
         "LOD0"
       ],
@@ -8245,6 +8403,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 702,
+      "bytes": 34572,
       "lods": [
         "LOD0"
       ],
@@ -8298,6 +8457,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 38,
+      "bytes": 8072,
       "lods": [
         "LOD0"
       ],
@@ -8341,6 +8501,7 @@
       },
       "groundOffsetY": 106.582,
       "triangles": 876,
+      "bytes": 395104,
       "lods": [
         "LOD0"
       ],
@@ -8386,6 +8547,7 @@
       },
       "groundOffsetY": -0.001,
       "triangles": 300,
+      "bytes": 312620,
       "lods": [
         "LOD0"
       ],
@@ -8429,6 +8591,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 136,
+      "bytes": 412948,
       "lods": [
         "LOD0"
       ],
@@ -8472,6 +8635,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 154,
+      "bytes": 413208,
       "lods": [
         "LOD0"
       ],
@@ -8515,6 +8679,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 152,
+      "bytes": 585748,
       "lods": [
         "LOD0"
       ],
@@ -8558,6 +8723,7 @@
       },
       "groundOffsetY": 0.041,
       "triangles": 452,
+      "bytes": 878104,
       "lods": [
         "LOD0"
       ],
@@ -8602,6 +8768,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 26,
+      "bytes": 1548176,
       "lods": [
         "LOD0"
       ],
@@ -8645,6 +8812,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 2,
+      "bytes": 175092,
       "lods": [
         "LOD0"
       ],
@@ -8688,6 +8856,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 6,
+      "bytes": 45072,
       "lods": [
         "LOD0"
       ],
@@ -8731,6 +8900,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 100,
+      "bytes": 583272,
       "lods": [
         "LOD0"
       ],
@@ -8774,6 +8944,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 652,
+      "bytes": 615332,
       "lods": [
         "LOD0"
       ],
@@ -8817,6 +8988,7 @@
       },
       "groundOffsetY": 0.002,
       "triangles": 384,
+      "bytes": 788692,
       "lods": [
         "LOD0"
       ],
@@ -8861,6 +9033,7 @@
       },
       "groundOffsetY": 0.025,
       "triangles": 324,
+      "bytes": 1072020,
       "lods": [
         "LOD0"
       ],
@@ -8906,6 +9079,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 108,
+      "bytes": 1149004,
       "lods": [
         "LOD0"
       ],
@@ -8951,6 +9125,7 @@
       },
       "groundOffsetY": 0.004,
       "triangles": 498,
+      "bytes": 1167348,
       "lods": [
         "LOD0"
       ],
@@ -8996,6 +9171,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 730,
+      "bytes": 1288196,
       "lods": [
         "LOD0"
       ],
@@ -9039,6 +9215,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 60,
+      "bytes": 2371768,
       "lods": [
         "LOD0"
       ],
@@ -9083,6 +9260,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 44,
+      "bytes": 2399400,
       "lods": [
         "LOD0"
       ],
@@ -9127,6 +9305,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 748,
+      "bytes": 2525684,
       "lods": [
         "LOD0"
       ],
@@ -9172,6 +9351,7 @@
       },
       "groundOffsetY": 14.873,
       "triangles": 10,
+      "bytes": 590956,
       "lods": [
         "LOD0"
       ],
@@ -9217,6 +9397,7 @@
       },
       "groundOffsetY": 14.859,
       "triangles": 10,
+      "bytes": 590956,
       "lods": [
         "LOD0"
       ],
@@ -9262,6 +9443,7 @@
       },
       "groundOffsetY": 14.873,
       "triangles": 10,
+      "bytes": 590984,
       "lods": [
         "LOD0"
       ],
@@ -9307,6 +9489,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 2,
+      "bytes": 600456,
       "lods": [
         "LOD0"
       ],
@@ -9350,6 +9533,7 @@
       },
       "groundOffsetY": 0.042,
       "triangles": 1112,
+      "bytes": 1229500,
       "lods": [
         "LOD0"
       ],
@@ -9394,6 +9578,7 @@
       },
       "groundOffsetY": 0.575,
       "triangles": 1800,
+      "bytes": 1703060,
       "lods": [
         "LOD0"
       ],
@@ -9439,6 +9624,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 5226,
+      "bytes": 5700424,
       "lods": [
         "LOD0"
       ],
@@ -9486,6 +9672,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1792,
+      "bytes": 388212,
       "lods": [
         "LOD0"
       ],
@@ -9531,6 +9718,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1800,
+      "bytes": 388552,
       "lods": [
         "LOD0"
       ],
@@ -9576,6 +9764,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1800,
+      "bytes": 388556,
       "lods": [
         "LOD0"
       ],
@@ -9621,6 +9810,7 @@
       },
       "groundOffsetY": 0.017,
       "triangles": 106,
+      "bytes": 405176,
       "lods": [
         "LOD0"
       ],
@@ -9665,6 +9855,7 @@
       },
       "groundOffsetY": 0.017,
       "triangles": 106,
+      "bytes": 405552,
       "lods": [
         "LOD0"
       ],
@@ -9709,6 +9900,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 113,
+      "bytes": 406336,
       "lods": [
         "LOD0"
       ],
@@ -9753,6 +9945,7 @@
       },
       "groundOffsetY": -0.03,
       "triangles": 132,
+      "bytes": 407284,
       "lods": [
         "LOD0"
       ],
@@ -9797,6 +9990,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 352,
+      "bytes": 582736,
       "lods": [
         "LOD0"
       ],
@@ -9840,6 +10034,7 @@
       },
       "groundOffsetY": 3.05,
       "triangles": 7530,
+      "bytes": 599152,
       "lods": [
         "LOD0"
       ],
@@ -9885,6 +10080,7 @@
       },
       "groundOffsetY": 2.989,
       "triangles": 7530,
+      "bytes": 599152,
       "lods": [
         "LOD0"
       ],
@@ -9930,6 +10126,7 @@
       },
       "groundOffsetY": 3.049,
       "triangles": 7530,
+      "bytes": 599348,
       "lods": [
         "LOD0"
       ],
@@ -9975,6 +10172,7 @@
       },
       "groundOffsetY": 2.474,
       "triangles": 7530,
+      "bytes": 602216,
       "lods": [
         "LOD0"
       ],
@@ -10020,6 +10218,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 10,
+      "bytes": 7956,
       "lods": [
         "LOD0"
       ],
@@ -10063,6 +10262,7 @@
       },
       "groundOffsetY": 0.001,
       "triangles": 26,
+      "bytes": 441448,
       "lods": [
         "LOD0"
       ],
@@ -10106,6 +10306,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 346,
+      "bytes": 534960,
       "lods": [
         "LOD0"
       ],
@@ -10151,6 +10352,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 496,
+      "bytes": 1739728,
       "lods": [
         "LOD0"
       ],
@@ -10197,6 +10399,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 124,
+      "bytes": 2447112,
       "lods": [
         "LOD0"
       ],
@@ -10245,6 +10448,7 @@
       },
       "groundOffsetY": 0.433,
       "triangles": 168,
+      "bytes": 6737552,
       "lods": [
         "LOD0"
       ],
@@ -10288,6 +10492,7 @@
       },
       "groundOffsetY": 0.189,
       "triangles": 70,
+      "bytes": 7760740,
       "lods": [
         "LOD0"
       ],
@@ -10332,6 +10537,7 @@
       },
       "groundOffsetY": 0.504,
       "triangles": 70,
+      "bytes": 7760740,
       "lods": [
         "LOD0"
       ],
@@ -10376,6 +10582,7 @@
       },
       "groundOffsetY": 0.368,
       "triangles": 70,
+      "bytes": 7760744,
       "lods": [
         "LOD0"
       ],
@@ -10420,6 +10627,7 @@
       },
       "groundOffsetY": 0.194,
       "triangles": 70,
+      "bytes": 7760744,
       "lods": [
         "LOD0"
       ],
@@ -10464,6 +10672,7 @@
       },
       "groundOffsetY": 0.578,
       "triangles": 70,
+      "bytes": 7760748,
       "lods": [
         "LOD0"
       ],
@@ -10508,6 +10717,7 @@
       },
       "groundOffsetY": 0.377,
       "triangles": 70,
+      "bytes": 7760748,
       "lods": [
         "LOD0"
       ],
@@ -10552,6 +10762,7 @@
       },
       "groundOffsetY": 0.374,
       "triangles": 70,
+      "bytes": 7760820,
       "lods": [
         "LOD0"
       ],
@@ -10596,6 +10807,7 @@
       },
       "groundOffsetY": 0.131,
       "triangles": 72,
+      "bytes": 7761284,
       "lods": [
         "LOD0"
       ],
@@ -10640,6 +10852,7 @@
       },
       "groundOffsetY": 0.345,
       "triangles": 628,
+      "bytes": 7797784,
       "lods": [
         "LOD0"
       ],
@@ -10684,6 +10897,7 @@
       },
       "groundOffsetY": -0.001,
       "triangles": 36,
+      "bytes": 19531700,
       "lods": [
         "LOD0"
       ],
@@ -10729,6 +10943,7 @@
       },
       "groundOffsetY": 0.439,
       "triangles": 66,
+      "bytes": 19533792,
       "lods": [
         "LOD0"
       ],
@@ -10774,6 +10989,7 @@
       },
       "groundOffsetY": 0.437,
       "triangles": 68,
+      "bytes": 19535124,
       "lods": [
         "LOD0"
       ],
@@ -10820,6 +11036,7 @@
       },
       "groundOffsetY": 0.188,
       "triangles": 68,
+      "bytes": 19535136,
       "lods": [
         "LOD0"
       ],
@@ -10866,6 +11083,7 @@
       },
       "groundOffsetY": 0.354,
       "triangles": 70,
+      "bytes": 19535200,
       "lods": [
         "LOD0"
       ],
@@ -10913,6 +11131,7 @@
       },
       "groundOffsetY": 0.139,
       "triangles": 1222,
+      "bytes": 214736,
       "lods": [
         "LOD0"
       ],
@@ -10958,6 +11177,7 @@
       },
       "groundOffsetY": 0.251,
       "triangles": 1468,
+      "bytes": 222224,
       "lods": [
         "LOD0"
       ],
@@ -11003,6 +11223,7 @@
       },
       "groundOffsetY": 0.233,
       "triangles": 1650,
+      "bytes": 232064,
       "lods": [
         "LOD0"
       ],
@@ -11048,6 +11269,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 236,
+      "bytes": 484820,
       "lods": [
         "LOD0"
       ],
@@ -11092,6 +11314,7 @@
       },
       "groundOffsetY": 0.015,
       "triangles": 1982,
+      "bytes": 493744,
       "lods": [
         "LOD0"
       ],
@@ -11136,6 +11359,7 @@
       },
       "groundOffsetY": 0.009,
       "triangles": 2482,
+      "bytes": 518392,
       "lods": [
         "LOD0"
       ],
@@ -11180,6 +11404,7 @@
       },
       "groundOffsetY": 0.018,
       "triangles": 2366,
+      "bytes": 1200100,
       "lods": [
         "LOD0"
       ],
@@ -11225,6 +11450,7 @@
       },
       "groundOffsetY": -0.008,
       "triangles": 5486,
+      "bytes": 1273100,
       "lods": [
         "LOD0"
       ],
@@ -11270,6 +11496,7 @@
       },
       "groundOffsetY": 0.479,
       "triangles": 5742,
+      "bytes": 1369096,
       "lods": [
         "LOD0"
       ],
@@ -11315,6 +11542,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 486,
+      "bytes": 105260,
       "lods": [
         "LOD0"
       ],
@@ -11361,6 +11589,7 @@
       },
       "groundOffsetY": 0.005,
       "triangles": 262,
+      "bytes": 158992,
       "lods": [
         "LOD0"
       ],
@@ -11405,6 +11634,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 160,
+      "bytes": 354052,
       "lods": [
         "LOD0"
       ],
@@ -11448,6 +11678,7 @@
       },
       "groundOffsetY": 0.001,
       "triangles": 221,
+      "bytes": 472352,
       "lods": [
         "LOD0"
       ],
@@ -11492,6 +11723,7 @@
       },
       "groundOffsetY": 0.001,
       "triangles": 221,
+      "bytes": 472352,
       "lods": [
         "LOD0"
       ],
@@ -11536,6 +11768,7 @@
       },
       "groundOffsetY": -0.007,
       "triangles": 194,
+      "bytes": 475620,
       "lods": [
         "LOD0"
       ],
@@ -11580,6 +11813,7 @@
       },
       "groundOffsetY": -0.002,
       "triangles": 197,
+      "bytes": 475672,
       "lods": [
         "LOD0"
       ],
@@ -11624,6 +11858,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 544,
+      "bytes": 532156,
       "lods": [
         "LOD0"
       ],
@@ -11668,6 +11903,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 733,
+      "bytes": 612264,
       "lods": [
         "LOD0"
       ],
@@ -11713,6 +11949,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 578,
+      "bytes": 791028,
       "lods": [
         "LOD0"
       ],
@@ -11757,6 +11994,7 @@
       },
       "groundOffsetY": -0.001,
       "triangles": 625,
+      "bytes": 915152,
       "lods": [
         "LOD0"
       ],
@@ -11802,6 +12040,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 134,
+      "bytes": 2665244,
       "lods": [
         "LOD0"
       ],
@@ -11846,6 +12085,7 @@
       },
       "groundOffsetY": 0.258,
       "triangles": 80,
+      "bytes": 6128132,
       "lods": [
         "LOD0"
       ],
@@ -11890,6 +12130,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 166,
+      "bytes": 6133276,
       "lods": [
         "LOD0"
       ],
@@ -11934,6 +12175,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 226,
+      "bytes": 8739356,
       "lods": [
         "LOD0"
       ],
@@ -11979,6 +12221,7 @@
       },
       "groundOffsetY": 0.029,
       "triangles": 2,
+      "bytes": 66348,
       "lods": [
         "LOD0"
       ],
@@ -12022,6 +12265,7 @@
       },
       "groundOffsetY": 0.005,
       "triangles": 2,
+      "bytes": 66352,
       "lods": [
         "LOD0"
       ],
@@ -12065,6 +12309,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 2,
+      "bytes": 66352,
       "lods": [
         "LOD0"
       ],
@@ -12108,6 +12353,7 @@
       },
       "groundOffsetY": 0.001,
       "triangles": 620,
+      "bytes": 77124,
       "lods": [
         "LOD0"
       ],
@@ -12151,6 +12397,7 @@
       },
       "groundOffsetY": 0.001,
       "triangles": 56,
+      "bytes": 211496,
       "lods": [
         "LOD0"
       ],
@@ -12194,6 +12441,7 @@
       },
       "groundOffsetY": 0.013,
       "triangles": 184,
+      "bytes": 585600,
       "lods": [
         "LOD0"
       ],
@@ -12237,6 +12485,7 @@
       },
       "groundOffsetY": 0.212,
       "triangles": 32,
+      "bytes": 591968,
       "lods": [
         "LOD0"
       ],
@@ -12280,6 +12529,7 @@
       },
       "groundOffsetY": 0.075,
       "triangles": 1698,
+      "bytes": 752448,
       "lods": [
         "LOD0"
       ],
@@ -12323,6 +12573,7 @@
       },
       "groundOffsetY": 0.335,
       "triangles": 472,
+      "bytes": 950736,
       "lods": [
         "LOD0"
       ],
@@ -12367,6 +12618,7 @@
       },
       "groundOffsetY": 0.362,
       "triangles": 696,
+      "bytes": 955988,
       "lods": [
         "LOD0"
       ],
@@ -12411,6 +12663,7 @@
       },
       "groundOffsetY": 0.756,
       "triangles": 882,
+      "bytes": 1015560,
       "lods": [
         "LOD0"
       ],
@@ -12455,6 +12708,7 @@
       },
       "groundOffsetY": 0.362,
       "triangles": 928,
+      "bytes": 1016476,
       "lods": [
         "LOD0"
       ],
@@ -12499,6 +12753,7 @@
       },
       "groundOffsetY": 0.309,
       "triangles": 802,
+      "bytes": 1188440,
       "lods": [
         "LOD0"
       ],
@@ -12544,6 +12799,7 @@
       },
       "groundOffsetY": 0.194,
       "triangles": 892,
+      "bytes": 1230128,
       "lods": [
         "LOD0"
       ],
@@ -12589,6 +12845,7 @@
       },
       "groundOffsetY": 0.089,
       "triangles": 744,
+      "bytes": 1323492,
       "lods": [
         "LOD0"
       ],
@@ -12634,6 +12891,7 @@
       },
       "groundOffsetY": 0.425,
       "triangles": 616,
+      "bytes": 1404148,
       "lods": [
         "LOD0"
       ],
@@ -12679,6 +12937,7 @@
       },
       "groundOffsetY": 0.009,
       "triangles": 692,
+      "bytes": 1406776,
       "lods": [
         "LOD0"
       ],
@@ -12724,6 +12983,7 @@
       },
       "groundOffsetY": 0.007,
       "triangles": 216,
+      "bytes": 1478328,
       "lods": [
         "LOD0"
       ],
@@ -12767,6 +13027,7 @@
       },
       "groundOffsetY": 1.987,
       "triangles": 5794,
+      "bytes": 1719596,
       "lods": [
         "LOD0"
       ],
@@ -12818,6 +13079,7 @@
       },
       "groundOffsetY": 0.176,
       "triangles": 530,
+      "bytes": 2285488,
       "lods": [
         "LOD0"
       ],
@@ -12861,6 +13123,7 @@
       },
       "groundOffsetY": 0.176,
       "triangles": 530,
+      "bytes": 2285488,
       "lods": [
         "LOD0"
       ],
@@ -12904,6 +13167,7 @@
       },
       "groundOffsetY": 0.176,
       "triangles": 530,
+      "bytes": 2285488,
       "lods": [
         "LOD0"
       ],
@@ -12947,6 +13211,7 @@
       },
       "groundOffsetY": 0.176,
       "triangles": 530,
+      "bytes": 2285488,
       "lods": [
         "LOD0"
       ],
@@ -12990,6 +13255,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 298,
+      "bytes": 2536880,
       "lods": [
         "LOD0"
       ],
@@ -13035,6 +13301,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 130,
+      "bytes": 12858724,
       "lods": [
         "LOD0"
       ],
@@ -13078,6 +13345,7 @@
       },
       "groundOffsetY": -0.012,
       "triangles": 1632,
+      "bytes": 13356104,
       "lods": [
         "LOD0"
       ],
@@ -13122,6 +13390,7 @@
       },
       "groundOffsetY": 0.009,
       "triangles": 1482,
+      "bytes": 14147356,
       "lods": [
         "LOD0"
       ],
@@ -13166,6 +13435,7 @@
       },
       "groundOffsetY": 0.026,
       "triangles": 1558,
+      "bytes": 14148244,
       "lods": [
         "LOD0"
       ],
@@ -13210,6 +13480,7 @@
       },
       "groundOffsetY": 0.027,
       "triangles": 1944,
+      "bytes": 14163008,
       "lods": [
         "LOD0"
       ],
@@ -13254,6 +13525,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 2010,
+      "bytes": 16321032,
       "lods": [
         "LOD0"
       ],
@@ -13299,6 +13571,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1200,
+      "bytes": 19744908,
       "lods": [
         "LOD0"
       ],
@@ -13343,6 +13616,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1876,
+      "bytes": 20651172,
       "lods": [
         "LOD0"
       ],
@@ -13387,6 +13661,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1768,
+      "bytes": 23848152,
       "lods": [
         "LOD0"
       ],
@@ -13431,6 +13706,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 792,
+      "bytes": 24711340,
       "lods": [
         "LOD0"
       ],
@@ -13475,6 +13751,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 516,
+      "bytes": 25405784,
       "lods": [
         "LOD0"
       ],
@@ -13519,6 +13796,7 @@
       },
       "groundOffsetY": 0,
       "triangles": 1876,
+      "bytes": 26801604,
       "lods": [
         "LOD0"
       ],

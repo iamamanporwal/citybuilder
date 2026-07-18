@@ -64,6 +64,12 @@ export function Toolbar() {
 
       <div className="tb-spacer" />
 
+      <div className="tb-group">
+        <button onClick={() => s().setCurationOpen(true)} title="Curate the asset library — pick the best 3D model variants per thing">
+          🎛️ Curate assets
+        </button>
+      </div>
+
       <SettingsMenu />
 
       <div className="tb-group">
