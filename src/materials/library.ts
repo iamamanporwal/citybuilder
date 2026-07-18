@@ -24,25 +24,34 @@ function std(o: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMateria
 // ---------- road surfaces (shared per set; per-segment UV offset via clone) ----------
 
 const ROAD_MATERIALS: Record<RoadSurfaceSet, THREE.MeshStandardMaterial> = {
-  'asphalt-new': std({ map: surf.asphaltNew.albedo, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }),
-  'asphalt-worn': std({ map: surf.asphaltWorn.albedo, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }),
-  'asphalt-patched': std({ map: surf.asphaltPatched.albedo, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }),
+  'asphalt-new': std({ map: surf.asphaltNew.albedo, normalMap: surf.asphaltNew.normal, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }),
+  'asphalt-worn': std({ map: surf.asphaltWorn.albedo, normalMap: surf.asphaltWorn.normal, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }),
+  'asphalt-patched': std({ map: surf.asphaltPatched.albedo, normalMap: surf.asphaltPatched.normal, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }),
   cobble: std({ map: surf.cobble.albedo, normalMap: surf.cobble.normal, roughnessMap: surf.cobble.mr, metalnessMap: surf.cobble.mr, roughness: 1, metalness: 1 }),
   pavers: std({ map: surf.pavers.albedo, normalMap: surf.pavers.normal, roughnessMap: surf.pavers.mr, metalnessMap: surf.pavers.mr, roughness: 1, metalness: 1 }),
   gravel: std({ map: surf.gravel.albedo, roughnessMap: surf.gravel.mr, metalnessMap: surf.gravel.mr, roughness: 1, metalness: 1 }),
 }
 
+// tile every attached map (albedo AND normal) to the same 6 m world period so
+// the normal never tiles at a different rate than the albedo it rides on
 for (const m of Object.values(ROAD_MATERIALS)) {
-  m.map!.repeat.set(1 / ROAD_TILE_M, 1 / ROAD_TILE_M)
+  for (const t of [m.map, m.normalMap]) t?.repeat.set(1 / ROAD_TILE_M, 1 / ROAD_TILE_M)
 }
 
 export function roadMaterial(set: RoadSurfaceSet, uvSeed = 0): THREE.MeshStandardMaterial {
   const base = ROAD_MATERIALS[set]
   if (uvSeed === 0) return base
-  // seeded per-instance UV shift breaks visible tiling between adjacent segments
+  // seeded per-instance UV shift breaks visible tiling between adjacent segments;
+  // albedo + normal share the same offset so their aggregate stays registered
   const m = base.clone()
+  const ox = uvSeed % 1
+  const oy = (uvSeed * 7.13) % 1
   m.map = base.map!.clone()
-  m.map.offset.set(uvSeed % 1, (uvSeed * 7.13) % 1)
+  m.map.offset.set(ox, oy)
+  if (base.normalMap) {
+    m.normalMap = base.normalMap.clone()
+    m.normalMap.offset.set(ox, oy)
+  }
   return m
 }
 

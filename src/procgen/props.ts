@@ -290,6 +290,13 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
     const e = elevation.profileFor(r, [station])[0] ?? 0
     return Math.abs(e) > 1e-6 ? e : 0
   }
+  // Curb top for furniture standing on a road's sidewalk band. Mirrors the
+  // resolver cross-section (resolve.ts): a 0.22 m curb on drivable, non-motorway,
+  // non-bridge roads. Lamps/benches/bins are offset onto that raised band, so
+  // they must sit ON the curb top — at grade they sink 0.22 m into the sidewalk.
+  const CURB_H = 0.22
+  const sidewalkCurb = (r: RoadSegment): number =>
+    !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== 'service' && r.roadClass !== 'motorway' && !r.bridge ? CURB_H : 0
   // OSM-mapped furniture is authoritative in plan (x/z) but still needs the
   // solved elevation: a lamp mapped on a bridge deck must stand ON the deck.
   // Bridges add one subtlety: OSM lamps sit on the bridge's SIDEWALK ways,
@@ -358,7 +365,7 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
           ? !index.insideCarriageway(lp, 0.35, r.id) // deck-edge lamps sit inside their own deck by design
           : !index.insideCarriageway(lp, 0.35)
         if ((onBridge || ctx.landCoverAt(lp) !== 'water') && clearOfRoads && !nearExistingLamp(lp)) {
-          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) })
+          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) + sidewalkCurb(r) })
         }
         side = -side
       }
@@ -375,7 +382,7 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
         const across = { x: -dir.z * side, z: dir.x * side }
         const bp = { x: p.x + across.x * (r.widthM / 2 + 1.6), z: p.z + across.z * (r.widthM / 2 + 1.6) }
         if (ctx.landCoverAt(bp) !== 'water' && !index.insideCarriageway(bp, 0.3)) {
-          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) })
+          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) + sidewalkCurb(r) })
         }
       }
     }
@@ -388,7 +395,7 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
         const across = { x: -dir.z * side, z: dir.x * side }
         const bp = { x: p.x + across.x * (r.widthM / 2 + 0.9), z: p.z + across.z * (r.widthM / 2 + 0.9) }
         if (ctx.landCoverAt(bp) !== 'water' && !index.insideCarriageway(bp, 0.3)) {
-          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) })
+          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) + sidewalkCurb(r) })
         }
       }
     }

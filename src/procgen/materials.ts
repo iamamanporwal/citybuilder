@@ -47,8 +47,10 @@ export const mats = {
   curb: new THREE.MeshStandardMaterial({ color: '#7d7d78', roughness: 0.9 }),
   // Markings are paint on asphalt, not light sources — lit PBR so they react to
   // the game's day/night sun instead of exporting as KHR_materials_unlit.
-  markingWhite: new THREE.MeshStandardMaterial({ color: '#e8e8e0', roughness: 0.8 }),
-  markingYellow: new THREE.MeshStandardMaterial({ color: '#d8b93a', roughness: 0.8 }),
+  // brighter, crisper paint (reads as fresh road paint against the new textured
+  // asphalt); worn-paint texturing is a follow-up (needs UVs on the merged mesh)
+  markingWhite: new THREE.MeshStandardMaterial({ color: '#f2f1ea', roughness: 0.75 }),
+  markingYellow: new THREE.MeshStandardMaterial({ color: '#e6c23e', roughness: 0.75 }),
   roofDark: new THREE.MeshStandardMaterial({ color: '#4a4640', roughness: 0.95 }),
   roofEnhanced: new THREE.MeshStandardMaterial({ color: '#5a564e', roughness: 0.85 }),
   treeTrunk: new THREE.MeshStandardMaterial({ color: '#5d4a32', roughness: 1 }),

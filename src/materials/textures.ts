@@ -98,43 +98,80 @@ function mrTexture(name: string, roughBase: number, roughVar: number, metal: num
 // Road & ground surfaces
 // ---------------------------------------------------------------------------
 
-function asphaltAlbedo(name: string, base: string, wear: number): THREE.Texture {
-  const size = 256
+// Asphalt: visible aggregate embedded in binder + a matching height→normal so
+// the surface catches relief as the sun moves (the flat matte grey read as
+// painted cardboard). wear 0 = new, 1 = worn (cracks), 2 = patched.
+function asphaltMaps(name: string, base: string, wear: number): { albedo: THREE.Texture; normal: THREE.Texture } {
+  const size = 512
   const [c, ctx] = makeCanvas(size)
+  const [hc, hctx] = makeCanvas(size)
   const r = rng(name)
   ctx.fillStyle = base
   ctx.fillRect(0, 0, size, size)
-  speckle(ctx, size, r, 2200, 0.08, true)
-  speckle(ctx, size, r, 1600, 0.1, false)
+  hctx.fillStyle = '#828282'
+  hctx.fillRect(0, 0, size, size)
+  // aggregate: many small stones of varied grey embedded in the binder; each
+  // stone is raised in the height field so the normal map shows the gravel.
+  for (let i = 0; i < 9000; i++) {
+    const x = r() * size
+    const y = r() * size
+    const s = 1 + r() * 3.2
+    const g = 58 + r() * 118
+    ctx.fillStyle = `rgba(${g | 0},${g | 0},${(g * 0.98) | 0},${0.45 + r() * 0.45})`
+    ctx.beginPath(); ctx.arc(x, y, s / 2, 0, Math.PI * 2); ctx.fill()
+    const hv = 118 + r() * 115
+    hctx.fillStyle = `rgb(${hv | 0},${hv | 0},${hv | 0})`
+    hctx.beginPath(); hctx.arc(x, y, s / 2, 0, Math.PI * 2); hctx.fill()
+  }
+  // fine dark binder grit + a few light flecks
+  speckle(ctx, size, r, 3400, 0.06, false)
+  speckle(ctx, size, r, 1400, 0.05, true)
+  // low-frequency tonal blotches (oil sheen / repaved areas) to break the tile
+  for (let i = 0; i < 16; i++) {
+    const cx = r() * size
+    const cy = r() * size
+    const rad = size * (0.05 + r() * 0.15)
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad)
+    g.addColorStop(0, `rgba(0,0,0,${0.05 + r() * 0.09})`)
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = g
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill()
+  }
   if (wear >= 1) {
-    // faded wheel-path banding + fine cracks
-    ctx.fillStyle = 'rgba(255,255,255,0.045)'
-    ctx.fillRect(0, size * 0.18, size, size * 0.16)
-    ctx.fillRect(0, size * 0.66, size, size * 0.16)
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-    ctx.lineWidth = 1
-    for (let i = 0; i < 4 + wear * 3; i++) {
-      ctx.beginPath()
+    // cracks: dark in albedo, recessed (dark) in height so they read as grooves
+    ctx.strokeStyle = 'rgba(12,12,14,0.5)'
+    hctx.strokeStyle = '#4a4a4a'
+    for (let i = 0; i < 5 + wear * 4; i++) {
       let x = r() * size
       let y = r() * size
-      ctx.moveTo(x, y)
+      ctx.lineWidth = 0.8 + r() * 1.2
+      hctx.lineWidth = ctx.lineWidth + 1
+      ctx.beginPath(); ctx.moveTo(x, y); hctx.beginPath(); hctx.moveTo(x, y)
       for (let s = 0; s < 6; s++) {
-        x += (r() - 0.5) * 40
-        y += r() * 26
-        ctx.lineTo(x, y)
+        x += (r() - 0.5) * 46
+        y += (r() - 0.5) * 46
+        ctx.lineTo(x, y); hctx.lineTo(x, y)
       }
-      ctx.stroke()
+      ctx.stroke(); hctx.stroke()
     }
   }
   if (wear >= 2) {
+    // repaved patches: darker, smoother (flat-ish in height) rectangles
     for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = `rgba(0,0,0,${0.12 + r() * 0.1})`
-      const w = 30 + r() * 70
-      const h = 20 + r() * 50
-      ctx.fillRect(r() * size, r() * size, w, h)
+      const px = r() * size
+      const py = r() * size
+      const w = 40 + r() * 90
+      const h = 28 + r() * 60
+      ctx.fillStyle = `rgba(18,18,22,${0.16 + r() * 0.12})`
+      ctx.fillRect(px, py, w, h)
+      hctx.fillStyle = 'rgba(130,130,130,0.7)'
+      hctx.fillRect(px, py, w, h)
     }
   }
-  return register(name, 'albedo', c, true)
+  return {
+    albedo: register(name, 'albedo', c, true),
+    normal: register(name + '_n', 'normal', heightToNormal(hc, 1.7), false),
+  }
 }
 
 function cobbleMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
@@ -591,9 +628,9 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 export function generateSurfaceTextures() {
   return {
-    asphaltNew: { albedo: asphaltAlbedo('asphalt_new', '#4a4e55', 0), mr: mrTexture('asphalt_new_mr', 0.92, 0.1, 0, 'an') },
-    asphaltWorn: { albedo: asphaltAlbedo('asphalt_worn', '#53565c', 1), mr: mrTexture('asphalt_worn_mr', 0.95, 0.08, 0, 'aw') },
-    asphaltPatched: { albedo: asphaltAlbedo('asphalt_patched', '#505359', 2), mr: mrTexture('asphalt_patched_mr', 0.95, 0.1, 0, 'ap') },
+    asphaltNew: { ...asphaltMaps('asphalt_new', '#43474e', 0), mr: mrTexture('asphalt_new_mr', 0.92, 0.14, 0, 'an') },
+    asphaltWorn: { ...asphaltMaps('asphalt_worn', '#4c4f55', 1), mr: mrTexture('asphalt_worn_mr', 0.95, 0.12, 0, 'aw') },
+    asphaltPatched: { ...asphaltMaps('asphalt_patched', '#494c52', 2), mr: mrTexture('asphalt_patched_mr', 0.95, 0.14, 0, 'ap') },
     cobble: { ...cobbleMaps(), mr: mrTexture('cobble_mr', 0.85, 0.12, 0, 'cb') },
     pavers: { ...paversMaps(), mr: mrTexture('pavers_mr', 0.88, 0.1, 0, 'pv') },
     gravel: { albedo: gravelAlbedo(), mr: mrTexture('gravel_mr', 0.98, 0.04, 0, 'gv') },
