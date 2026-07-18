@@ -14,6 +14,8 @@ import { applyBuildingMaterial, buildScene, currentBuildingMaterial } from '../s
 import type { BuildingMaterial } from '../scene/registry'
 import { loadCuration, saveCuration, type CurationMap } from './curation'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
+import { setRoadStyle, type RoadStyle } from '../materials/library'
+import { setPaintWear } from '../procgen/materials'
 import { clampRoadScale } from '../procgen/roadScale'
 import type { ResolvedContext } from '../resolver/types'
 import type { LintWarning } from '../resolver/varietyLint'
@@ -59,6 +61,7 @@ interface EditorState {
   useLibraryAssets: boolean
   curation: CurationMap
   useCorridorElevation: boolean
+  roadStyle: RoadStyle
   roadScale: number
   contextInfo: ContextInfo | null
   lintReport: LintWarning[]
@@ -80,6 +83,7 @@ interface EditorState {
   setUseLibraryAssets: (v: boolean) => void
   setCuration: (c: CurationMap) => void
   setUseCorridorElevation: (v: boolean) => void
+  setRoadStyle: (v: RoadStyle) => void
   setRoadScale: (v: number) => void
   setLintReport: (w: LintWarning[]) => void
   select: (ids: string[], additive?: boolean) => void
@@ -179,6 +183,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   // Kept in sync with the config module flag (procgen/corridor/config.ts), which
   // also defaults on; the toolbar toggle flips both for instant A/B.
   useCorridorElevation: true,
+  // Road surface style — realistic (textured aggregate) vs arcade (clean kit look).
+  roadStyle: 'realistic',
   // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.
   roadScale: 1,
   contextInfo: null,
@@ -239,6 +245,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   setUseCorridorElevation: (v) => {
     setCorridorElevationEnabled(v)
     set({ useCorridorElevation: v })
+  },
+  setRoadStyle: (v) => {
+    setRoadStyle(v)
+    setPaintWear(v === 'arcade' ? 0 : 1)
+    set({ roadStyle: v })
   },
   setRoadScale: (v) => set({ roadScale: clampRoadScale(v) }),
   setLintReport: (w) => set({ lintReport: w }),

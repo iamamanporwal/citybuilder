@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
 import { exportCity, exportDesignerGlb } from '../export/exporter'
-import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale } from '../app/buildCity'
+import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle } from '../app/buildCity'
 
 export function Toolbar() {
   const cameraMode = useEditor((s) => s.cameraMode)
@@ -156,6 +156,7 @@ function SettingsMenu() {
   const quality3d = useEditor((s) => s.quality3d)
   const useLibraryAssets = useEditor((s) => s.useLibraryAssets)
   const useCorridorElevation = useEditor((s) => s.useCorridorElevation)
+  const roadStyle = useEditor((s) => s.roadStyle)
   const roadScale = useEditor((s) => s.roadScale)
   const s = useEditor.getState
   const [open, setOpen] = useState(false)
@@ -234,6 +235,25 @@ function SettingsMenu() {
               <em>Graph-wide grade solve instead of per-segment ramps. Rebuilds.</em>
             </span>
           </label>
+
+          <div className="tb-setting-seg">
+            <div className="tb-setting-seg-head">
+              <b>🛣️ Road style</b>
+              <em>{roadStyle === 'arcade' ? 'Clean road-kit look' : 'Textured aggregate'}</em>
+            </div>
+            <div className="tb-setting-seg-btns">
+              {(['realistic', 'arcade'] as const).map((rs) => (
+                <button
+                  key={rs}
+                  className={roadStyle === rs ? 'active' : ''}
+                  onClick={() => rebuildWithRoadStyle(rs)}
+                  title={`Road surface style: ${rs}`}
+                >
+                  {rs === 'realistic' ? 'Realistic' : 'Arcade'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="tb-setting-slider">
             <div className="tb-setting-slider-head">

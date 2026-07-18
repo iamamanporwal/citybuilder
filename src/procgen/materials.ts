@@ -42,13 +42,21 @@ export const facadeTextureEnhanced = makeFacadeTexture(true)
 // modulate the paint color by WORLD-position noise so lane lines and crosswalks
 // fade/scuff in patches, reading as aged paint on the asphalt rather than a
 // crisp sticker. World-keyed so wear is continuous across segments.
+// Shared uniform: 1 = worn paint (realistic), 0 = crisp paint (arcade road-kit).
+// Live-adjustable (no rebuild needed) via setPaintWear.
+const PAINT_WEAR = { value: 1 }
+export function setPaintWear(v: number): void {
+  PAINT_WEAR.value = v
+}
+
 function withPaintWear(m: THREE.MeshStandardMaterial, key: string): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uPaintWear = PAINT_WEAR
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCbPaintW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbPaintW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCbPaintW;')
+      .replace('#include <common>', '#include <common>\nuniform float uPaintWear;\nvarying vec3 vCbPaintW;')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -56,7 +64,8 @@ function withPaintWear(m: THREE.MeshStandardMaterial, key: string): THREE.MeshSt
         float cbW2 = sin(vCbPaintW.x * 0.19 - vCbPaintW.z * 0.53);
         float cbWear = 0.5 + 0.5 * (cbW1 * 0.55 + cbW2 * 0.45);
         float cbScuff = sin(vCbPaintW.x * 2.3) * sin(vCbPaintW.z * 2.1);
-        diffuseColor.rgb *= mix(0.6, 1.0, smoothstep(0.12, 0.55, cbWear)) * (0.93 + 0.07 * cbScuff);`,
+        float cbWornFactor = mix(0.6, 1.0, smoothstep(0.12, 0.55, cbWear)) * (0.93 + 0.07 * cbScuff);
+        diffuseColor.rgb *= mix(1.0, cbWornFactor, uPaintWear);`,
       )
   }
   m.customProgramCacheKey = () => key

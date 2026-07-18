@@ -148,6 +148,22 @@ export async function rebuildWithCorridorElevation(enabled: boolean): Promise<vo
 }
 
 /**
+ * Switch the road surface style (realistic aggregate ↔ arcade road-kit) and
+ * rebuild in place. Roads are cloned per-segment from roadMaterial() at build,
+ * so the whole surface set only changes on a rebuild; markings restyle live via
+ * the paint-wear uniform. Geometry is untouched (PRD §8: roads stay data-driven).
+ */
+export async function rebuildWithRoadStyle(style: import('../materials/library').RoadStyle): Promise<void> {
+  const s = useEditor.getState()
+  s.setRoadStyle(style)
+  const graph = workingGraph()
+  if (!graph || !sceneContext) return
+  s.initScene(graph, sceneContext)
+  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.showToast(style === 'arcade' ? 'Arcade road-kit style' : 'Realistic road style')
+}
+
+/**
  * Set the road-width multiplier (car-game "stretch roads" trigger, §14) and
  * rebuild the current scene in place. Widens drivable carriageways and displaces
  * non-road features out of the widened corridors — roads, colliders, semantics

@@ -56,14 +56,35 @@ const ROAD_MATERIALS: Record<RoadSurfaceSet, THREE.MeshStandardMaterial> = {
   gravel: std({ map: surf.gravel.albedo, roughnessMap: surf.gravel.mr, metalnessMap: surf.gravel.mr, roughness: 1, metalness: 1 }),
 }
 
+// Arcade road-kit style: clean stylized asphalt (no aggregate, no macro
+// variation) for the drivable surfaces; cobble/pavers/gravel are kept from the
+// realistic set. A/B against realistic via setRoadStyle + a scene rebuild.
+const ARCADE_ASPHALT = std({ map: surf.asphaltArcade.albedo, normalMap: surf.asphaltArcade.normal, roughnessMap: surf.asphaltArcade.mr, metalnessMap: surf.asphaltArcade.mr, roughness: 1, metalness: 1 })
+const ROAD_MATERIALS_ARCADE: Record<RoadSurfaceSet, THREE.MeshStandardMaterial> = {
+  'asphalt-new': ARCADE_ASPHALT,
+  'asphalt-worn': ARCADE_ASPHALT,
+  'asphalt-patched': ARCADE_ASPHALT,
+  cobble: ROAD_MATERIALS.cobble,
+  pavers: ROAD_MATERIALS.pavers,
+  gravel: ROAD_MATERIALS.gravel,
+}
+
 // tile every attached map (albedo AND normal) to the same 6 m world period so
 // the normal never tiles at a different rate than the albedo it rides on
-for (const m of Object.values(ROAD_MATERIALS)) {
+for (const m of [...Object.values(ROAD_MATERIALS), ARCADE_ASPHALT]) {
   for (const t of [m.map, m.normalMap]) t?.repeat.set(1 / ROAD_TILE_M, 1 / ROAD_TILE_M)
 }
 
+export type RoadStyle = 'realistic' | 'arcade'
+let activeRoadStyle: RoadStyle = 'realistic'
+/** Switch the road surface material set. Followed by a scene rebuild so every
+ *  road mesh re-reads roadMaterial() (materials are cloned per segment at build). */
+export function setRoadStyle(style: RoadStyle): void {
+  activeRoadStyle = style
+}
+
 export function roadMaterial(set: RoadSurfaceSet, uvSeed = 0): THREE.MeshStandardMaterial {
-  const base = ROAD_MATERIALS[set]
+  const base = (activeRoadStyle === 'arcade' ? ROAD_MATERIALS_ARCADE : ROAD_MATERIALS)[set]
   if (uvSeed === 0) return base
   // seeded per-instance UV shift breaks visible tiling between adjacent segments;
   // albedo + normal share the same offset so their aggregate stays registered

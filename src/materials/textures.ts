@@ -174,6 +174,33 @@ function asphaltMaps(name: string, base: string, wear: number): { albedo: THREE.
   }
 }
 
+// Arcade/Kenney-style asphalt: deliberately clean + flat — a smooth dark grey
+// with only faint grain, no visible aggregate or cracks. Pairs with crisp
+// (un-worn) markings for a stylized road-kit look, as an A/B against realistic.
+function arcadeAsphaltMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
+  const size = 256
+  const [c, ctx] = makeCanvas(size)
+  const [hc, hctx] = makeCanvas(size)
+  const r = rng('asphalt_arcade')
+  ctx.fillStyle = '#42464e'
+  ctx.fillRect(0, 0, size, size)
+  hctx.fillStyle = '#8a8a8a'
+  hctx.fillRect(0, 0, size, size)
+  speckle(ctx, size, r, 1300, 0.03, true)
+  speckle(ctx, size, r, 1000, 0.03, false)
+  for (let i = 0; i < 8; i++) {
+    const g = ctx.createRadialGradient(r() * size, r() * size, 2, r() * size, r() * size, size * (0.1 + r() * 0.18))
+    g.addColorStop(0, `rgba(0,0,0,${0.02 + r() * 0.04})`)
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, size, size)
+  }
+  return {
+    albedo: register('asphalt_arcade', 'albedo', c, true),
+    normal: register('asphalt_arcade_n', 'normal', heightToNormal(hc, 0.4), false),
+  }
+}
+
 function cobbleMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
   // one tile covers ROAD_TILE_M (6 m): 32 setts per side ≈ 19 cm stones. The
   // previous 8-per-side (75 cm) read as giant pillows at street level.
@@ -635,6 +662,7 @@ export function generateSurfaceTextures() {
     pavers: { ...paversMaps(), mr: mrTexture('pavers_mr', 0.88, 0.1, 0, 'pv') },
     gravel: { albedo: gravelAlbedo(), mr: mrTexture('gravel_mr', 0.98, 0.04, 0, 'gv') },
     sidewalk: { ...sidewalkMaps(), mr: mrTexture('sidewalk_mr', 0.93, 0.08, 0, 'sw') },
+    asphaltArcade: { ...arcadeAsphaltMaps(), mr: mrTexture('asphalt_arcade_mr', 0.82, 0.05, 0, 'aa') },
   }
 }
 
