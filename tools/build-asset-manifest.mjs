@@ -18,6 +18,18 @@ const LIB_DIR = join(ROOT, 'assets', 'library')
 const OUT_MANIFEST = join(ROOT, 'assets', 'manifest.json')
 const OUT_COVERAGE = join(ROOT, 'assets', 'coverage-report.md')
 
+// Optional human curation allowlist (from the Curate studio's Apply export). When
+// present, ONLY these placeable assets are pooled — the city draws from exactly
+// the picked variants. Reference-only assets (roads) are unaffected. Delete the
+// file to un-curate. See assets/curation-selection.json.
+const curatedIds = (() => {
+  try {
+    const sel = JSON.parse(readFileSync(join(ROOT, 'assets', 'curation-selection.json'), 'utf8'))
+    const ids = new Set(Object.values(sel.byKind ?? {}).flat())
+    return ids.size ? ids : null
+  } catch { return null }
+})()
+
 // ---------------------------------------------------------------------------
 // Classification lexicon — ordered; first match wins.
 // semantic: coarse type · role: function within the type · style: visual family
@@ -283,6 +295,9 @@ for (const pack of readdirSync(LIB_DIR).filter(d => statSync(join(LIB_DIR, d)).i
       attribution: label?.attribution,
       sourceUrl: label?.sourceUrl,
       flags,
+      // whether this asset is in the active curation allowlist (true when no
+      // curation file exists — everything is "in" by default)
+      curated: curatedIds ? curatedIds.has(`${pack}/${name}`) : true,
     }
     assets.push(asset)
     if (flags.length) reviewFlags.push({ id: asset.id, flags, sizeMeters: asset.sizeMeters, triangles: geo.tris })
@@ -312,6 +327,8 @@ const isPoolable = (a) => !a.flags.some(f => POOL_EXCLUDING.includes(f))
 const pools = {}
 for (const a of assets) {
   if (!isPoolable(a)) continue
+  // curation allowlist gates PLACEABLE assets only (roads/reference stay as-is)
+  if (curatedIds && !a.referenceOnly && !curatedIds.has(a.id)) continue
   for (const tag of [...a.osmTags, ...a.internalTags]) {
     const key = `${tag}|${a.style}`
     let weight = /noWear/i.test(a.id) ? 0.5 : 1
@@ -327,9 +344,11 @@ const manifest = {
   pickContract: "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   counts: {
     assets: assets.length,
-    pooled: assets.filter(a => isPoolable(a) && (a.osmTags.length || a.internalTags.length)).length,
+    pooled: assets.filter(a => isPoolable(a) && (a.osmTags.length || a.internalTags.length) && (!curatedIds || a.referenceOnly || curatedIds.has(a.id))).length,
     flaggedForReview: reviewFlags.length,
     pools: Object.keys(pools).length,
+    curationActive: !!curatedIds,
+    curatedSelected: curatedIds ? curatedIds.size : null,
   },
   assets,
   pools,

@@ -1,0 +1,21 @@
+{
+  "schema": "citybuilder.curation/v1",
+  "note": "Human-curated asset allowlist. When present, the scanner pools ONLY these placeable assets (per tools/build-asset-manifest.mjs). Delete this file to un-curate (pool everything again). Regenerate from the Curate studio's Apply export.",
+  "generatedAt": "2026-07-18T08:32:47.887Z",
+  "totalSelected": 33,
+  "byKind": {
+    "tree": ["toxsam-polygonal-mind/tree_26", "toxsam-polygonal-mind/tree_08", "toxsam-polygonal-mind/tree_36", "toxsam-polygonal-mind/tree_29"],
+    "street_lamp": ["kenney-city-kit-roads/light-square", "kenney-city-kit-roads/light-square-double", "kenney-city-kit-roads/light-curved", "kenney-city-kit-roads/light-square-cross", "kenney-city-kit-roads/light-curved-double", "toxsam-polygonal-mind/street_lamp_02", "kenney-city-kit-roads/light-curved-cross"],
+    "planter": ["toxsam-polygonal-mind/planter_08", "toxsam-polygonal-mind/planter_01", "toxsam-polygonal-mind/planter_03"],
+    "fence": ["toxsam-polygonal-mind/fence_10", "kenney-city-kit-roads/construction-barrier", "toxsam-polygonal-mind/fence_09", "toxsam-polygonal-mind/fence_06", "toxsam-polygonal-mind/fence_08", "toxsam-polygonal-mind/fence_11"],
+    "statue": ["toxsam-polygonal-mind/statue_07", "toxsam-polygonal-mind/statue_08"],
+    "bench": ["toxsam-polygonal-mind/bench_04", "sketchfab-curated/bench_picnic_table_low_poly_fe35ac"],
+    "building": ["quaternius-downtown-city-megakit/Building_Small_1", "quaternius-downtown-city-megakit/Building_Large_2"],
+    "cone": ["kenney-city-kit-roads/construction-cone"],
+    "manhole": ["quaternius-downtown-city-megakit/Prop_Drain", "quaternius-downtown-city-megakit/Prop_ManholeCover"],
+    "hvac": ["quaternius-downtown-city-megakit/Prop_ACUnit"],
+    "bollard": ["quaternius-downtown-city-megakit/Prop_Bollard"],
+    "fire_hydrant": ["sketchfab-curated/hydrant_psx_low_poly_fire_hydrant_1d2b13"],
+    "traffic_signal": ["sketchfab-curated/traffic_light_traffic_light_793e07"]
+  }
+}

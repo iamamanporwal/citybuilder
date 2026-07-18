@@ -228,7 +228,13 @@ export function curationCandidates(): CurationKind[] {
   for (const a of placeable) {
     const kind = ROLE_ALIAS[a.role] ?? (KIND_META[a.role] ? a.role : a.role || a.semantic)
     const budget = TRI_BUDGET[a.semantic] ?? 12000
-    const weightClass = a.triangles <= budget * 0.34 ? 'light' : a.triangles <= budget ? 'medium' : 'heavy'
+    // weight factors BOTH triangles AND file size (bytes) — a low-poly mesh with
+    // a 27 MB embedded texture is NOT lightweight for a streaming web game.
+    const bytes = a.bytes ?? 0
+    const triClass = a.triangles <= budget * 0.34 ? 0 : a.triangles <= budget ? 1 : 2
+    const byteClass = bytes <= 1_000_000 ? 0 : bytes <= 4_000_000 ? 1 : 2
+    const w = Math.max(triClass, byteClass)
+    const weightClass = w === 0 ? 'light' : w === 1 ? 'medium' : 'heavy'
     const cand: CurationCandidate = {
       id: a.id,
       name: a.id.split('/').pop() ?? a.id,

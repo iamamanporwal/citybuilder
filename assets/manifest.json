@@ -4,9 +4,11 @@
   "pickContract": "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) — deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   "counts": {
     "assets": 350,
-    "pooled": 350,
+    "pooled": 114,
     "flaggedForReview": 10,
-    "pools": 60
+    "pools": 32,
+    "curationActive": true,
+    "curatedSelected": 33
   },
   "assets": [
     {
@@ -53,7 +55,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/bridge-pillar",
@@ -99,7 +102,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/construction-barrier",
@@ -147,7 +151,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/construction-cone",
@@ -193,7 +198,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/construction-light",
@@ -239,7 +245,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/light-curved-cross",
@@ -285,7 +292,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/light-curved-double",
@@ -331,7 +339,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/light-curved",
@@ -377,7 +386,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/light-square-cross",
@@ -423,7 +433,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/light-square-double",
@@ -469,7 +480,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/light-square",
@@ -515,7 +527,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "kenney-city-kit-roads/road-bend-barrier",
@@ -561,7 +574,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-bend-sidewalk",
@@ -607,7 +621,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-bend-square-barrier",
@@ -653,7 +668,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-bend-square",
@@ -699,7 +715,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-bend",
@@ -745,7 +762,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-bridge",
@@ -791,7 +809,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-crossing",
@@ -837,7 +856,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-crossroad-barrier",
@@ -883,7 +903,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-crossroad-line",
@@ -929,7 +950,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-crossroad-path",
@@ -975,7 +997,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-crossroad",
@@ -1021,7 +1044,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-curve-barrier",
@@ -1067,7 +1091,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-curve-intersection-barrier",
@@ -1113,7 +1138,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-curve-intersection",
@@ -1159,7 +1185,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-curve-pavement",
@@ -1205,7 +1232,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-curve",
@@ -1251,7 +1279,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-driveway-double-barrier",
@@ -1297,7 +1326,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-driveway-double",
@@ -1343,7 +1373,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-driveway-single-barrier",
@@ -1389,7 +1420,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-driveway-single",
@@ -1435,7 +1467,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-end-barrier",
@@ -1481,7 +1514,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-end-round-barrier",
@@ -1527,7 +1561,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-end-round",
@@ -1573,7 +1608,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-end",
@@ -1619,7 +1655,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-intersection-barrier",
@@ -1665,7 +1702,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-intersection-line",
@@ -1711,7 +1749,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-intersection-path",
@@ -1757,7 +1796,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-intersection",
@@ -1803,7 +1843,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-roundabout-barrier",
@@ -1849,7 +1890,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-roundabout",
@@ -1895,7 +1937,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-side-barrier",
@@ -1941,7 +1984,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-side-entry-barrier",
@@ -1987,7 +2031,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-side-entry",
@@ -2033,7 +2078,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-side-exit-barrier",
@@ -2079,7 +2125,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-side-exit",
@@ -2125,7 +2172,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-side",
@@ -2171,7 +2219,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-barrier",
@@ -2217,7 +2266,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-curve-barrier",
@@ -2263,7 +2313,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-curve",
@@ -2309,7 +2360,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-flat-curve",
@@ -2355,7 +2407,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-flat-high",
@@ -2401,7 +2454,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-flat",
@@ -2447,7 +2501,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-high-barrier",
@@ -2493,7 +2548,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant-high",
@@ -2539,7 +2595,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-slant",
@@ -2585,7 +2642,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-split-barrier",
@@ -2631,7 +2689,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-split",
@@ -2677,7 +2736,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-square-barrier",
@@ -2723,7 +2783,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-square",
@@ -2769,7 +2830,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-straight-barrier-end",
@@ -2815,7 +2877,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-straight-barrier-half",
@@ -2861,7 +2924,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-straight-barrier",
@@ -2907,7 +2971,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-straight-half",
@@ -2953,7 +3018,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/road-straight",
@@ -2999,7 +3065,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/sign-highway-detailed",
@@ -3045,7 +3112,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/sign-highway-wide",
@@ -3091,7 +3159,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/sign-highway",
@@ -3137,7 +3206,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/tile-high",
@@ -3183,7 +3253,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/tile-low",
@@ -3229,7 +3300,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/tile-slant",
@@ -3275,7 +3347,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "kenney-city-kit-roads/tile-slantHigh",
@@ -3321,7 +3394,8 @@
       "license": "CC0-1.0",
       "attribution": "Kenney (kenney.nl)",
       "sourceUrl": "https://kenney.nl/assets/city-kit-roads",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_90Angle_L",
@@ -3373,7 +3447,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_90Angle_R",
@@ -3425,7 +3500,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_BottomTrim",
@@ -3481,7 +3557,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Column_RedBricks",
@@ -3532,7 +3609,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Column_Small",
@@ -3583,7 +3661,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Column_TrimBricks",
@@ -3638,7 +3717,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
@@ -3690,7 +3770,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Bottom",
@@ -3745,7 +3826,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Cap",
@@ -3800,7 +3882,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_CapShort",
@@ -3851,7 +3934,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center_Half",
@@ -3902,7 +3986,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
@@ -3953,7 +4038,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
@@ -4008,7 +4094,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Bottom",
@@ -4063,7 +4150,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Center",
@@ -4114,7 +4202,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Top",
@@ -4169,7 +4258,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_HalfTrim",
@@ -4225,7 +4315,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
@@ -4283,7 +4374,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved",
@@ -4341,7 +4433,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
@@ -4399,7 +4492,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Inset",
@@ -4455,7 +4549,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_1",
@@ -4506,7 +4601,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_3",
@@ -4557,7 +4653,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_4",
@@ -4608,7 +4705,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Ornament_Horizontal",
@@ -4659,7 +4757,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Plain_1",
@@ -4711,7 +4810,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
@@ -4763,7 +4863,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
@@ -4815,7 +4916,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Plain_4",
@@ -4867,7 +4969,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_RedWhite_DoubleWindow",
@@ -4929,7 +5032,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_TopTrim_90Angle_L",
@@ -4985,7 +5089,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_TopTrim_90Angle_R",
@@ -5041,7 +5146,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_TopTrim_Corner",
@@ -5097,7 +5203,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
@@ -5153,7 +5260,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Window_CurvedDouble",
@@ -5211,7 +5319,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Window_Square_Single",
@@ -5269,7 +5378,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
@@ -5327,7 +5437,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
@@ -5385,7 +5496,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Building_Large_2",
@@ -5464,7 +5576,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "quaternius-downtown-city-megakit/Building_Medium_2_001",
@@ -5540,7 +5653,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Building_Small_1",
@@ -5621,7 +5735,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Brick_90Angle_L",
@@ -5672,7 +5787,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Brick_90Angle_R",
@@ -5723,7 +5839,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Brick_Center",
@@ -5774,7 +5891,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Brick_L",
@@ -5825,7 +5943,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Brick_R",
@@ -5876,7 +5995,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Metal_90Angle_L",
@@ -5927,7 +6047,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Metal_90Angle_R",
@@ -5978,7 +6099,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Metal_Center",
@@ -6029,7 +6151,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Metal_L",
@@ -6080,7 +6203,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Metal_R",
@@ -6131,7 +6255,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Trim_90Angle_L",
@@ -6182,7 +6307,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Trim_90Angle_R",
@@ -6233,7 +6359,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Trim_Center",
@@ -6284,7 +6411,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Trim_L",
@@ -6335,7 +6463,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Cornice_Trim_R",
@@ -6386,7 +6515,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_ArrowForwardLeft",
@@ -6434,7 +6564,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_ArrowForwardRight",
@@ -6482,7 +6613,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_ArrowStraight",
@@ -6530,7 +6662,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_ArrowTurnLeft",
@@ -6578,7 +6711,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_ArrowTurnRight",
@@ -6626,7 +6760,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Bikelane",
@@ -6674,7 +6809,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_BrokenLine_Straight",
@@ -6722,7 +6858,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
@@ -6771,7 +6908,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
@@ -6820,7 +6958,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Curve_2Lane_Stripe",
@@ -6868,7 +7007,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort_DoubleYellow",
@@ -6916,7 +7056,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort_Stripe",
@@ -6964,7 +7105,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort",
@@ -7012,7 +7154,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_DoubleYellow_Straight",
@@ -7060,7 +7203,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Only",
@@ -7108,7 +7252,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Slow",
@@ -7156,7 +7301,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Decal_Stop",
@@ -7204,7 +7350,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Door_1",
@@ -7255,7 +7402,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Door_2",
@@ -7307,7 +7455,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Door_3",
@@ -7359,7 +7508,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
@@ -7411,7 +7561,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
@@ -7468,7 +7619,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
@@ -7520,7 +7672,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Entrance_Concrete_2x1",
@@ -7571,7 +7724,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Entrance_Concrete_2x2",
@@ -7622,7 +7776,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Floor_2x2",
@@ -7677,7 +7832,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Floor_4x4",
@@ -7732,7 +7888,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Floor_Inset",
@@ -7787,7 +7944,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Column_Bottom",
@@ -7838,7 +7996,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Column_Center",
@@ -7889,7 +8048,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Bottom",
@@ -7940,7 +8100,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Center",
@@ -7991,7 +8152,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Top",
@@ -8042,7 +8204,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Column_Top",
@@ -8093,7 +8256,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
@@ -8148,7 +8312,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
@@ -8207,7 +8372,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Window",
@@ -8268,7 +8434,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_FullWindow",
@@ -8321,7 +8488,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Plain_1",
@@ -8376,7 +8544,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Plain_3",
@@ -8431,7 +8600,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
@@ -8484,7 +8654,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Metal_Window",
@@ -8542,7 +8713,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Prop_ACUnit",
@@ -8592,7 +8764,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "quaternius-downtown-city-megakit/Prop_Bollard",
@@ -8642,7 +8815,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "quaternius-downtown-city-megakit/Prop_Drain",
@@ -8693,7 +8867,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "quaternius-downtown-city-megakit/Prop_ManholeCover",
@@ -8743,7 +8918,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "quaternius-downtown-city-megakit/Prop_Planter_Single",
@@ -8797,7 +8973,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_Center",
@@ -8848,7 +9025,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_L",
@@ -8899,7 +9077,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_R",
@@ -8950,7 +9129,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_2x2",
@@ -9001,7 +9181,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_4x4",
@@ -9052,7 +9233,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
@@ -9107,7 +9289,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_Slate_Corner",
@@ -9158,7 +9341,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_Slate_InnerCorner",
@@ -9213,7 +9397,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
@@ -9274,7 +9459,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
@@ -9333,7 +9519,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
@@ -9388,7 +9575,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
@@ -9447,7 +9635,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
@@ -9508,7 +9697,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m_Stripe",
@@ -9557,7 +9747,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Flat_3m",
@@ -9608,7 +9799,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m_Stripe",
@@ -9657,7 +9849,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Corner_Round_3m",
@@ -9708,7 +9901,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_NoCurb_3m",
@@ -9759,7 +9953,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Planter",
@@ -9813,7 +10008,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m_Stripe",
@@ -9862,7 +10058,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Sidewalk_Straight_3m",
@@ -9913,7 +10110,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Stairs_Entrance_Concrete",
@@ -9968,7 +10166,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_1",
@@ -10019,7 +10218,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_2",
@@ -10070,7 +10270,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
@@ -10121,7 +10322,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_2Lane_noSidewalk",
@@ -10174,7 +10376,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_2Lane",
@@ -10231,7 +10434,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_4Lane_noSidewalk",
@@ -10284,7 +10488,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_4Lane",
@@ -10341,7 +10546,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_4WayIntersection",
@@ -10397,7 +10603,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Asphalt_6x6",
@@ -10447,7 +10654,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Asphalt_9x9",
@@ -10497,7 +10705,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Asphalt_Curve_2Lane",
@@ -10548,7 +10757,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Asphalt_Curve_4Lane_Short",
@@ -10599,7 +10809,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane_Curb",
@@ -10650,7 +10861,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Curve_2Lane",
@@ -10707,7 +10919,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Curve_4Lane_Short_Curb",
@@ -10758,7 +10971,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_Curve_4LaneShort",
@@ -10815,7 +11029,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Street_TIntersection",
@@ -10871,7 +11086,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_90Angle_TopCover",
@@ -10926,7 +11142,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Column_Bottom",
@@ -10977,7 +11194,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Column_Center",
@@ -11028,7 +11246,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Column_Top",
@@ -11079,7 +11298,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Corner",
@@ -11134,7 +11354,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Wall",
@@ -11189,7 +11410,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Window_001",
@@ -11246,7 +11468,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Window_Columns",
@@ -11297,7 +11520,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Plain_3",
@@ -11352,7 +11576,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Wall_Guard",
@@ -11403,7 +11628,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "quaternius-downtown-city-megakit/Trim_Window",
@@ -11461,7 +11687,8 @@
       ],
       "source": "Quaternius — Downtown City MegaKit (free)",
       "license": "CC0-1.0",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "sketchfab-curated/bench_picnic_table_low_poly_fe35ac",
@@ -11505,7 +11732,8 @@
       "license": "CC-BY (attribution)",
       "attribution": "\"Picnic Table - Low Poly\" by Derek Flanagan — CC-BY (attribution)",
       "sourceUrl": "https://sketchfab.com/3d-models/none-fe35acda3a5245da8459d1a062e28190",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "sketchfab-curated/bus_stop_bus_stop_shelter_bca23b",
@@ -11549,7 +11777,8 @@
       "license": "CC-BY (attribution)",
       "attribution": "\"Bus Stop Shelter\" by R3indeer — CC-BY (attribution)",
       "sourceUrl": "https://sketchfab.com/3d-models/none-bca23ba2d6794c4aab20c9a3d6e01b6a",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "sketchfab-curated/fence_old_fence_3a98ea",
@@ -11595,7 +11824,8 @@
       "sourceUrl": "https://sketchfab.com/3d-models/none-3a98eabc0aa9475db5fcf7fab235751b",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "sketchfab-curated/hydrant_psx_low_poly_fire_hydrant_1d2b13",
@@ -11639,7 +11869,8 @@
       "license": "CC-BY-SA (attribution, share-alike)",
       "attribution": "\"PSX Low-poly Fire Hydrant\" by korkskrew2000 — CC-BY-SA (attribution, share-alike)",
       "sourceUrl": "https://sketchfab.com/3d-models/none-1d2b139c1d1948918bf55d361d1132aa",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "sketchfab-curated/streetlight_street_light_2d44b3",
@@ -11685,7 +11916,8 @@
       "sourceUrl": "https://sketchfab.com/3d-models/none-2d44b333f56c4faaab1bd2007868cc37",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "sketchfab-curated/traffic_light_traffic_light_793e07",
@@ -11739,7 +11971,8 @@
       "sourceUrl": "https://sketchfab.com/3d-models/none-793e078faa02407bb6ece323048852c4",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": true
     },
     {
       "id": "sketchfab-curated/trash_can_trash_can_minecraft_831dd4",
@@ -11783,7 +12016,8 @@
       "license": "CC-BY (attribution)",
       "attribution": "\"Trash Can [Minecraft]\" by sedona1029 — CC-BY (attribution)",
       "sourceUrl": "https://sketchfab.com/3d-models/none-831dd489b8044ba8bb77f0ca253dcfde",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "sketchfab-curated/tree_pine_tree_proto_series_free_08014e",
@@ -11829,7 +12063,8 @@
       "sourceUrl": "https://sketchfab.com/3d-models/none-08014e92a59244c992884091218230b8",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/bench_01",
@@ -11873,7 +12108,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Seat.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/bench_02",
@@ -11917,7 +12153,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/bench_03",
@@ -11961,7 +12198,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/bench_04",
@@ -12005,7 +12243,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Bench_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/bench_05",
@@ -12050,7 +12289,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bench_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/bench_06",
@@ -12094,7 +12334,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/bin_01",
@@ -12138,7 +12379,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Icon_TrashBin_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_01",
@@ -12182,7 +12424,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/Fence.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_02",
@@ -12226,7 +12469,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Tower_Station_Fence_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_03",
@@ -12270,7 +12514,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Tower_Ornamental_Fence_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_04",
@@ -12315,7 +12560,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Fence_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_05",
@@ -12361,7 +12607,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Fence_01_Post_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_06",
@@ -12407,7 +12654,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Fence01.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/fence_07",
@@ -12453,7 +12701,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Fence02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fence_08",
@@ -12497,7 +12746,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Railing_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/fence_09",
@@ -12542,7 +12792,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/LoveDeath_Fence_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/fence_10",
@@ -12587,7 +12838,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Railing_02.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/fence_11",
@@ -12633,7 +12885,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/Spooky_Fence_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/fountain_01",
@@ -12679,7 +12932,8 @@
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_01_Art.glb",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fountain_02",
@@ -12725,7 +12979,8 @@
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_02_Art.glb",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fountain_03",
@@ -12771,7 +13026,8 @@
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_01_Art.001.glb",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fountain_04",
@@ -12815,7 +13071,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_FX_2_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fountain_05",
@@ -12860,7 +13117,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Str_Fountain_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fountain_06",
@@ -12906,7 +13164,8 @@
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/WaterfallFoam01.glb",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/fountain_07",
@@ -12954,7 +13213,8 @@
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Stairs_Hall_01_Fountain_Water.glb",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_01",
@@ -13000,7 +13260,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/planter_02",
@@ -13046,7 +13307,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_03",
@@ -13092,7 +13354,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_02.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/planter_04",
@@ -13137,7 +13400,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_01_Art.001_Vapor.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_05",
@@ -13182,7 +13446,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Vapor_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_06",
@@ -13227,7 +13492,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Retro_03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_07",
@@ -13272,7 +13538,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Vapor_02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_08",
@@ -13316,7 +13583,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Pot_Plant.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/planter_09",
@@ -13362,7 +13630,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_10",
@@ -13408,7 +13677,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_11",
@@ -13454,7 +13724,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Narrow_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/planter_12",
@@ -13500,7 +13771,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_01",
@@ -13544,7 +13816,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Sign_07_Exit.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_02",
@@ -13588,7 +13861,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/StoreCartel.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_03",
@@ -13634,7 +13908,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Sign_book.001.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_04",
@@ -13681,7 +13956,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/SignPost.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_05",
@@ -13730,7 +14006,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/EntranceBoard.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_06",
@@ -13774,7 +14051,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_13.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_07",
@@ -13819,7 +14097,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_09.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_08",
@@ -13864,7 +14143,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_10.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_09",
@@ -13909,7 +14189,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_06.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_10",
@@ -13954,7 +14235,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_08.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_11",
@@ -13999,7 +14281,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_05.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_12",
@@ -14044,7 +14327,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_07.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_13",
@@ -14089,7 +14373,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_16.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_14",
@@ -14134,7 +14419,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_15",
@@ -14179,7 +14465,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_16",
@@ -14225,7 +14512,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_04.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_17",
@@ -14271,7 +14559,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_14.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_18",
@@ -14318,7 +14607,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_15.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_19",
@@ -14365,7 +14655,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/sign_20",
@@ -14412,7 +14703,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_12.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_01",
@@ -14458,7 +14750,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodBastet_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_02",
@@ -14504,7 +14797,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodAnubis_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_03",
@@ -14550,7 +14844,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodRa_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_04",
@@ -14595,7 +14890,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/Obelisk_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_05",
@@ -14640,7 +14936,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Statue_greek_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_06",
@@ -14685,7 +14982,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Statue_greek_02_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/statue_07",
@@ -14731,7 +15029,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/David_Retro.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/statue_08",
@@ -14777,7 +15076,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Venus_Retro.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/statue_09",
@@ -14824,7 +15124,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Venus_01_Floating.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_01",
@@ -14871,7 +15172,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/aero-system/Aero_Lampost_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_02",
@@ -14916,7 +15218,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/Lamp01.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_03",
@@ -14960,7 +15263,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Lamp_Stand.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_04",
@@ -15005,7 +15309,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_05",
@@ -15050,7 +15355,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp04.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_06",
@@ -15095,7 +15401,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_07",
@@ -15140,7 +15447,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_08",
@@ -15185,7 +15493,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/Spooky_Tower_Lantern_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_09",
@@ -15231,7 +15540,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/Lamp.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_10",
@@ -15276,7 +15586,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/OutterLamp.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_11",
@@ -15322,7 +15633,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/LampWreath.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_12",
@@ -15367,7 +15679,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Light_Streetlight_01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_13",
@@ -15412,7 +15725,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Lamp_Wall.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_14",
@@ -15457,7 +15771,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/TableLamp.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/street_lamp_15",
@@ -15503,7 +15818,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Studio_Lamp.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_01",
@@ -15547,7 +15863,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_02",
@@ -15591,7 +15908,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush02_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_03",
@@ -15635,7 +15953,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush03_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_04",
@@ -15679,7 +15998,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/xyz/007_Starplant_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_05",
@@ -15723,7 +16043,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/BlockChain_CodeBush_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_06",
@@ -15767,7 +16088,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Plant_02_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_07",
@@ -15811,7 +16133,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/LoveDeath_Plant_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_08",
@@ -15855,7 +16178,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/PalmTree_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/tree_09",
@@ -15900,7 +16224,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_10",
@@ -15945,7 +16270,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_02_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_11",
@@ -15990,7 +16316,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_12",
@@ -16035,7 +16362,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_02_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_13",
@@ -16081,7 +16409,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/aero-system/Tree_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_14",
@@ -16127,7 +16456,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_Trunk_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_15",
@@ -16173,7 +16503,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_03_art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_16",
@@ -16219,7 +16550,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_04_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_17",
@@ -16265,7 +16597,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_03_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_18",
@@ -16309,7 +16642,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush04.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_19",
@@ -16361,7 +16695,8 @@
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/Tree01_Art.glb",
       "flags": [
         "oversized"
-      ]
+      ],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_20",
@@ -16405,7 +16740,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_21",
@@ -16449,7 +16785,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush07.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_22",
@@ -16493,7 +16830,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush08.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_23",
@@ -16537,7 +16875,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush09.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_24",
@@ -16583,7 +16922,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Plant_01_Art.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_25",
@@ -16627,7 +16967,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_26",
@@ -16672,7 +17013,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/BasePalmTree01.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/tree_27",
@@ -16717,7 +17059,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree02.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_28",
@@ -16762,7 +17105,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_29",
@@ -16807,7 +17151,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree04.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     },
     {
       "id": "toxsam-polygonal-mind/tree_30",
@@ -16853,7 +17198,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_31",
@@ -16898,7 +17244,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree01.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_32",
@@ -16943,7 +17290,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree03.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_33",
@@ -16988,7 +17336,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree04.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_34",
@@ -17033,7 +17382,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush06.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_35",
@@ -17078,7 +17428,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush05.glb",
-      "flags": []
+      "flags": [],
+      "curated": false
     },
     {
       "id": "toxsam-polygonal-mind/tree_36",
@@ -17123,7 +17474,8 @@
       "license": "CC0-1.0",
       "attribution": "Polygonal Mind (via ToxSam open-source-3D-assets)",
       "sourceUrl": "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree02.glb",
-      "flags": []
+      "flags": [],
+      "curated": true
     }
   ],
   "pools": {
@@ -17408,10 +17760,6 @@
         {
           "id": "kenney-city-kit-roads/construction-cone",
           "weight": 1
-        },
-        {
-          "id": "kenney-city-kit-roads/construction-light",
-          "weight": 1
         }
       ]
     },
@@ -17447,386 +17795,6 @@
         }
       ]
     },
-    "street_sign|kenney": {
-      "osmTag": "street_sign",
-      "style": "kenney",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "kenney-city-kit-roads/sign-highway-detailed",
-          "weight": 1
-        },
-        {
-          "id": "kenney-city-kit-roads/sign-highway-wide",
-          "weight": 1
-        },
-        {
-          "id": "kenney-city-kit-roads/sign-highway",
-          "weight": 1
-        }
-      ]
-    },
-    "building:part=yes|brick-red": {
-      "osmTag": "building:part=yes",
-      "style": "brick-red",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_BottomTrim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Column_RedBricks",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Column_Small",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Column_TrimBricks",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Cap",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_CapShort",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center_Half",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfTrim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Ornament_Horizontal",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
-          "weight": 0.5
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_RedWhite_DoubleWindow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_CurvedDouble",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Square_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_R",
-          "weight": 1
-        }
-      ]
-    },
-    "building:material=brick|brick-red": {
-      "osmTag": "building:material=brick",
-      "style": "brick-red",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_BottomTrim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Column_RedBricks",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Column_Small",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Column_TrimBricks",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Corner_Plain",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Cap",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_CapShort",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center_Half",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_CornerColumn_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfColumn_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_HalfTrim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved_Small",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window_Curved",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset_Window",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Inset",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_InteriorWall_4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Ornament_Horizontal",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_3_noWear",
-          "weight": 0.5
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Plain_4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_RedWhite_DoubleWindow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_TopTrim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_CurvedDouble",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Square_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Brick_Window_Trim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Brick_R",
-          "weight": 1
-        }
-      ]
-    },
     "building=commercial|downtown-brick": {
       "osmTag": "building=commercial",
       "style": "downtown-brick",
@@ -17836,10 +17804,6 @@
         {
           "id": "quaternius-downtown-city-megakit/Building_Large_2",
           "weight": 1.5
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Building_Medium_2_001",
-          "weight": 1
         }
       ]
     },
@@ -17866,10 +17830,6 @@
           "weight": 1
         },
         {
-          "id": "quaternius-downtown-city-megakit/Building_Medium_2_001",
-          "weight": 1
-        },
-        {
           "id": "quaternius-downtown-city-megakit/Building_Small_1",
           "weight": 1
         }
@@ -17881,10 +17841,6 @@
       "semantic": "building",
       "referenceOnly": false,
       "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Building_Medium_2_001",
-          "weight": 1
-        },
         {
           "id": "quaternius-downtown-city-megakit/Building_Small_1",
           "weight": 1.5
@@ -17900,634 +17856,6 @@
         {
           "id": "quaternius-downtown-city-megakit/Building_Small_1",
           "weight": 1.5
-        }
-      ]
-    },
-    "building:part=yes|metal-glass": {
-      "osmTag": "building:part=yes",
-      "style": "metal-glass",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Window",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FullWindow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Plain_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Plain_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Window",
-          "weight": 1
-        }
-      ]
-    },
-    "building:material=metal|metal-glass": {
-      "osmTag": "building:material=metal",
-      "style": "metal-glass",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Metal_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Small_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Column_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Wall",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FirstFloor_Window",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_FullWindow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Plain_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Plain_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Window_Half",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Metal_Window",
-          "weight": 1
-        }
-      ]
-    },
-    "building:part=yes|painted-trim": {
-      "osmTag": "building:part=yes",
-      "style": "painted-trim",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Door_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Door_2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Door_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Entrance_Concrete_2x1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Entrance_Concrete_2x2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Floor_2x2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Floor_4x4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Floor_Inset",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_4x4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Entrance_Concrete",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_90Angle_TopCover",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Column_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Column_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Column_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Wall",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Window_001",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Window_Columns",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Plain_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Wall_Guard",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Window",
-          "weight": 1
-        }
-      ]
-    },
-    "building:material=concrete|painted-trim": {
-      "osmTag": "building:material=concrete",
-      "style": "painted-trim",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Cornice_Trim_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Door_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Door_2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Door_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Metal_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Trim",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/DoorFrame_Wooden",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Entrance_Concrete_2x1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Entrance_Concrete_2x2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Floor_2x2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Floor_4x4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Floor_Inset",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_L",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2_90Angle_R",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_2x2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_4x4",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Entrance_Concrete",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal_Straight_2",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Stairs_Rails_Metal",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_90Angle_TopCover",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Column_Bottom",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Column_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Column_Top",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Wall",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Window_001",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_FirstFloor_Window_Columns",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Plain_3",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Wall_Guard",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Trim_Window",
-          "weight": 1
-        }
-      ]
-    },
-    "turn:lanes~through;left|paint-us": {
-      "osmTag": "turn:lanes~through;left",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_ArrowForwardLeft",
-          "weight": 1
-        }
-      ]
-    },
-    "turn:lanes~through;right|paint-us": {
-      "osmTag": "turn:lanes~through;right",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_ArrowForwardRight",
-          "weight": 1
-        }
-      ]
-    },
-    "turn:lanes~through|paint-us": {
-      "osmTag": "turn:lanes~through",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_ArrowStraight",
-          "weight": 1
-        }
-      ]
-    },
-    "turn:lanes~left|paint-us": {
-      "osmTag": "turn:lanes~left",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_ArrowTurnLeft",
-          "weight": 1
-        }
-      ]
-    },
-    "turn:lanes~right|paint-us": {
-      "osmTag": "turn:lanes~right",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_ArrowTurnRight",
-          "weight": 1
-        }
-      ]
-    },
-    "cycleway=lane|paint-us": {
-      "osmTag": "cycleway=lane",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Bikelane",
-          "weight": 1
-        }
-      ]
-    },
-    "road_marking|paint-us": {
-      "osmTag": "road_marking",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_BrokenLine_Straight",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Curve_2Lane_Stripe",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort_DoubleYellow",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort_Stripe",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Curve_4LaneShort",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_DoubleYellow_Straight",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Only",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Slow",
-          "weight": 1
-        }
-      ]
-    },
-    "highway=crossing|paint-us": {
-      "osmTag": "highway=crossing",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
-          "weight": 1
-        }
-      ]
-    },
-    "crossing=marked|paint-us": {
-      "osmTag": "crossing=marked",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk_Wide",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Crosswalk",
-          "weight": 1
-        }
-      ]
-    },
-    "highway=stop|paint-us": {
-      "osmTag": "highway=stop",
-      "style": "paint-us",
-      "semantic": "road_decal",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Decal_Stop",
-          "weight": 1
         }
       ]
     },
@@ -18579,102 +17907,6 @@
       "entries": [
         {
           "id": "quaternius-downtown-city-megakit/Prop_Drain",
-          "weight": 1
-        }
-      ]
-    },
-    "man_made=planter|concrete": {
-      "osmTag": "man_made=planter",
-      "style": "concrete",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Prop_Planter_Single",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Sidewalk_Planter",
-          "weight": 1
-        }
-      ]
-    },
-    "building:part=yes|slate": {
-      "osmTag": "building:part=yes",
-      "style": "slate",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_InnerCorner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
-          "weight": 1
-        }
-      ]
-    },
-    "building:material=slate|slate": {
-      "osmTag": "building:material=slate",
-      "style": "slate",
-      "semantic": "building_module",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_InnerCorner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_Slate_Window_1",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Center",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Corner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_InnerCorner",
-          "weight": 1
-        },
-        {
-          "id": "quaternius-downtown-city-megakit/Roof_SlateCornice_Window_1",
           "weight": 1
         }
       ]
@@ -18907,31 +18139,6 @@
         }
       ]
     },
-    "highway=bus_stop|modern": {
-      "osmTag": "highway=bus_stop",
-      "style": "modern",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "sketchfab-curated/bus_stop_bus_stop_shelter_bca23b",
-          "weight": 1
-        }
-      ]
-    },
-    "barrier=fence|metal": {
-      "osmTag": "barrier=fence",
-      "style": "metal",
-      "semantic": "barrier",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "sketchfab-curated/fence_old_fence_3a98ea",
-          "weight": 1,
-          "normalizeScale": true
-        }
-      ]
-    },
     "emergency=fire_hydrant|us": {
       "osmTag": "emergency=fire_hydrant",
       "style": "us",
@@ -18941,19 +18148,6 @@
         {
           "id": "sketchfab-curated/hydrant_psx_low_poly_fire_hydrant_1d2b13",
           "weight": 1
-        }
-      ]
-    },
-    "highway=street_lamp|modern": {
-      "osmTag": "highway=street_lamp",
-      "style": "modern",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "sketchfab-curated/streetlight_street_light_2d44b3",
-          "weight": 1,
-          "normalizeScale": true
         }
       ]
     },
@@ -18970,31 +18164,6 @@
         }
       ]
     },
-    "amenity=waste_basket|city": {
-      "osmTag": "amenity=waste_basket",
-      "style": "city",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "sketchfab-curated/trash_can_trash_can_minecraft_831dd4",
-          "weight": 1
-        }
-      ]
-    },
-    "natural=tree|deciduous": {
-      "osmTag": "natural=tree",
-      "style": "deciduous",
-      "semantic": "vegetation",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "sketchfab-curated/tree_pine_tree_proto_series_free_08014e",
-          "weight": 1,
-          "normalizeScale": true
-        }
-      ]
-    },
     "amenity=bench|stylized": {
       "osmTag": "amenity=bench",
       "style": "stylized",
@@ -19002,39 +18171,7 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "toxsam-polygonal-mind/bench_01",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/bench_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/bench_03",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/bench_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/bench_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/bench_06",
-          "weight": 1
-        }
-      ]
-    },
-    "amenity=waste_basket|stylized": {
-      "osmTag": "amenity=waste_basket",
-      "style": "stylized",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "toxsam-polygonal-mind/bin_01",
           "weight": 1
         }
       ]
@@ -19046,31 +18183,7 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "toxsam-polygonal-mind/fence_01",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fence_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fence_03",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fence_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fence_05",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/fence_06",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fence_07",
           "weight": 1
         },
         {
@@ -19091,47 +18204,6 @@
         }
       ]
     },
-    "amenity=fountain|stylized": {
-      "osmTag": "amenity=fountain",
-      "style": "stylized",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "toxsam-polygonal-mind/fountain_01",
-          "weight": 1,
-          "normalizeScale": true
-        },
-        {
-          "id": "toxsam-polygonal-mind/fountain_02",
-          "weight": 1,
-          "normalizeScale": true
-        },
-        {
-          "id": "toxsam-polygonal-mind/fountain_03",
-          "weight": 1,
-          "normalizeScale": true
-        },
-        {
-          "id": "toxsam-polygonal-mind/fountain_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fountain_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/fountain_06",
-          "weight": 1,
-          "normalizeScale": true
-        },
-        {
-          "id": "toxsam-polygonal-mind/fountain_07",
-          "weight": 1,
-          "normalizeScale": true
-        }
-      ]
-    },
     "man_made=planter|stylized": {
       "osmTag": "man_made=planter",
       "style": "stylized",
@@ -19143,135 +18215,11 @@
           "weight": 1
         },
         {
-          "id": "toxsam-polygonal-mind/planter_02",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/planter_03",
           "weight": 1
         },
         {
-          "id": "toxsam-polygonal-mind/planter_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_06",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_07",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/planter_08",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_09",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_10",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_11",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/planter_12",
-          "weight": 1
-        }
-      ]
-    },
-    "street_sign|stylized": {
-      "osmTag": "street_sign",
-      "style": "stylized",
-      "semantic": "street_furniture",
-      "referenceOnly": false,
-      "entries": [
-        {
-          "id": "toxsam-polygonal-mind/sign_01",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_03",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_06",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_07",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_08",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_09",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_10",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_11",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_12",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_13",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_14",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_15",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_16",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_17",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_18",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_19",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/sign_20",
           "weight": 1
         }
       ]
@@ -19283,39 +18231,11 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "toxsam-polygonal-mind/statue_01",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_03",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_06",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/statue_07",
           "weight": 1
         },
         {
           "id": "toxsam-polygonal-mind/statue_08",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_09",
           "weight": 1
         }
       ]
@@ -19327,39 +18247,11 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "toxsam-polygonal-mind/statue_01",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_03",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_06",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/statue_07",
           "weight": 1
         },
         {
           "id": "toxsam-polygonal-mind/statue_08",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/statue_09",
           "weight": 1
         }
       ]
@@ -19371,63 +18263,7 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "toxsam-polygonal-mind/street_lamp_01",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/street_lamp_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_03",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_06",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_07",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_08",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_09",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_10",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_11",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_12",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_13",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_14",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/street_lamp_15",
           "weight": 1
         }
       ]
@@ -19439,104 +18275,7 @@
       "referenceOnly": false,
       "entries": [
         {
-          "id": "toxsam-polygonal-mind/tree_01",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_02",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_03",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_04",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_05",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_06",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_07",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/tree_08",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_09",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_10",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_11",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_12",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_13",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_14",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_15",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_16",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_17",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_18",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_19",
-          "weight": 1,
-          "normalizeScale": true
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_20",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_21",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_22",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_23",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_24",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_25",
           "weight": 1
         },
         {
@@ -19544,39 +18283,7 @@
           "weight": 1
         },
         {
-          "id": "toxsam-polygonal-mind/tree_27",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_28",
-          "weight": 1
-        },
-        {
           "id": "toxsam-polygonal-mind/tree_29",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_30",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_31",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_32",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_33",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_34",
-          "weight": 1
-        },
-        {
-          "id": "toxsam-polygonal-mind/tree_35",
           "weight": 1
         },
         {
