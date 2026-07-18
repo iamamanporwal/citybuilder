@@ -21,12 +21,36 @@ function std(o: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMateria
   return new THREE.MeshStandardMaterial(o)
 }
 
+// Large-scale variation keyed to WORLD position (not UV), so long roads don't
+// show the 6 m tile repeat and — because it ignores the per-segment UV offset —
+// the patchiness stays continuous across segment seams. Cheap multi-sine "noise"
+// modulates brightness a little, the same onBeforeCompile pattern the ocean uses.
+function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.MeshStandardMaterial {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float cbM1 = sin(vCbMacroW.x * 0.071 + vCbMacroW.z * 0.031);
+        float cbM2 = sin(vCbMacroW.x * 0.017 - vCbMacroW.z * 0.089);
+        float cbMacro = 0.5 + 0.5 * (cbM1 * 0.6 + cbM2 * 0.4);
+        diffuseColor.rgb *= mix(0.87, 1.11, cbMacro);`,
+      )
+  }
+  m.customProgramCacheKey = () => key
+  return m
+}
+
 // ---------- road surfaces (shared per set; per-segment UV offset via clone) ----------
 
 const ROAD_MATERIALS: Record<RoadSurfaceSet, THREE.MeshStandardMaterial> = {
-  'asphalt-new': std({ map: surf.asphaltNew.albedo, normalMap: surf.asphaltNew.normal, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }),
-  'asphalt-worn': std({ map: surf.asphaltWorn.albedo, normalMap: surf.asphaltWorn.normal, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }),
-  'asphalt-patched': std({ map: surf.asphaltPatched.albedo, normalMap: surf.asphaltPatched.normal, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }),
+  'asphalt-new': withMacroVariation(std({ map: surf.asphaltNew.albedo, normalMap: surf.asphaltNew.normal, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }), 'cb-asphalt-new'),
+  'asphalt-worn': withMacroVariation(std({ map: surf.asphaltWorn.albedo, normalMap: surf.asphaltWorn.normal, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }), 'cb-asphalt-worn'),
+  'asphalt-patched': withMacroVariation(std({ map: surf.asphaltPatched.albedo, normalMap: surf.asphaltPatched.normal, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }), 'cb-asphalt-patched'),
   cobble: std({ map: surf.cobble.albedo, normalMap: surf.cobble.normal, roughnessMap: surf.cobble.mr, metalnessMap: surf.cobble.mr, roughness: 1, metalness: 1 }),
   pavers: std({ map: surf.pavers.albedo, normalMap: surf.pavers.normal, roughnessMap: surf.pavers.mr, metalnessMap: surf.pavers.mr, roughness: 1, metalness: 1 }),
   gravel: std({ map: surf.gravel.albedo, roughnessMap: surf.gravel.mr, metalnessMap: surf.gravel.mr, roughness: 1, metalness: 1 }),
