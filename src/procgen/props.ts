@@ -6,6 +6,7 @@ import { mats } from './materials'
 import { mergeGeometries } from './geometry'
 import { instanceKindVaried } from '../scene/libraryTemplates'
 import { buildRoadElevation } from './corridor'
+import { sampleTerrain } from './terrain/field'
 import { NON_DRIVABLE } from './roadNetwork'
 import { nearestRoadInfo } from './signMath'
 
@@ -17,7 +18,7 @@ export function buildTrafficSignal(p: PointFeature): THREE.Group {
   const g = new THREE.Group()
   g.name = 'Traffic signal'
   g.userData.objectId = p.id
-  g.position.set(p.position.x, 0, p.position.z)
+  g.position.set(p.position.x, sampleTerrain(p.position.x, p.position.z), p.position.z)
 
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 4.6, 8), mats.signalPole)
   pole.position.y = 2.3
@@ -113,12 +114,13 @@ export function buildTrees(trees: PointFeature[], ctx: ResolvedContext): THREE.G
     list.forEach((e, i) => {
       const trunkH = geo.trunkH * e.scale
       const cs = e.scale * (species === 'broadleaf' ? 1.9 : 1.15)
+      const ty = sampleTerrain(e.t.position.x, e.t.position.z) // root the tree on the ground
       s.set(e.scale, trunkH, e.scale)
-      v.set(e.t.position.x, trunkH / 2, e.t.position.z)
+      v.set(e.t.position.x, ty + trunkH / 2, e.t.position.z)
       m.compose(v, q, s)
       trunks.setMatrixAt(i, m)
       s.set(cs, cs, cs)
-      v.set(e.t.position.x, trunkH + cs * (species === 'columnar' || species === 'conifer' ? 1.1 : 0.45), e.t.position.z)
+      v.set(e.t.position.x, ty + trunkH + cs * (species === 'columnar' || species === 'conifer' ? 1.1 : 0.45), e.t.position.z)
       m.compose(v, q, s)
       canopies.setMatrixAt(i, m)
       c.set(geo.canopyColor).offsetHSL(e.tint * 0.03, e.tint * 0.06, e.tint * 0.045)
@@ -127,6 +129,12 @@ export function buildTrees(trees: PointFeature[], ctx: ResolvedContext): THREE.G
     trunks.instanceMatrix.needsUpdate = true
     canopies.instanceMatrix.needsUpdate = true
     if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true
+    // Instance matrices carry WORLD positions while the mesh sits at the group
+    // origin, so the base geometry's sphere at origin would frustum-cull the
+    // whole spread-out batch from most angles (trees pop in as you approach).
+    // Compute the instance-aware bounding sphere now so culling is correct.
+    trunks.computeBoundingSphere()
+    canopies.computeBoundingSphere()
     trunks.userData.objectId = 'veg_trees'
     canopies.userData.objectId = 'veg_trees'
     group.add(trunks, canopies)
@@ -303,14 +311,22 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
   // which the engine drops (the rendered deck has no separate sidewalks) — the
   // raw position would float in mid-air beside the deck. Those clamp onto the
   // nearest drivable deck's edge; everything else keeps its mapped position.
+  // How far a road's surface is RAISED above the local ground — the real
+  // "is this a deck?" signal. With terrain, absolute elevation is non-zero even
+  // at grade (the road follows the hill), so a raw `e > 0.5` test would misread
+  // an ordinary hillside street as a bridge deck; the raise above terrain does not.
+  const raiseAt = (r: RoadSegment, station: number, at: Vec2): number =>
+    elevAt(r, station) - sampleTerrain(at.x, at.z)
   const placeOsm = (p: PointFeature, rotY: number): Placement => {
     const near = nearestRoadInfo(p.position, graph.roads, true)
-    if (!near?.road || near.dist > near.road.widthM / 2 + 8) return { p: p.position, rotY, y: 0 }
+    if (!near?.road || near.dist > near.road.widthM / 2 + 8)
+      return { p: p.position, rotY, y: sampleTerrain(p.position.x, p.position.z) }
     const e = elevAt(near.road, near.station ?? 0)
-    if (!near.road.bridge && e < 0.5) return { p: p.position, rotY, y: e }
+    if (!near.road.bridge && raiseAt(near.road, near.station ?? 0, p.position) < 0.5)
+      return { p: p.position, rotY, y: e }
     // elevated context — find the drivable deck this furniture belongs to
     const deck = nearestRoadInfo(p.position, graph.roads, false)
-    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || elevAt(deck.road, deck.station ?? 0) > 0.5)) {
+    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || raiseAt(deck.road, deck.station ?? 0, deck.point) > 0.5)) {
       const halfD = deck.road.widthM / 2
       const yDeck = elevAt(deck.road, deck.station ?? 0)
       if (deck.dist > halfD - 0.55) {
@@ -434,6 +450,9 @@ export function buildFurniture(graph: CityGraph, ctx: ResolvedContext): THREE.Gr
       im.setMatrixAt(i, m)
     })
     im.instanceMatrix.needsUpdate = true
+    // world-space instance matrices vs origin-anchored base geometry → compute
+    // the instance-aware sphere so the whole furniture batch isn't wrongly culled
+    im.computeBoundingSphere()
     im.castShadow = true
     im.name = name
     im.userData.objectId = 'furn_all'

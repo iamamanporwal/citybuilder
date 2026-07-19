@@ -30,6 +30,8 @@ export interface GenerateOptions {
   roadScale?: number
   /** Network elevation solve (semantics v3 y-channel). Default on. */
   corridorElevation?: boolean
+  /** Terrain relief (procgen/terrain) drives world elevation. Default on. */
+  terrain?: boolean
   onProgress?: (message: string) => void
 }
 
@@ -89,6 +91,7 @@ export async function generateCity(opts: GenerateOptions): Promise<ExportBundle>
   await loadLibraryTemplates([], false)
   s.setUseLibraryAssets(false)
   s.setUseCorridorElevation(opts.corridorElevation ?? true)
+  s.setUseTerrain(opts.terrain ?? true)
   const roadScale = clampRoadScale(opts.roadScale ?? 1)
   s.setRoadScale(roadScale)
 

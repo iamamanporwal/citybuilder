@@ -245,12 +245,18 @@ describe('roof-form geometry', () => {
     expect(buildRoofCap(square(1), { x: 0.5, z: 0.5 }, 'hipped', 6, res)).toBeNull()
   })
 
-  it('wraps the building in a group when a roof cap is present, plain mesh when flat', () => {
+  it('wraps the building in a group for a roof cap or a flat-roof cornice; plain mesh only when nothing is added', () => {
     const withCap = buildProceduralBuilding(building({ id: 'bld_cap', heightM: 10 }), res, 'hipped')
     expect(withCap.type).toBe('Group')
     expect((withCap as any).children.length).toBe(2) // mass + cap
-    const flat = buildProceduralBuilding(building({ id: 'bld_flat', heightM: 10 }), res, 'flat')
-    expect(flat.type).toBe('Mesh')
+    // a flat roof on a readable footprint now gets a projecting cornice (relief at
+    // eye level), so it wraps in a group too (mass + cornice).
+    const flat = buildProceduralBuilding(building({ id: 'bld_flat', heightM: 10, footprint: square(14) }), res, 'flat')
+    expect(flat.type).toBe('Group')
+    expect((flat as any).children.length).toBe(2) // mass + cornice
+    // a tiny flat footprint is too small to carry a cornice → plain mesh, no wrap.
+    const tiny = buildProceduralBuilding(building({ id: 'bld_tiny', heightM: 10, footprint: square(2) }), res, 'flat')
+    expect(tiny.type).toBe('Mesh')
   })
 })
 

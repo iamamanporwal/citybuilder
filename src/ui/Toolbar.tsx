@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
 import { exportCity, exportDesignerGlb } from '../export/exporter'
-import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle } from '../app/buildCity'
+import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle, rebuildWithTerrain } from '../app/buildCity'
 
 export function Toolbar() {
   const cameraMode = useEditor((s) => s.cameraMode)
@@ -156,6 +156,7 @@ function SettingsMenu() {
   const quality3d = useEditor((s) => s.quality3d)
   const useLibraryAssets = useEditor((s) => s.useLibraryAssets)
   const useCorridorElevation = useEditor((s) => s.useCorridorElevation)
+  const useTerrain = useEditor((s) => s.useTerrain)
   const roadStyle = useEditor((s) => s.roadStyle)
   const roadScale = useEditor((s) => s.roadScale)
   const s = useEditor.getState
@@ -182,7 +183,7 @@ function SettingsMenu() {
     }
   }, [open])
 
-  const activeCount = (fxPreview ? 1 : 0) + (useLibraryAssets ? 1 : 0) + (useCorridorElevation ? 1 : 0)
+  const activeCount = (fxPreview ? 1 : 0) + (useLibraryAssets ? 1 : 0) + (useCorridorElevation ? 1 : 0) + (useTerrain ? 1 : 0)
 
   return (
     <div className="tb-settings-wrap" ref={wrap}>
@@ -233,6 +234,14 @@ function SettingsMenu() {
             <span>
               <b>🛣️ Road elevation solve</b>
               <em>Graph-wide grade solve instead of per-segment ramps. Rebuilds.</em>
+            </span>
+          </label>
+
+          <label className="tb-setting-row">
+            <input type="checkbox" checked={useTerrain} onChange={() => rebuildWithTerrain(!useTerrain)} />
+            <span>
+              <b>⛰️ Terrain relief</b>
+              <em>Rolling ground + river valley the roads follow, vs a flat world. Rebuilds.</em>
             </span>
           </label>
 

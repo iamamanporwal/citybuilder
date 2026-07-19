@@ -177,6 +177,12 @@ export function mergeGeometries(geoms: THREE.BufferGeometry[]): THREE.BufferGeom
   let vtx = 0
   let idx = 0
   const hasUv = geoms.every((g) => g.getAttribute('uv'))
+  // If ANY source lacks normals, a verbatim copy would leave that block with
+  // zero-length normals — the merged mesh shades those faces black (a visibility-
+  // adjacent glitch). Fall back to recomputing normals for the whole merge in
+  // that case; otherwise keep the already-oriented per-source normals verbatim
+  // (recompute would average across folds and darken them).
+  const allHaveNormals = geoms.every((g) => g.getAttribute('normal'))
   for (const g of geoms) {
     vtx += g.getAttribute('position').count
     idx += g.getIndex() ? g.getIndex()!.count : g.getAttribute('position').count
@@ -208,6 +214,7 @@ export function mergeGeometries(geoms: THREE.BufferGeometry[]): THREE.BufferGeom
   out.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
   if (uvs) out.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
   out.setIndex(new THREE.BufferAttribute(indices, 1))
+  if (!allHaveNormals) out.computeVertexNormals()
   return out
 }
 

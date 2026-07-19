@@ -2,13 +2,17 @@ import { useEditor } from '../state/store'
 import { ingestOverpass } from '../ingest/overpass'
 import { resolveContext } from '../resolver/adapters'
 import { lintScene } from '../resolver/varietyLint'
-import { flickerLint, roadConsistencyLint, waterLint } from '../resolver/lints'
+import { flickerLint, geometryLintScene, roadConsistencyLint, waterLint } from '../resolver/lints'
+import { buildCollidersFromRegistry } from '../physics/registryColliders'
+import { colliderLint } from '../physics/colliderLint'
+import type { LintWarning } from '../resolver/varietyLint'
 import { loadLibraryTemplates } from '../scene/libraryTemplates'
 import { setActiveCuration } from '../resolver/assetPools'
 import { activeIdsOf } from '../state/curation'
 import { prefetchRecognizerData } from '../recognizer/prepass'
-import { sceneContext } from '../scene/registry'
+import { cityGraph, sceneContext } from '../scene/registry'
 import { scaleRoadNetwork } from '../procgen/roadScale'
+import { setTerrainEnabled } from '../procgen/terrain/config'
 import type { CityGraph } from '../types'
 import {
   cacheCity,
@@ -31,6 +35,26 @@ function workingGraph(): CityGraph | null {
   return scaleRoadNetwork(pristineGraph, useEditor.getState().roadScale)
 }
 
+/**
+ * Every build/rebuild trigger surfaces the SAME gate: the resolver/variety/water/
+ * flicker lints plus the two visibility gates added for the drive preview — the
+ * collider audit (phantom/lane-intrusion/orphan/seam) over the exact set the car
+ * drives, and the geometry-validity check (bounds/normals/instanced/clip) over
+ * the rendered scene. Cheap relative to the initScene rebuild each trigger runs.
+ */
+function buildGateLints(): LintWarning[] {
+  const out = [
+    ...roadConsistencyLint(),
+    ...flickerLint(),
+    ...waterLint(),
+    ...lintScene(),
+    ...geometryLintScene(),
+  ]
+  const colliderSet = buildCollidersFromRegistry()
+  if (colliderSet && cityGraph) out.push(...colliderLint(cityGraph, colliderSet))
+  return out
+}
+
 function firstRunHelp() {
   if (!localStorage.getItem('cb_seen_help')) {
     useEditor.getState().setHelpOpen(true)
@@ -45,6 +69,9 @@ const perf = (label: string, t0: number) => {
 
 async function generateScene(raw: any, name: string) {
   const s = useEditor.getState()
+  // Honor the store's terrain toggle on the first build (the module flag defaults
+  // off for unit-test isolation; the app default is on via the store).
+  setTerrainEnabled(s.useTerrain)
   s.setBuilding('Parsing map data…')
   await new Promise((r) => setTimeout(r, 30))
   let t = now()
@@ -76,7 +103,7 @@ async function generateScene(raw: any, name: string) {
   s.initScene(workingGraph()!, ctx)
   perf('initScene/buildScene', t)
   t = now()
-  useEditor.getState().setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  useEditor.getState().setLintReport(buildGateLints())
   perf('lints', t)
   firstRunHelp()
 }
@@ -110,7 +137,7 @@ export async function rebuildWithLibraryAssets(enabled: boolean): Promise<void> 
   if (!graph || !sceneContext) return
   await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
   s.initScene(graph, sceneContext)
-  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.setLintReport(buildGateLints())
   s.showToast(enabled ? 'Library 3D assets placed' : 'Reverted to procedural props')
 }
 
@@ -127,7 +154,7 @@ export async function rebuildWithCuration(curation: import('../state/curation').
   if (!graph || !sceneContext) return
   await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
   s.initScene(graph, sceneContext)
-  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.setLintReport(buildGateLints())
   const on = activeIdsOf(curation).size > 0
   s.showToast(on ? 'Asset library updated — applied to the map' : 'All kinds procedural')
 }
@@ -143,7 +170,7 @@ export async function rebuildWithCorridorElevation(enabled: boolean): Promise<vo
   const graph = workingGraph()
   if (!graph || !sceneContext) return
   s.initScene(graph, sceneContext)
-  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.setLintReport(buildGateLints())
   s.showToast(enabled ? 'Network elevation solve on' : 'Reverted to per-segment elevation')
 }
 
@@ -159,7 +186,7 @@ export async function rebuildWithRoadStyle(style: import('../materials/library')
   const graph = workingGraph()
   if (!graph || !sceneContext) return
   s.initScene(graph, sceneContext)
-  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.setLintReport(buildGateLints())
   s.showToast(style === 'arcade' ? 'Arcade road-kit style' : 'Realistic road style')
 }
 
@@ -176,9 +203,25 @@ export async function rebuildWithRoadScale(factor: number): Promise<void> {
   if (!graph || !sceneContext) return
   await loadLibraryTemplates(kindsPresent(graph), applyCurationToResolver())
   s.initScene(graph, sceneContext)
-  s.setLintReport([...roadConsistencyLint(), ...flickerLint(), ...waterLint(), ...lintScene()])
+  s.setLintReport(buildGateLints())
   const pct = Math.round(useEditor.getState().roadScale * 100)
   s.showToast(pct === 100 ? 'Roads at original width' : `Roads widened to ${pct}%`)
+}
+
+/**
+ * Toggle the terrain relief (procgen/terrain) and rebuild the scene in place.
+ * The height field is rebuilt and reinstalled at the start of buildScene, so the
+ * road-elevation solve, ground, land cover, buildings, props and colliders all
+ * re-read it. Flag-off makes the field return 0 everywhere → the flat world.
+ */
+export async function rebuildWithTerrain(enabled: boolean): Promise<void> {
+  const s = useEditor.getState()
+  s.setUseTerrain(enabled)
+  const graph = workingGraph()
+  if (!graph || !sceneContext) return
+  s.initScene(graph, sceneContext)
+  s.setLintReport(buildGateLints())
+  s.showToast(enabled ? 'Terrain relief on' : 'Flat terrain')
 }
 
 export async function buildCityFromArea(bbox: BBox, name: string, opts: FetchOptions): Promise<void> {

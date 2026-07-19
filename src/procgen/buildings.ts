@@ -5,6 +5,7 @@ import type { RoofForm } from '../recognizer/types'
 import { hash01 } from '../resolver/resolve'
 import { facadeMaterial, roofMaterial } from '../materials/library'
 import { mats } from './materials'
+import { sampleTerrain } from './terrain/field'
 
 // Buildings are generated into a fixed "slot": the footprint/height/position come
 // from data and stay stable no matter which provider fills the slot (PRD §7.2).
@@ -143,27 +144,57 @@ export function buildProceduralBuilding(
   roofForm: RoofForm = 'flat',
 ): THREE.Object3D {
   const c = footprintCentroid(b.footprint)
+  const gy = sampleTerrain(c.x, c.z) // seat the plot on the terrain (0 when flat)
   const geo = extrudeFootprint(b.footprint, c, b.heightM + BASE_SINK, -BASE_SINK, 1, false)
   const mesh = new THREE.Mesh(geo, [
     roofMaterial(res.roof),
     facadeMaterial(res.facade, res.tint, res.uvSeed),
   ])
-  mesh.position.set(c.x, 0, c.z)
+  mesh.position.set(c.x, gy, c.z)
   mesh.name = b.name ?? 'Building'
   mesh.userData.objectId = b.id
   mesh.castShadow = true
   mesh.receiveShadow = true
 
+  // A flat extruded box reads as a featureless slab from the driver's seat, so a
+  // flat-roofed building gets a projecting CORNICE band at the roofline: it
+  // overhangs the walls and casts a shadow line that gives the facade real relief
+  // at eye level. Pitched/domed roofs get their cap instead (which already breaks
+  // the silhouette), so the cornice is flat-roof only.
   const cap = buildRoofCap(b.footprint, c, roofForm, b.heightM, res)
-  if (!cap) return mesh
+  const cornice = roofForm === 'flat' ? buildCornice(b.footprint, c, b.heightM, res) : null
+  const extras = [cap, cornice].filter((x): x is THREE.Mesh => x !== null)
+  if (extras.length === 0) return mesh
 
   const group = new THREE.Group()
   group.name = mesh.name
   group.userData.objectId = b.id
-  group.position.set(c.x, 0, c.z)
+  group.position.set(c.x, gy, c.z)
   mesh.position.set(0, 0, 0) // re-parent: group now carries the world position
-  group.add(mesh, cap)
+  group.add(mesh, ...extras)
   return group
+}
+
+/**
+ * Projecting cornice/parapet band at the roofline of a flat-roofed building, in
+ * the mesh-local frame (base seated so the band straddles the roof edge). It is a
+ * short extrusion of the footprint at a slightly LARGER scale, so it overhangs the
+ * 1× walls by a fixed ~0.4 m all round — the wall's roof face ends up enclosed
+ * inside the band (no exposed coplanar face, flicker invariants hold). Skipped for
+ * footprints too small to carry a readable cornice.
+ */
+function buildCornice(fp: Vec2[], c: Vec2, topY: number, res: BuildingResolution): THREE.Mesh | null {
+  const ext = footprintExtent(fp)
+  const r = Math.max(ext.maxX - ext.minX, ext.maxZ - ext.minZ) / 2
+  if (r < 3) return null // too small to read
+  const overhang = 0.4
+  const scale = Math.min(1.06, Math.max(1.01, 1 + overhang / r))
+  const band = 0.7
+  const geo = extrudeFootprint(fp, c, band, topY - band / 2, scale, false)
+  const mesh = new THREE.Mesh(geo, roofMaterial(res.roof))
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  return mesh
 }
 
 /**
@@ -175,7 +206,7 @@ export function buildEnhancedBuilding(b: BuildingFeature, res: BuildingResolutio
   const c = footprintCentroid(b.footprint)
   const rand = (salt: string) => hash01(b.id + ':gen:' + salt)
   const group = new THREE.Group()
-  group.position.set(c.x, 0, c.z)
+  group.position.set(c.x, sampleTerrain(c.x, c.z), c.z)
   group.name = `${b.name ?? 'Building'} (generated)`
 
   const wall = facadeMaterial(res.facade, res.tint, [rand('u'), rand('v')])
@@ -274,7 +305,7 @@ export function fitToSlot(model: THREE.Object3D, b: BuildingFeature): THREE.Grou
   // same amount as procedural buildings so no bottom face is coplanar with the
   // terrain (avoids z-fighting — see the flicker invariants).
   const after = new THREE.Box3().setFromObject(wrapper)
-  wrapper.position.set(c.x, -after.min.y - BASE_SINK, c.z)
+  wrapper.position.set(c.x, sampleTerrain(c.x, c.z) - after.min.y - BASE_SINK, c.z)
   wrapper.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true

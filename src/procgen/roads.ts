@@ -6,9 +6,11 @@ import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/lib
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import polygonClipping from 'polygon-clipping'
-import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, roundPolygon, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, ringAreaM2, roundPolygon, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
 import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, discRadius, nodeKey, NON_DRIVABLE, segCenterline, siblingFootwayBridgeIds } from './roadNetwork'
 import { buildRoadElevation, isCorridorElevationEnabled } from './corridor'
+import { sampleTerrain } from './terrain/field'
+import { TERRAIN } from './terrain/config'
 import { DecalPlanner } from './decalPlan'
 import { matchBridgeLandmark, type LandmarkEntry } from '../scene/landmarks'
 import { buildArchBridge, buildSuspensionBridge, chainCenterlines, type LandmarkBridge } from './bridges'
@@ -33,6 +35,10 @@ const Y_CROSSWALK = 0.07
 // Pedestrian plazas/streets sit on a raised slab (curb ~14 cm above grade) so
 // they read as an uplifted pedestrian area rather than flush pavement.
 const PLAZA_CURB_H = 0.14
+// The curb's vertical face extends this far BELOW the road surface so the raised
+// sidewalk slab always has supporting geometry buried in the ground (no floating
+// curbs, even where the terrain beside a fill-embankment road dips below it).
+const SIDEWALK_FOUNDATION = 0.35
 
 // Stop lines sit on through-classes only (residential/service/living_street
 // junctions in a dense old town would otherwise get a painted bar at every arm),
@@ -352,12 +358,29 @@ export function buildRoads(
     // cycleways/crossings stay flush (they cross carriageways untrimmed). Only
     // flat (non-elevated) pedestrian ways are raised; elevated ones stay flush.
     const isPlaza = r.roadClass === 'pedestrian' && !elevated
+    // Paths/plazas are NOT in the road-elevation solve, so on relief they would
+    // render at a fixed absolute Y and get buried under (or float over) the
+    // terrain. Instead they ride the conformed terrain field directly: sampleTerrain
+    // already has the drivable roads burned in, so a footway meets any carriageway
+    // it crosses instead of hovering above the hillside. Flat world ⇒ sampleTerrain
+    // returns 0 ⇒ the path keeps its exact legacy Y (byte-identical).
+    // Waterfront paths (river greenways) ride the terrain down toward the shore,
+    // but must never dip to the water surface — that would make the path ribbon
+    // coplanar with the water and z-fight. Clamp to a boardwalk just above the
+    // water level so a shore path floats cleanly over the water instead. (Flat
+    // world: sampleTerrain 0 > the clamp, so paths keep their exact legacy Y.)
+    const pathFloor = TERRAIN.waterSurfaceY + 0.06
+    const groundAt = isPath
+      ? left.map((_, i) => Math.max(sampleTerrain(surfacePts[i].x, surfacePts[i].z), pathFloor))
+      : null
     let surface: THREE.BufferGeometry
     if (isPlaza) {
-      surface = raisedRibbonGeometry(left, right, PLAZA_CURB_H, 0)
+      surface = raisedRibbonGeometry(left, right, PLAZA_CURB_H, groundAt ?? 0)
+    } else if (isPath) {
+      surface = ribbonGeometry(left, right, groundAt!.map((g) => g + Y_PATH))
+      planarUvXZ(surface)
     } else {
       surface = ribbonGeometry(left, right, profile)
-      if (isPath) planarUvXZ(surface)
     }
     const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ':uv')))
     mesh.name = r.name ?? `${r.roadClass} road`
@@ -427,13 +450,19 @@ export function buildRoads(
             : 0
       const walkPts = trimPolyline(pts, startTrim, endTrim)
       if (walkPts && walkPts.length >= 2) {
-        // curb/sidewalk slab rides the road surface: base = road elevation at
-        // each station, top = base + curbHeight (flat road ⇒ base 0 ⇒ legacy).
+        // Curb/sidewalk slab: top face at base+curbHeight (base = the road surface
+        // it rides), and the vertical curb face runs DOWN past the road surface by
+        // SIDEWALK_FOUNDATION so the curb always has supporting geometry embedded in
+        // the ground and never floats — even on a fill embankment where the ground
+        // beside the road dips below the carriageway. The top stays exactly
+        // curbHeight above the road; only the skirt extends downward.
         const base = layerProfile(walkPts, 0)
+        const foot = typeof base === 'number' ? base - SIDEWALK_FOUNDATION : base.map((b) => b - SIDEWALK_FOUNDATION)
+        const slabH = res.crossSection.curbHeight + SIDEWALK_FOUNDATION
         for (const side of [1, -1]) {
           const inner = offsetPolyline(walkPts, side * (half + 0.05))
           const outer = offsetPolyline(walkPts, side * (half + sw))
-          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, res.crossSection.curbHeight, base))
+          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, slabH, foot))
         }
       }
     }
@@ -596,16 +625,18 @@ export function buildRoads(
     if (discs.length < 2) continue
     const zc = elevation.nodeElevation(canonical)
 
-    // Preferred: ONE rounded, flared pad = the convex hull of every external arm
-    // mouth (flared laterally, pushed out along the arm to meet the trimmed
-    // ribbon) plus the member-node centres, with curb-return-rounded corners.
+    // Preferred: ONE rounded pad = the boolean UNION of every external arm's
+    // rectangle (each anchored at its OWN node, run out to the trimmed ribbon and
+    // flared) — the true junction footprint, concave notches included, rather than
+    // the convex hull of the mouths (which fills the notches into a blob). Corners
+    // rounded with a curb-return fillet, filled with the road material.
     let padded = false
     const arms = clusterArms.get(canonical)
     if (arms && arms.length >= 2) {
       const maxW = Math.max(...discs.map((d) => d.rad)) / 0.58
-      const corners = clusterArmHull(arms, JUNCTION_FLARE, discs.map((d) => ({ x: d.x, z: d.z })))
-      if (corners.length >= 3) {
-        const ring = roundPolygon(corners, junctionFilletR(maxW))
+      let ring = armUnionRing(discs[0] as unknown as Vec2, arms, (a) => a.h * 1.16 + 1.5, JUNCTION_FLARE)
+      if (ring.length >= 3) {
+        ring = roundPolygon(ring, junctionFilletR(maxW))
         const g = junctionPatchGeometry([ring.map((p) => [p.x, p.z] as [number, number])], zc + Y_DISC)
         if (g) {
           discGeoms.push(g)
@@ -666,16 +697,22 @@ export function buildRoads(
     if (!contained) {
       keptDiscs.push({ x: info.p.x, z: info.p.z, rad, elev: nodeElev })
       const arms = armsAt.get(k)
-      // convex hull of the arm mouths — a polygon that spans the intersection and
-      // laps a little onto each road end (setback matches the arm surface trim,
-      // junctionRadius*0.72). Falls back to the disc if arms are unavailable.
+      // UNION of the arm rectangles → the true +/T/X/Y footprint (concave notches
+      // and all), rounded at the corners with a curb-return fillet, filled with the
+      // road material. The ribbons trim back to junctionRadius*0.72, so the pad
+      // reaches a touch past that to lap onto each mouth. Falls back to the disc
+      // only when the union degenerates or arms are unavailable. Flag-off keeps the
+      // legacy convex-hull pad (byte-identical A/B).
       let g: THREE.BufferGeometry | null = null
       if (arms && arms.length >= 2) {
-        const setback = junctionRadius(info.p) * 0.72 - 0.6
-        // flag-on: flare the mouths (bell-mouth) and round the corners (curb
-        // returns); flag-off keeps the exact legacy un-flared, straight hull.
-        let ring = junctionArmHull(info.p, arms, setback, consolidate ? JUNCTION_FLARE : 1)
-        if (consolidate && ring.length >= 3) ring = roundPolygon(ring, junctionFilletR(info.maxWidth))
+        let ring: Vec2[]
+        if (consolidate) {
+          const reach = junctionRadius(info.p) * 0.72 + 0.8
+          ring = armUnionRing(info.p, arms, () => reach, JUNCTION_FLARE)
+          if (ring.length >= 3) ring = roundPolygon(ring, junctionFilletR(info.maxWidth))
+        } else {
+          ring = junctionArmHull(info.p, arms, junctionRadius(info.p) * 0.72 - 0.6, 1)
+        }
         if (ring.length >= 3) g = junctionPatchGeometry([ring.map((p) => [p.x, p.z] as [number, number])], nodeElev + Y_DISC)
       }
       if (!g) {
@@ -938,6 +975,62 @@ function nearestIndex(cum: number[], d: number): number {
 }
 
 /**
+ * Junction outline = boolean UNION of one rectangle per arm. Each arm's rectangle
+ * runs from just BEHIND the node (so all arms overlap and fill the throat) out to
+ * its trimmed mouth, at the road's full width. The union of those rectangles is
+ * exactly the +/T/X/Y footprint the arms make — including the CONCAVE notches
+ * between arms, which a convex hull cannot represent (it fills the notches, giving
+ * the oval/blob this replaces). Returns the largest ring of the union, or [] when
+ * it degenerates (caller falls back to the disc). `reachFor` gives each arm's
+ * outward extent (its ribbon trim), `flare` widens the mouths so turns read.
+ */
+interface UnionArm { p?: Vec2; d: Vec2; h: number }
+function armUnionRing(
+  center: Vec2,
+  arms: UnionArm[],
+  reachFor: (a: UnionArm) => number,
+  flare: number,
+): Vec2[] {
+  const rects: [number, number][][] = []
+  for (const a of arms) {
+    const o = a.p ?? center
+    const perp = { x: a.d.z, z: -a.d.x }
+    const h = a.h * flare
+    const back = a.h + 1.5 // start behind the node so every arm overlaps at the centre
+    const reach = reachFor(a)
+    const bx = o.x - a.d.x * back, bz = o.z - a.d.z * back
+    const fx = o.x + a.d.x * reach, fz = o.z + a.d.z * reach
+    rects.push([
+      [bx + perp.x * h, bz + perp.z * h],
+      [fx + perp.x * h, fz + perp.z * h],
+      [fx - perp.x * h, fz - perp.z * h],
+      [bx - perp.x * h, bz - perp.z * h],
+      [bx + perp.x * h, bz + perp.z * h],
+    ])
+  }
+  if (rects.length < 1) return []
+  let merged: [number, number][][][]
+  try {
+    const polys = rects.map((r) => [r])
+    merged = polygonClipping.union(polys[0] as never, ...(polys.slice(1) as never[])) as [number, number][][][]
+  } catch {
+    return []
+  }
+  // the union of arms sharing a node is one connected body — keep its largest ring
+  let best: Vec2[] = []
+  let bestA = 0
+  for (const poly of merged) {
+    const ring = poly[0]
+    if (!ring || ring.length < 4) continue
+    const v = ring.map(([x, z]) => ({ x, z }))
+    if (v.length > 1 && Math.hypot(v[0].x - v[v.length - 1].x, v[0].z - v[v.length - 1].z) < 1e-6) v.pop()
+    const a = ringAreaM2(v)
+    if (a > bestA) { bestA = a; best = v }
+  }
+  return best
+}
+
+/**
  * Junction fill polygon = convex hull of every arm's two mouth corners at the
  * setback distance from the node, plus the node itself (keeps degenerate 2-arm
  * cases non-empty). Bounded by the roads, so — unlike the disc it replaces — it
@@ -949,26 +1042,6 @@ function junctionArmHull(center: Vec2, arms: { d: Vec2; h: number }[], setback: 
     const perp = { x: a.d.z, z: -a.d.x }
     const bx = center.x + a.d.x * setback
     const bz = center.z + a.d.z * setback
-    pts.push({ x: bx + perp.x * a.h * flare, z: bz + perp.z * a.h * flare })
-    pts.push({ x: bx - perp.x * a.h * flare, z: bz - perp.z * a.h * flare })
-  }
-  return convexHull(pts)
-}
-
-/**
- * Cluster-junction pad boundary: like junctionArmHull but each arm mouth is
- * anchored at its OWN node (not a shared centre), pushed ~one disc-radius out
- * along the arm so the pad reaches the trimmed ribbon ends, and flared laterally.
- * The member-node centres seed the hull so the interior of a spread-out
- * bridgehead is always covered. Returns the convex hull (always simple).
- */
-function clusterArmHull(arms: { p: Vec2; d: Vec2; h: number }[], flare: number, centers: Vec2[]): Vec2[] {
-  const pts: Vec2[] = [...centers]
-  for (const a of arms) {
-    const perp = { x: a.d.z, z: -a.d.x }
-    const setback = a.h * 1.16 // ≈ discRadius(width) so the mouth meets the trimmed arm
-    const bx = a.p.x + a.d.x * setback
-    const bz = a.p.z + a.d.z * setback
     pts.push({ x: bx + perp.x * a.h * flare, z: bz + perp.z * a.h * flare })
     pts.push({ x: bx - perp.x * a.h * flare, z: bz - perp.z * a.h * flare })
   }

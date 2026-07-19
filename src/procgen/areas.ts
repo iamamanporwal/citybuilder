@@ -3,6 +3,9 @@ import polygonClipping from 'polygon-clipping'
 import type { AreaFeature, Vec2 } from '../types'
 import { clipRingToRect, mergeGeometries, pointInRing, ringAreaM2, ringIsSimple, wallGeometry, type Rect } from './geometry'
 import { generateLandTextures } from '../materials/textures'
+import { sampleTerrain } from './terrain/field'
+import { isTerrainEnabled, TERRAIN } from './terrain/config'
+import { terrainGridGeometry } from './terrain/mesh'
 
 // Rendered land-cover polygons (parks, grass, sand, forest floor) plus the
 // terrain/water system. Land is the default base: the ground plane covers the
@@ -136,7 +139,8 @@ export function buildAreas(areas: AreaFeature[]): { kind: string; mesh: THREE.Me
   }
   const out: { kind: string; mesh: THREE.Mesh }[] = []
   for (const [kind, geoms] of byKind) {
-    const mesh = new THREE.Mesh(mergeGeometries(geoms), AREA_STYLE[kind]!.mat)
+    const geo = conformToTerrain(mergeGeometries(geoms))
+    const mesh = new THREE.Mesh(geo, AREA_STYLE[kind]!.mat)
     mesh.name =
       kind === 'park' ? 'Parks' : kind === 'grass' ? 'Grass' : kind === 'sand' ? 'Sand & beaches' : 'Forest floor'
     mesh.receiveShadow = true
@@ -204,6 +208,38 @@ export function waterRings(waterAreas: AreaFeature[], bounds: Rect): { carved: W
  * hole is painted instead (earcut cannot triangulate intersecting holes).
  */
 export function buildTerrain(waterAreas: AreaFeature[], bounds: Rect): TerrainBuild {
+  return isTerrainEnabled()
+    ? buildTerrainRelief(waterAreas, bounds)
+    : buildTerrainFlat(waterAreas, bounds)
+}
+
+/**
+ * Terrain-relief ground: a displaced grid seated on the height field. Water is
+ * NOT carved — the field drops to a submerged riverbed inside each water ring,
+ * hidden under the opaque water surface, so ground and water separate purely
+ * by height (no holes, no bank skirts, no z-fight). See procgen/terrain/field.ts.
+ */
+function buildTerrainRelief(waterAreas: AreaFeature[], bounds: Rect): TerrainBuild {
+  const { carved, painted } = waterRings(waterAreas, bounds)
+  const ground = buildGroundGrid(bounds)
+  ground.name = 'Ground'
+
+  // flat opaque water surfaces (islands cut out), seated in the field's valley
+  const surfaces = [...carved, ...painted].map((w) => holedFlatGeometry(w.ring, w.holes, TERRAIN.waterSurfaceY))
+  let water: THREE.Group | null = null
+  if (surfaces.length) {
+    water = new THREE.Group()
+    water.name = 'Water'
+    const m = new THREE.Mesh(mergeGeometries(surfaces), WATER_MAT)
+    m.receiveShadow = true
+    water.add(m)
+  }
+  return { ground, water, carvedCount: carved.length, paintedCount: painted.length }
+}
+
+/** Legacy flat ground (terrain off): rect minus carved water holes, water sunk to
+ *  -WATER_DEPTH with bank skirts. Byte-identical to the pre-terrain behaviour. */
+function buildTerrainFlat(waterAreas: AreaFeature[], bounds: Rect): TerrainBuild {
   const { carved, painted } = waterRings(waterAreas, bounds)
   const paintGeoms = painted.map((p) => holedFlatGeometry(p.ring, p.holes, WATER_PAINT_Y))
 
@@ -310,4 +346,32 @@ function indexed(g: THREE.BufferGeometry): THREE.BufferGeometry {
   for (let i = 0; i < count; i++) idx[i] = i
   g.setIndex(new THREE.BufferAttribute(idx, 1))
   return g
+}
+
+/**
+ * Raise every vertex of a flat XZ geometry onto the terrain field (adds the
+ * field height to the existing y, so a layer offset like AREA_STYLE.y is kept as
+ * a gap on top of the ground). A no-op when terrain is off (sampleTerrain → 0),
+ * which is why land cover can call it unconditionally and stay flat-world exact.
+ */
+function conformToTerrain(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, pos.getY(i) + sampleTerrain(pos.getX(i), pos.getZ(i)))
+  }
+  pos.needsUpdate = true
+  geo.computeVertexNormals()
+  return geo
+}
+
+/**
+ * Ground as a uniform grid displaced by the terrain field. Grid density is
+ * capped (~220 segments/axis) so a large area stays a manageable single mesh.
+ * PlaneGeometry.rotateX(-π/2) yields +Y-facing normals in the XZ plane, matching
+ * the shape-space winding used elsewhere in this module.
+ */
+function buildGroundGrid(bounds: Rect): THREE.Mesh {
+  const mesh = new THREE.Mesh(terrainGridGeometry(bounds), GROUND_MAT)
+  mesh.receiveShadow = true
+  return mesh
 }

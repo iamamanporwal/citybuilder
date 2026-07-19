@@ -4,7 +4,9 @@ import type { BuildingResolution, FacadeSet, ResolvedContext, RoadResolution, Ro
 import { resolveRoad } from '../resolver/resolve'
 import { buildRoads } from '../procgen/roads'
 import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCentroid } from '../procgen/buildings'
-import { applyLandTextures, buildAreas, buildTerrain } from '../procgen/areas'
+import { applyLandTextures, buildAreas, buildTerrain, waterRings } from '../procgen/areas'
+import { buildTerrainField, conformTerrainToRoads, setActiveTerrain, type RoadCorridor } from '../procgen/terrain/field'
+import { cumulative, NON_DRIVABLE, segCenterline } from '../procgen/roadNetwork'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { buildGenericSign, buildGiveWaySign, buildSpeedLimitSign, buildStopSign, planSpeedLimitSigns } from '../procgen/signs'
@@ -205,8 +207,29 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   if (!isFinite(minX)) { minX = -500; maxX = 500; minZ = -500; maxZ = 500 }
   const pad = 120
   const bounds = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad }
+  // Install the terrain height field FIRST: the road-elevation solve, ground,
+  // land cover, buildings, props and colliders all sample it, so it must exist
+  // before any of them are built. Flag-off returns a zero field (flat world).
+  const waterAreas = graph.areas.filter((a) => a.kind === 'water')
+  const { carved, painted } = waterRings(waterAreas, bounds)
+  const naturalField = buildTerrainField(bounds, [...carved, ...painted])
+  setActiveTerrain(naturalField)
+  // Solve the road elevation against the NATURAL land (this caches, so the later
+  // buildRoads reuses it), then CONFORM the ground datum to the solved road
+  // surface: the ground, land cover, buildings, props and colliders below all
+  // sample the conformed field, so the paved corridor is never buried and curbs
+  // meet grade. Roads keep reading the natural field, so there is no feedback loop.
+  const elevation = buildRoadElevation(graph.roads)
+  const corridors: RoadCorridor[] = []
+  for (const r of graph.roads) {
+    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge || r.points.length < 2) continue
+    if (elevation.isInternal(r.id)) continue
+    const pts = segCenterline(r)
+    corridors.push({ pts, elev: elevation.profileFor(r, cumulative(pts)), half: r.widthM / 2, pave: 4 })
+  }
+  setActiveTerrain(conformTerrainToRoads(naturalField, corridors, bounds))
   applyLandTextures() // attach tileable ground-cover textures on first render
-  const terrain = buildTerrain(graph.areas.filter((a) => a.kind === 'water'), bounds)
+  const terrain = buildTerrain(waterAreas, bounds)
   add(
     {
       id: 'terrain_ground', type: 'ground', name: 'Ground', locked: true,

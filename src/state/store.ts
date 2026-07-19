@@ -14,6 +14,7 @@ import { applyBuildingMaterial, buildScene, currentBuildingMaterial } from '../s
 import type { BuildingMaterial } from '../scene/registry'
 import { loadCuration, saveCuration, type CurationMap } from './curation'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
+import { setTerrainEnabled } from '../procgen/terrain/config'
 import { setRoadStyle, type RoadStyle } from '../materials/library'
 import { setPaintWear } from '../procgen/materials'
 import { clampRoadScale } from '../procgen/roadScale'
@@ -61,6 +62,7 @@ interface EditorState {
   useLibraryAssets: boolean
   curation: CurationMap
   useCorridorElevation: boolean
+  useTerrain: boolean
   roadStyle: RoadStyle
   roadScale: number
   contextInfo: ContextInfo | null
@@ -83,6 +85,7 @@ interface EditorState {
   setUseLibraryAssets: (v: boolean) => void
   setCuration: (c: CurationMap) => void
   setUseCorridorElevation: (v: boolean) => void
+  setUseTerrain: (v: boolean) => void
   setRoadStyle: (v: RoadStyle) => void
   setRoadScale: (v: number) => void
   setLintReport: (w: LintWarning[]) => void
@@ -183,6 +186,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   // Kept in sync with the config module flag (procgen/corridor/config.ts), which
   // also defaults on; the toolbar toggle flips both for instant A/B.
   useCorridorElevation: true,
+  // Terrain relief (procgen/terrain) — ON by default (the main map ships with
+  // realistic ground). Kept in sync with the config module flag; the toolbar
+  // toggle flips both for instant A/B against the flat world.
+  useTerrain: true,
   // Road surface style — realistic (textured aggregate) vs arcade (clean kit look).
   roadStyle: 'realistic',
   // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.
@@ -245,6 +252,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   setUseCorridorElevation: (v) => {
     setCorridorElevationEnabled(v)
     set({ useCorridorElevation: v })
+  },
+  setUseTerrain: (v) => {
+    setTerrainEnabled(v)
+    set({ useTerrain: v })
   },
   setRoadStyle: (v) => {
     setRoadStyle(v)

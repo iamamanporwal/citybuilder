@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Physics, useRapier } from '@react-three/rapier'
 import { buildCollidersFromRegistry } from '../../physics/registryColliders'
 import { buildStaticColliders } from '../../physics/buildColliders'
+import { colliderLint } from '../../physics/colliderLint'
+import { cityGraph } from '../../scene/registry'
 import { Car } from './Car'
 
 // Drive preview physics world. Lazy-mounted by Viewport only while
@@ -13,6 +15,13 @@ function CityColliders({ onReady }: { onReady: () => void }) {
   const { world, rapier } = useRapier()
   useEffect(() => {
     const set = buildCollidersFromRegistry()
+    // Validate the EXACT set the car is about to drive on (phantom/lane-intrusion/
+    // orphan/seam) — the drive preview previously cooked colliders with no gate.
+    if (import.meta.env?.DEV && set && cityGraph) {
+      for (const w of colliderLint(cityGraph, set)) {
+        if (w.severity === 'warn') console.warn('[drive collider audit]', w.message)
+      }
+    }
     const built = set ? buildStaticColliders(world, rapier, set.colliders) : null
     onReady()
     return () => built?.dispose()

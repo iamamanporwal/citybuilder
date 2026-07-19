@@ -387,9 +387,12 @@ describe('surface layers ride the elevation (E4)', () => {
         minY = Math.min(minY, y)
       }
       // curb top climbs with the road (near eMax+curb, less the junction trim);
-      // base never dips below grade; and it clearly lifted off the flat stack.
+      // the skirt now extends one foundation-depth below the road surface (so the
+      // curb is anchored in the ground and never floats), but no further; and it
+      // clearly lifted off the flat stack.
+      const FOUNDATION = 0.35
       expect(topMax).toBeGreaterThan(eMax + CURB - 0.6)
-      expect(minY).toBeGreaterThanOrEqual(-1e-3)
+      expect(minY).toBeGreaterThanOrEqual(-FOUNDATION - 1e-3)
       expect(topMax).toBeGreaterThan(CURB + 1)
     })
   })

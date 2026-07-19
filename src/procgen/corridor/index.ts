@@ -1,5 +1,6 @@
 import type { RoadSegment } from '../../types'
 import { analyzeRoadNodes, elevationProfile, rampSpecFor } from '../roadNetwork'
+import { terrainSolveBase, type TerrainField } from '../terrain/field'
 import { isCorridorElevationEnabled } from './config'
 import { solveNetworkElevation, type ElevationStats } from './elevation'
 
@@ -38,14 +39,19 @@ export interface RoadElevation {
 // deterministic and side-effect-free, so memoise it per (roads array, flag
 // state): a scene build does one solve, not three. The WeakMap keys on array
 // identity, so a new build (new array) never sees a stale result.
-const cache = new WeakMap<RoadSegment[], { enabled: boolean; value: RoadElevation }>()
+// The base height of every free node is the ACTIVE terrain field (elevation.ts),
+// so the cache must also key on that field's identity: toggling terrain relief
+// (or rebuilding it) installs a new field and must re-solve, or roads would keep
+// the old elevation while the ground moves under them (roads buried/floating).
+const cache = new WeakMap<RoadSegment[], { enabled: boolean; terrain: TerrainField; value: RoadElevation }>()
 
 export function buildRoadElevation(roads: RoadSegment[]): RoadElevation {
   const enabled = isCorridorElevationEnabled()
+  const terrain = terrainSolveBase()
   const hit = cache.get(roads)
-  if (hit && hit.enabled === enabled) return hit.value
+  if (hit && hit.enabled === enabled && hit.terrain === terrain) return hit.value
   const value = enabled ? solveNetworkElevation(roads) : legacyElevation(roads)
-  cache.set(roads, { enabled, value })
+  cache.set(roads, { enabled, terrain, value })
   return value
 }
 

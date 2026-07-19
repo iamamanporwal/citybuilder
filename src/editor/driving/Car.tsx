@@ -4,6 +4,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, RigidBody, useBeforePhysicsStep, useRapier, type RapierRigidBody } from '@react-three/rapier'
 import type { DynamicRayCastVehicleController } from '@dimforge/rapier3d-compat'
 import { focusState, focusTarget, lastOrbitTarget, nearestRoadPoint } from '../bus'
+import { sampleTerrain } from '../../procgen/terrain/field'
 import { pressed } from '../input'
 import { useDriveHud } from '../../state/driveHud'
 
@@ -59,7 +60,9 @@ export function Car() {
     // else where the user was looking in orbit
     const f = focusState.has ? focusTarget : lastOrbitTarget
     const s = nearestRoadPoint(f.x, f.z)
-    return { x: s.x, z: s.z, yaw: Math.atan2(s.hx, s.hz) } // local +z is forward
+    // seat the spawn on the terrain so the car drops onto the road, not through a
+    // hilltop or high above a valley floor (y is 0 when terrain is off)
+    return { x: s.x, z: s.z, y: sampleTerrain(s.x, s.z), yaw: Math.atan2(s.hx, s.hz) } // local +z is forward
   }, [])
 
   useEffect(() => {
@@ -89,9 +92,10 @@ export function Car() {
     const body = chassis.current
     if (!controller || !body) return
 
-    // kill-plane: fell off the world (e.g. through a water sensor) → respawn
-    if (body.translation().y < -10) {
-      body.setTranslation({ x: spawn.x, y: 2, z: spawn.z }, true)
+    // kill-plane: fell off the world (e.g. through a water sensor) → respawn.
+    // Relative to the spawn's terrain height so a valley floor never trips it.
+    if (body.translation().y < spawn.y - 12) {
+      body.setTranslation({ x: spawn.x, y: spawn.y + 2, z: spawn.z }, true)
       body.setRotation(yawQuat(spawn.yaw), true)
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
@@ -161,7 +165,7 @@ export function Car() {
       ref={chassis}
       colliders={false}
       ccd
-      position={[spawn.x, 2, spawn.z]}
+      position={[spawn.x, spawn.y + 2, spawn.z]}
       rotation={[0, spawn.yaw, 0]}
       // arcade physics: lock pitch & roll so the car can never flip
       enabledRotations={[false, true, false]}

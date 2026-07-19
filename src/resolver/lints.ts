@@ -4,6 +4,7 @@ import { useEditor } from '../state/store'
 import { cityGraph, getVariant, roadSegments } from '../scene/registry'
 import { DEPTH_CONFIG, depthQuantumAt, LAYER_CONVENTION, MIN_SEPARATION } from '../editor/depthConfig'
 import { auditWater } from './waterAudit'
+import { geometryLint } from '../scene/geometryLint'
 import type { LintWarning } from './varietyLint'
 
 // Geometry robustness linters, run after every build and again as an export
@@ -278,4 +279,32 @@ export function roadConsistencyLint(): LintWarning[] {
     warnings.push({ severity: 'info', message: `Road consistency passed: ${segs.length} segments, no elevation/width/seam violations.` })
   }
   return warnings
+}
+
+/**
+ * Render-visibility gate over the live scene: gathers the active variant objects
+ * from the store/registry and runs geometryLint (bounds/normals/instanced-bounds/
+ * clip-range). Kept here — beside flickerLint — so it shares the registry read
+ * pattern; geometryLint itself stays pure and unit-testable.
+ */
+export function geometryLintScene(): LintWarning[] {
+  if (!cityGraph) return []
+  const s = useEditor.getState()
+  const roots: THREE.Object3D[] = []
+  for (const id of s.objectOrder) {
+    const obj = s.objects[id]
+    if (!obj || obj.deleted || !obj.visible) continue
+    const three = getVariant(obj.id, obj.asset)
+    if (three) roots.push(three)
+  }
+  // scene bounds = road extent (+pad), mirroring buildScene / colliders
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const r of cityGraph.roads) for (const p of r.points) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z)
+  }
+  const bounds = isFinite(minX)
+    ? { minX: minX - 120, maxX: maxX + 120, minZ: minZ - 120, maxZ: maxZ + 120 }
+    : undefined
+  return geometryLint(roots, { bounds })
 }

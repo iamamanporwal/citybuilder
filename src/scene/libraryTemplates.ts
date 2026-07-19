@@ -278,6 +278,9 @@ export function instanceTemplate(
       im.setMatrixAt(i, m)
     })
     im.instanceMatrix.needsUpdate = true
+    // world-space instance matrices vs origin-anchored geometry → compute the
+    // instance-aware bounding sphere so the whole batch isn't frustum-culled
+    im.computeBoundingSphere()
     im.castShadow = true
     im.receiveShadow = true
     im.userData.objectId = objectId

@@ -1,4 +1,5 @@
-import type { RoadSegment } from '../../types'
+import type { RoadSegment, Vec2 } from '../../types'
+import { sampleTerrainBase } from '../terrain/field'
 import {
   analyzeRoadNodes,
   BRIDGE_LAYER_H,
@@ -123,8 +124,12 @@ export function solveNetworkElevation(roads: RoadSegment[]): NetworkElevation {
 
 // ---- 2a. node relaxation ---------------------------------------------------
 
-// Base height per node (0 today; a DEM sample plugs in here later, §6a E6).
-const baseHeight = (_key: string): number => 0
+// Base height per node = the terrain height at the node's world position. The
+// solve relaxes free nodes toward this (SOLVER.baseWeight) while projecting back
+// inside each edge's grade cap, so roads follow the land but stay drivable — the
+// civil-engineering cut/fill falls out of the existing relaxation for free.
+// With terrain off, sampleTerrain returns 0 and this reproduces the flat world.
+const baseHeight = (p: Vec2): number => sampleTerrainBase(p.x, p.z)
 
 function solveNodeElevations(graph: RoadGraph): {
   z: Map<string, number>
@@ -135,7 +140,7 @@ function solveNodeElevations(graph: RoadGraph): {
   const keys = [...graph.nodes.keys()].sort() // fixed, deterministic visit order
   for (const key of keys) {
     const n = graph.nodes.get(key)!
-    z.set(key, n.pin ?? baseHeight(key))
+    z.set(key, n.pin ?? baseHeight(n.p))
   }
 
   const { maxIterations, tolerance, baseWeight } = SOLVER
@@ -149,7 +154,7 @@ function solveNodeElevations(graph: RoadGraph): {
       if (n.pin !== null) continue // hard constraint — never moves
 
       // Laplacian target: pull toward base and toward neighbours (1/length weighted).
-      let num = baseWeight * baseHeight(key)
+      let num = baseWeight * baseHeight(n.p)
       let den = baseWeight
       // Grade-cap interval: intersection of [z_j ± maxGrade·len] over incident edges.
       let lo = -Infinity

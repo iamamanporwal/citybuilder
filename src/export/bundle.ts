@@ -12,7 +12,7 @@ import {
 import { buildTextureManifest } from '../materials/packaging'
 import { buildCollidersFromRegistry } from '../physics/registryColliders'
 import { colliderLint } from '../physics/colliderLint'
-import { flickerLint, roadConsistencyLint, waterLint } from '../resolver/lints'
+import { flickerLint, geometryLintScene, roadConsistencyLint, waterLint } from '../resolver/lints'
 import type { ColliderSet } from '../physics/types'
 import { colliderGroupMerged } from './colliderGlb'
 import { buildRoadSemantics, buildTrafficAudit, buildTrafficDevices } from './semantics'
@@ -103,6 +103,7 @@ function runExportGate(s: ReturnType<typeof useEditor.getState>, colliderSet: Co
     ...flickerLint(),
     ...roadConsistencyLint(),
     ...waterLint(),
+    ...geometryLintScene(),
     ...(colliderSet && cityGraph ? colliderLint(cityGraph, colliderSet) : []),
   ]
   s.setLintReport([...gate, ...s.lintReport.filter((w) => !gate.some((g) => g.message === w.message))])

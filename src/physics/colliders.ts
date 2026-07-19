@@ -16,6 +16,9 @@ import {
   type Rect,
 } from '../procgen/geometry'
 import { flatRingGeometry, waterRings } from '../procgen/areas'
+import { sampleTerrain } from '../procgen/terrain/field'
+import { isTerrainEnabled } from '../procgen/terrain/config'
+import { terrainGridGeometry } from '../procgen/terrain/mesh'
 import {
   analyzeRoadNodes,
   cumulative,
@@ -27,6 +30,7 @@ import {
   type RoadNodeInfo,
 } from '../procgen/roadNetwork'
 import { buildRoadElevation, type RoadElevation } from '../procgen/corridor'
+import { curbsideDevicePosition, nearestRoadInfo } from '../procgen/signMath'
 import type { FurniturePlacements } from '../procgen/props'
 import { CLASS_PHYSICS, SURFACE_PHYSICS } from './materials'
 import type { ColliderClass, ColliderDescriptor, ColliderSet } from './types'
@@ -59,7 +63,19 @@ export interface BuildCollidersOptions {
   furniturePlacements?: FurniturePlacements | null
   /** Measured extents from live registry variants (AI-replaced props). */
   propExtents?: Map<string, PropExtent>
+  /** Driving side for curbside relocation of un-placed oriented devices (default right). */
+  drivingSide?: 'left' | 'right'
 }
+
+// Editable point props whose collider may be nudged to the kerb when a raw OSM
+// node lands inside a driving lane AND no live placement exists (headless / pure
+// builds). In production these carry a live placement from the store, so the
+// collider tracks the visible mesh exactly (correspondence) and this never fires;
+// it only keeps the pure/headless collider set free of in-lane obstacles. Trees
+// are excluded — they are numerous, thin, and displaced out of lanes by roadScale.
+const RELOCATABLE_PROP_KINDS = new Set<PointFeature['kind']>([
+  'traffic_signal', 'stop_sign', 'give_way', 'road_sign', 'bus_stop', 'fountain', 'statue',
+])
 
 const IDENTITY_Q: [number, number, number, number] = [0, 0, 0, 1]
 
@@ -114,7 +130,7 @@ export function buildColliders(
   buildingColliders(graph, opts, excluded, colliders)
   terrainCollider(bounds, colliders)
   waterSensors(graph, bounds, colliders)
-  barrierColliders(graph, colliders)
+  barrierColliders(graph, excluded, colliders)
   propColliders(graph, opts, excluded, colliders)
 
   const stats = Object.fromEntries(
@@ -251,7 +267,11 @@ function bridgeRailColliders(graph: CityGraph, elevation: RoadElevation, out: Co
     const half = r.widthM / 2
     let n = 0
     for (const side of [1, -1]) {
-      const rail = offsetPolyline(pts, side * half)
+      // centre the rail box just OUTSIDE the deck edge (+RAIL_T/2) so its inner
+      // face sits exactly at the carriageway edge — otherwise the box straddles
+      // the edge line and pokes RAIL_T/2 into the drivable lane at car height,
+      // clipping a car that hugs the parapet.
+      const rail = offsetPolyline(pts, side * (half + RAIL_T / 2))
       for (let i = 0; i + 1 < rail.length; i++) {
         const a = rail[i]
         const b = rail[i + 1]
@@ -331,7 +351,7 @@ function buildingColliders(
     geo.rotateX(-Math.PI / 2) // extrusion +z -> +y; base at y=0
 
     const live = opts.placements?.get(b.id)
-    const position: [number, number, number] = live ? [...live.position] : [cx, 0, cz]
+    const position: [number, number, number] = live ? [...live.position] : [cx, sampleTerrain(cx, cz), cz]
     // yaw-only rotation: buildings are edited with a Y gizmo; other axes ignored
     const quaternion = live && live.rotation[1] !== 0 ? yawQuaternion(live.rotation[1]) : IDENTITY_Q
     out.push({
@@ -346,9 +366,22 @@ function buildingColliders(
 }
 
 function terrainCollider(bounds: Rect, out: ColliderDescriptor[]) {
-  // one flat box, top at y=0. Water is NOT carved (no DEM yet — a 0.35m visual
-  // hole is not worth falling through); water sensor volumes overlay instead.
-  // Future DEM support: swap kind to 'heightfield' here, nothing else changes.
+  // Terrain relief on: the drive surface is the SAME displaced grid the renderer
+  // shows (terrainGridGeometry), emitted as a trimesh so the car rolls over hills
+  // and down into the river valley on exactly the mesh it sees. Water is still not
+  // carved (the riverbed sits below the opaque surface); water sensors overlay.
+  if (isTerrainEnabled()) {
+    out.push({
+      id: 'col_terrain_ground',
+      kind: 'trimesh',
+      geometry: toTrimesh(terrainGridGeometry(bounds)),
+      transform: { position: [0, 0, 0], quaternion: IDENTITY_Q },
+      semantics: { class: 'terrain', featureId: 'terrain_ground', static: true },
+      material: { ...CLASS_PHYSICS.terrain },
+    })
+    return
+  }
+  // Terrain off: one flat box, top at y=0 (byte-identical to the pre-terrain build).
   const hx = (bounds.maxX - bounds.minX) / 2
   const hz = (bounds.maxZ - bounds.minZ) / 2
   out.push({
@@ -379,7 +412,8 @@ function waterSensors(graph: CityGraph, bounds: Rect, out: ColliderDescriptor[])
   })
 }
 
-function barrierColliders(graph: CityGraph, out: ColliderDescriptor[]) {
+function barrierColliders(graph: CityGraph, excluded: Set<string>, out: ColliderDescriptor[]) {
+  if (excluded.has('net_barriers')) return // aggregate hidden → no orphan wall colliders
   const THICK = 0.15
   for (const b of graph.barriers) {
     if (b.points.length < 2) continue
@@ -412,6 +446,58 @@ interface PropShape {
   box?: [number, number, number]
   rotY?: number
   minor?: boolean
+}
+
+// Kinds whose colliders are owned by the generated-furniture side channel
+// (furniturePlacements), NOT the raw graph.points loop. OSM maps these on the
+// highway/sidewalk way; buildFurniture (procgen/props.ts) relocates them to the
+// curb, proves carriageway clearance, and rides the solved elevation. Emitting
+// them from graph.points too would double up — a SECOND solid collider at the
+// raw OSM point (uncleared, y=0), which for a centreline-mapped lamp lands INSIDE
+// a driving lane: the "invisible obstacle on the road" phantom. One owner only.
+const FURNITURE_CHANNEL_KINDS = new Set<PointFeature['kind']>(['street_lamp', 'bench', 'waste_basket'])
+
+/** True when q sits inside any drivable, at-grade carriageway (centerline ± half). */
+function insideAnyLane(q: Vec2, graph: CityGraph): boolean {
+  for (const r of graph.roads) {
+    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge || r.points.length < 2 || !(r.widthM > 0)) continue
+    const half = r.widthM / 2
+    for (let i = 1; i < r.points.length; i++) {
+      const a = r.points[i - 1]
+      const b = r.points[i]
+      const dx = b.x - a.x
+      const dz = b.z - a.z
+      const len2 = dx * dx + dz * dz
+      let t = len2 > 1e-9 ? ((q.x - a.x) * dx + (q.z - a.z) * dz) / len2 : 0
+      t = t < 0 ? 0 : t > 1 ? 1 : t
+      if (Math.hypot(q.x - (a.x + dx * t), q.z - (a.z + dz * t)) < half) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Kerb position for an OSM-mapped oriented device (mapped ON the highway line),
+ * clear of every drivable lane. Starts from the single-road kerb offset; if that
+ * still lands in a lane (a junction/dual-carriageway where the nearest-road push
+ * projects into a crossing lane), it searches both sides at growing offsets and
+ * takes the first clear spot. Deterministic; production overrides via `live`.
+ */
+function clearDevicePosition(p: Vec2, graph: CityGraph, drivingSide: 'left' | 'right'): Vec2 {
+  const near = nearestRoadInfo(p, graph.roads)
+  const base = curbsideDevicePosition(p, near, drivingSide)
+  if (!insideAnyLane(base, graph)) return base
+  if (!near?.road || !near.point) return base
+  const nrm = { x: -near.dir.z, z: near.dir.x }
+  const half = near.road.widthM / 2
+  const preferred = drivingSide === 'right' ? -1 : 1
+  for (const off of [half + 0.7, half + 1.6, half + 2.8, half + 4.2]) {
+    for (const s of [preferred, -preferred]) {
+      const cand = { x: near.point.x + nrm.x * s * off, z: near.point.z + nrm.z * s * off }
+      if (!insideAnyLane(cand, graph)) return cand
+    }
+  }
+  return base // give up gracefully — the audit will flag if still in a lane
 }
 
 function propShapeFor(p: PointFeature): PropShape | null {
@@ -480,8 +566,20 @@ function propColliders(
     }
   }
 
+  // aggregate-object exclusion: the store's editable objects are the render
+  // aggregates (veg_trees, furn_all), not the individual features their colliders
+  // are keyed by. Hiding an aggregate must therefore suppress its constituents
+  // here, or the mesh vanishes while its colliders linger as orphans (the car
+  // hits an invisible tree/lamp). Individually-editable props (signals, statues…)
+  // already suppress by their own id via `excluded`.
+  const treesHidden = excluded.has('veg_trees')
+  const furnitureHidden = excluded.has('furn_all')
+
   for (const p of graph.points) {
     if (excluded.has(p.id)) continue
+    // owned by the furniture channel below — never emit a second (phantom) collider
+    if (FURNITURE_CHANNEL_KINDS.has(p.kind)) continue
+    if (p.kind === 'tree' && treesHidden) continue
     const shape = propShapeFor(p)
     if (!shape || (shape.minor && !opts.includeMinorProps)) continue
     const ext = opts.propExtents?.get(p.id)
@@ -493,15 +591,28 @@ function propColliders(
         shape.box = ext.box
       }
     }
+    // an un-placed editable prop mapped inside a lane is nudged to a kerb spot
+    // clear of EVERY drivable lane (whole-network clearance, so a device at a
+    // junction never lands in the crossing lane); props already clear are left
+    // exactly where OSM mapped them.
     const live = opts.placements?.get(p.id)
-    const pos: [number, number, number] = live ? [...live.position] : [p.position.x, 0, p.position.z]
+    let base: Vec2 = p.position
+    if (!live && RELOCATABLE_PROP_KINDS.has(p.kind) && insideAnyLane(p.position, graph)) {
+      base = clearDevicePosition(p.position, graph, opts.drivingSide ?? 'right')
+    }
+    // seat the base on the terrain (matches building colliders) so a trunk on a
+    // hillside or in a valley touches the visible ground instead of floating or
+    // sinking at y=0. sampleTerrain returns 0 with terrain off (byte-identical).
+    const pos: [number, number, number] = live
+      ? [...live.position]
+      : [base.x, sampleTerrain(base.x, base.z), base.z]
     const rotY = (live?.rotation[1] ?? 0) + (shape.rotY ?? 0)
     push(p.id, shape, p.kind, pos, rotY)
   }
 
   // generated street furniture (lamps always; benches/bins/signs are minor).
   // The base y is the placement's road-surface elevation (props on ramps/decks).
-  const fp = opts.furniturePlacements
+  const fp = furnitureHidden ? null : opts.furniturePlacements
   if (fp) {
     fp.lamps.forEach((l, i) =>
       push(`furn_lamp_${i}`, { kind: 'cylinder', radius: 0.1, halfHeight: 3.7 }, 'street_lamp', [l.p.x, l.y ?? 0, l.p.z], l.rotY),

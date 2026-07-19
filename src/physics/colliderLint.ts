@@ -1,11 +1,17 @@
-import type { CityGraph } from '../types'
+import type { CityGraph, RoadSegment, Vec2 } from '../types'
 import { polylineLength, ringAreaM2, ringIsSimple } from '../procgen/geometry'
 import {
+  analyzeRoadNodes,
   BRIDGE_LAYER_H,
+  cumulative,
+  discRadius,
   MAX_RAMP_GRADE,
   NON_DRIVABLE,
+  nodeKey,
+  segCenterline,
   shortSpanElevCap,
 } from '../procgen/roadNetwork'
+import { buildRoadElevation } from '../procgen/corridor'
 import { maxGradeFor } from '../procgen/corridor/config'
 import type { LintWarning } from '../resolver/varietyLint'
 import type { ColliderSet } from './types'
@@ -17,6 +23,15 @@ const MAX_TRIS_PER_MESH = 60_000
 const MAX_TRIS_TOTAL = 1_500_000
 // eased ramp curve peaks at π/2 × mean grade (see roadNetwork.ease); 1.6 covers it
 const GRADE_TOLERANCE = 1.6
+// A solid obstacle counts as a lane intrusion only when its centre sits deeper
+// than this inside the carriageway edge — so legitimate edge structures (curbs
+// at half+0.05, a tree just off the kerb) never trip it, but a prop dropped on
+// the lane (e.g. an OSM device left at its raw centreline coordinate) does.
+const LANE_INTRUSION_MARGIN = 0.6
+// Max vertical step tolerated where a road ribbon meets its junction disc. The
+// parity contract (colliders.ts header) makes both = elevation + Y_ROAD_COL, so
+// a clean solve is ~0 here; anything above this is a bump the car would feel.
+const SEAM_STEP_TOL = 0.08
 
 export function colliderLint(graph: CityGraph, set: ColliderSet): LintWarning[] {
   const warnings: LintWarning[] = []
@@ -141,6 +156,48 @@ export function colliderLint(graph: CityGraph, set: ColliderSet): LintWarning[] 
     warn(`Collider: total trimesh budget exceeded (${Math.round(totalTris).toLocaleString()} triangles)`)
   }
 
+  // 5) unique ids — a duplicated id means two colliders were emitted for one
+  // feature (a merge/dedup slip); the GLB loader keys on the node name, so the
+  // second silently overwrites or double-stacks. Cheap invariant, guards §14A.
+  const ids = new Set<string>()
+  let dupIds = 0
+  for (const c of set.colliders) {
+    if (ids.has(c.id)) dupIds++
+    ids.add(c.id)
+  }
+  if (dupIds) warn(`Collider: ${dupIds} duplicate collider id(s)`)
+
+  // 6) lane intrusion — the core "invisible obstacle on the road" guard. No
+  // SOLID prop collider may sit inside a drivable, at-grade carriageway MID-BLOCK:
+  // props belong on the kerb/verge, and one dropped in a lane is exactly the
+  // phantom a car slams into. Junction discs are excluded — an intersection is an
+  // open drivable area where corner devices (signals) legitimately sit near the
+  // untrimmed ribbon overlap; only a straight-segment intrusion is a real hazard.
+  const lanes = new DrivableLaneSet(graph.roads, analyzeRoadNodes(graph.roads))
+  const intruders: string[] = []
+  for (const c of set.colliders) {
+    if (c.semantics.sensor || c.semantics.class !== 'prop') continue
+    const [x, , z] = c.transform.position
+    if (lanes.intrudes({ x, z })) intruders.push(c.semantics.featureId ?? c.id)
+  }
+  if (intruders.length) {
+    warn(
+      `Collider: ${intruders.length} solid prop collider(s) intrude into a driving lane ` +
+        `(e.g. ${intruders[0]}) — obstacle on the drivable surface`,
+    )
+  }
+
+  // 7) seam continuity — where a road ribbon meets its junction disc both are
+  // emitted at elevation + Y_ROAD_COL, so a correct solve leaves no step. A
+  // mismatch here is a lip the car jolts over crossing the intersection.
+  const steps = seamSteps(graph.roads)
+  if (steps.count) {
+    warn(
+      `Collider: ${steps.count} junction seam(s) step more than ${(SEAM_STEP_TOL * 100).toFixed(0)} cm ` +
+        `(worst ${(steps.worst * 100).toFixed(0)} cm at ${steps.worstNode}) — bump crossing the junction`,
+    )
+  }
+
   if (!warnings.some((w) => w.severity === 'warn')) {
     warnings.push({
       severity: 'info',
@@ -151,4 +208,111 @@ export function colliderLint(graph: CityGraph, set: ColliderSet): LintWarning[] 
     })
   }
   return warnings
+}
+
+// ---------------------------------------------------------------------------
+// Drivable-lane membership oracle (pure, node-safe — re-implemented locally like
+// sanity.ts's DrivableGrid so this lint never imports the DOM-tainted renderer).
+// Indexes at-grade, drivable carriageways; bridge/tunnel decks are excluded
+// because their lanes are elevated, so a ground-level prop under them is not an
+// intrusion. A uniform grid keeps the per-collider query O(1).
+// ---------------------------------------------------------------------------
+
+interface LaneSeg { ax: number; az: number; bx: number; bz: number; half: number }
+interface JunctionDisc { x: number; z: number; r2: number }
+
+class DrivableLaneSet {
+  private cells = new Map<string, LaneSeg[]>()
+  private discs: JunctionDisc[] = []
+  private static CELL = 24
+
+  constructor(roads: RoadSegment[], nodes: ReturnType<typeof analyzeRoadNodes>) {
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge) continue
+      if (r.points.length < 2 || !(r.widthM > 0)) continue
+      const half = r.widthM / 2
+      for (let i = 1; i < r.points.length; i++) this.insert(r.points[i - 1], r.points[i], half)
+    }
+    // junction open areas: a corner device near the untrimmed ribbon overlap is
+    // not a mid-lane hazard, so exclude a disc (a bit past the visual disc radius).
+    for (const info of nodes.values()) {
+      if (info.count < 2) continue
+      const rad = discRadius(info.maxWidth) + 1
+      this.discs.push({ x: info.p.x, z: info.p.z, r2: rad * rad })
+    }
+  }
+
+  private nearJunction(p: Vec2): boolean {
+    for (const d of this.discs) {
+      if ((p.x - d.x) ** 2 + (p.z - d.z) ** 2 < d.r2) return true
+    }
+    return false
+  }
+
+  private insert(a: Vec2, b: Vec2, half: number): void {
+    const C = DrivableLaneSet.CELL
+    const pad = half + 1
+    for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / C); cx <= Math.floor((Math.max(a.x, b.x) + pad) / C); cx++) {
+      for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / C); cz <= Math.floor((Math.max(a.z, b.z) + pad) / C); cz++) {
+        const key = `${cx},${cz}`
+        let list = this.cells.get(key)
+        if (!list) this.cells.set(key, (list = []))
+        list.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half })
+      }
+    }
+  }
+
+  /** True when p sits deeper than LANE_INTRUSION_MARGIN inside a carriageway,
+   *  away from any junction disc (open intersection area). */
+  intrudes(p: Vec2): boolean {
+    if (this.nearJunction(p)) return false
+    const C = DrivableLaneSet.CELL
+    const list = this.cells.get(`${Math.floor(p.x / C)},${Math.floor(p.z / C)}`)
+    if (!list) return false
+    for (const s of list) {
+      const limit = s.half - LANE_INTRUSION_MARGIN
+      if (limit > 0 && pointSegDist(p, s.ax, s.az, s.bx, s.bz) < limit) return true
+    }
+    return false
+  }
+}
+
+function pointSegDist(q: Vec2, ax: number, az: number, bx: number, bz: number): number {
+  const dx = bx - ax
+  const dz = bz - az
+  const len2 = dx * dx + dz * dz
+  let t = len2 > 1e-9 ? ((q.x - ax) * dx + (q.z - az) * dz) / len2 : 0
+  t = t < 0 ? 0 : t > 1 ? 1 : t
+  return Math.hypot(q.x - (ax + dx * t), q.z - (az + dz * t))
+}
+
+/**
+ * Vertical step where each road end meets the junction disc it feeds. Both the
+ * road ribbon (elevation.profileFor) and the disc (elevation.nodeElevation) sit
+ * at the same +Y_ROAD_COL offset, so the physical step is |profile_end − node|.
+ * Pure: rebuilds the same elevation the collider builder used.
+ */
+function seamSteps(roads: RoadSegment[]): { count: number; worst: number; worstNode: string } {
+  const nodes = analyzeRoadNodes(roads)
+  const elevation = buildRoadElevation(roads)
+  let count = 0
+  let worst = 0
+  let worstNode = ''
+  for (const r of roads) {
+    if (r.tunnel || r.points.length < 2) continue
+    const pts = segCenterline(r)
+    const profile = elevation.profileFor(r, cumulative(pts))
+    for (const atEnd of [false, true]) {
+      const endPt = atEnd ? pts[pts.length - 1] : pts[0]
+      const key = nodeKey(endPt)
+      const node = nodes.get(key)
+      if (!node || node.count < 2) continue // not a shared junction; nothing to match
+      const step = Math.abs((atEnd ? profile[profile.length - 1] : profile[0]) - elevation.nodeElevation(key))
+      if (step > SEAM_STEP_TOL) {
+        count++
+        if (step > worst) { worst = step; worstNode = key }
+      }
+    }
+  }
+  return { count, worst, worstNode }
 }
