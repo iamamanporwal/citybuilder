@@ -224,6 +224,16 @@ export async function rebuildWithTerrain(enabled: boolean): Promise<void> {
   s.showToast(enabled ? 'Terrain relief on' : 'Flat terrain')
 }
 
+export async function rebuildWithGreenery(enabled: boolean): Promise<void> {
+  const s = useEditor.getState()
+  s.setRoadsideGreenery(enabled)
+  const graph = workingGraph()
+  if (!graph || !sceneContext) return
+  s.initScene(graph, sceneContext)
+  s.setLintReport(buildGateLints())
+  s.showToast(enabled ? 'Roadside greenery on' : 'Roadside greenery off')
+}
+
 export async function buildCityFromArea(bbox: BBox, name: string, opts: FetchOptions): Promise<void> {
   const s = useEditor.getState()
   try {

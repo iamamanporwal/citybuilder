@@ -8,6 +8,7 @@ import { applyLandTextures, buildAreas, buildTerrain, waterRings } from '../proc
 import { buildTerrainField, conformTerrainToRoads, setActiveTerrain, type RoadCorridor } from '../procgen/terrain/field'
 import { cumulative, NON_DRIVABLE, segCenterline } from '../procgen/roadNetwork'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
+import { buildRoadsideVegetation } from '../procgen/vegetation'
 import { buildBarriers, buildBusStop, buildEnhancedProp, buildFountain, buildStatue } from '../procgen/propLibrary'
 import { buildGenericSign, buildGiveWaySign, buildSpeedLimitSign, buildStopSign, planSpeedLimitSigns } from '../procgen/signs'
 import { curbsideDevicePosition, deviceHeading, nearestRoadInfo } from '../procgen/signMath'
@@ -518,6 +519,22 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
         meta: { count: trees.length, 'species source': ctx.treePoolSource },
       },
       g,
+    )
+  }
+
+  // ---- roadside greenery: grass tufts + shrubs scattered on grass/bare verges
+  const greenery = buildRoadsideVegetation(graph.roads, ctx)
+  if (greenery.children.length) {
+    const counts = greenery.userData.counts ?? {}
+    add(
+      {
+        id: 'veg_roadside', type: 'vegetation', name: 'Roadside greenery',
+        locked: true,
+        transform: { position: [0, 0, 0], ...IDENTITY },
+        asset: { ...PROC_ASSET },
+        meta: { grass: counts.grass, shrubs: counts.shrubs },
+      },
+      greenery,
     )
   }
 

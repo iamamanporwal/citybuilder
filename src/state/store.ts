@@ -15,6 +15,7 @@ import type { BuildingMaterial } from '../scene/registry'
 import { loadCuration, saveCuration, type CurationMap } from './curation'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
 import { setTerrainEnabled } from '../procgen/terrain/config'
+import { setGreeneryEnabled } from '../procgen/vegetation'
 import { setRoadStyle, type RoadStyle } from '../materials/library'
 import { setPaintWear } from '../procgen/materials'
 import { clampRoadScale } from '../procgen/roadScale'
@@ -63,6 +64,7 @@ interface EditorState {
   curation: CurationMap
   useCorridorElevation: boolean
   useTerrain: boolean
+  roadsideGreenery: boolean
   roadStyle: RoadStyle
   roadScale: number
   contextInfo: ContextInfo | null
@@ -86,6 +88,7 @@ interface EditorState {
   setCuration: (c: CurationMap) => void
   setUseCorridorElevation: (v: boolean) => void
   setUseTerrain: (v: boolean) => void
+  setRoadsideGreenery: (v: boolean) => void
   setRoadStyle: (v: RoadStyle) => void
   setRoadScale: (v: number) => void
   setLintReport: (w: LintWarning[]) => void
@@ -190,6 +193,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   // realistic ground). Kept in sync with the config module flag; the toolbar
   // toggle flips both for instant A/B against the flat world.
   useTerrain: true,
+  // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
+  // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
+  roadsideGreenery: true,
   // Road surface style — realistic (textured aggregate) vs arcade (clean kit look).
   roadStyle: 'realistic',
   // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.
@@ -256,6 +262,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   setUseTerrain: (v) => {
     setTerrainEnabled(v)
     set({ useTerrain: v })
+  },
+  setRoadsideGreenery: (v) => {
+    setGreeneryEnabled(v)
+    set({ roadsideGreenery: v })
   },
   setRoadStyle: (v) => {
     setRoadStyle(v)
