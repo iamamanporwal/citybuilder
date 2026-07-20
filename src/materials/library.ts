@@ -160,14 +160,99 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
   return m
 }
 
+// Stone relief (cobble / pavers): the request was to make Prague's stone streets
+// read as chunky 3D setts instead of a flat sidewalk-like print. Hex-tiling and the
+// asphalt wear shader are wrong here (they smear structured textures / paint lane
+// wear that doesn't belong on cobbles), so this is a dedicated, cheaper effect:
+//   • Parallax occlusion (8-step, distance-faded) offsets the UV by a per-stone
+//     height map so setts genuinely stand proud and the mortar recedes as you zoom.
+//   • Crevice AO darkens the deep joints (sells the depth even at grazing angles).
+//   • A fine detail normal + boosted normalScale makes each stone catch the sun.
+//   • Shares the wetness uniform so cobbles glisten in the rain like the asphalt.
+// TBN is rebuilt from screen derivatives (road ribbons carry no tangent attribute),
+// the same path three's own normal mapping uses.
+const STONE_RELIEF_GLSL = `
+uniform sampler2D cbStoneHeight;
+uniform float cbStoneScale;
+uniform sampler2D cbStoneDetail;
+uniform float cbStoneDetailRepeat;
+uniform float uWet;
+`
+function withStoneRelief(m: THREE.MeshStandardMaterial, key: string, height: THREE.Texture): THREE.MeshStandardMaterial {
+  height.wrapS = height.wrapT = THREE.RepeatWrapping
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.cbStoneHeight = { value: height }
+    shader.uniforms.cbStoneScale = { value: 0.045 } // parallax depth (UV units ≈ per-6 m tile)
+    shader.uniforms.cbStoneDetail = { value: DETAIL_NORMAL }
+    shader.uniforms.cbStoneDetailRepeat = { value: ROAD_TILE_M / 0.5 }
+    shader.uniforms.uWet = CB_WET
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${STONE_RELIEF_GLSL}`)
+      .replace(
+        '#include <map_fragment>',
+        `// cotangent frame from screen derivatives (no tangent attribute on ribbons)
+        vec3 cbN = normalize(vNormal);
+        vec3 cbV = normalize(vViewPosition);
+        vec3 cbDp1 = dFdx(-vViewPosition), cbDp2 = dFdy(-vViewPosition);
+        vec2 cbDuv1 = dFdx(vMapUv), cbDuv2 = dFdy(vMapUv);
+        vec3 cbDp2p = cross(cbDp2, cbN), cbDp1p = cross(cbN, cbDp1);
+        vec3 cbT = cbDp2p * cbDuv1.x + cbDp1p * cbDuv2.x;
+        vec3 cbB = cbDp2p * cbDuv1.y + cbDp1p * cbDuv2.y;
+        float cbInv = inversesqrt(max(dot(cbT, cbT), dot(cbB, cbB)));
+        mat3 cbTBN = mat3(cbT * cbInv, cbB * cbInv, cbN);
+        vec3 cbVts = normalize(cbV * cbTBN); // surface→eye in tangent space
+        float cbFade = 1.0 - smoothstep(14.0, 42.0, length(vViewPosition));
+        float cbScale = cbStoneScale * cbFade;
+        vec2 cbStoneUv = vMapUv;
+        if (cbScale > 0.0005) {
+          const int CB_STEPS = 8;
+          float cbLayerD = 1.0 / float(CB_STEPS);
+          float cbCurD = 0.0;
+          vec2 cbDelta = (cbVts.xy / max(cbVts.z, 0.35)) * cbScale / float(CB_STEPS);
+          float cbDval = 1.0 - texture2D(cbStoneHeight, cbStoneUv).r;
+          for (int i = 0; i < CB_STEPS; i++) {
+            if (cbCurD >= cbDval) break;
+            cbStoneUv -= cbDelta;
+            cbDval = 1.0 - texture2D(cbStoneHeight, cbStoneUv).r;
+            cbCurD += cbLayerD;
+          }
+        }
+        #ifdef USE_MAP
+          diffuseColor *= texture2D( map, cbStoneUv );
+        #endif
+        float cbHeight = texture2D(cbStoneHeight, cbStoneUv).r;
+        diffuseColor.rgb *= mix(0.5, 1.06, smoothstep(0.12, 0.6, cbHeight)); // crevice AO
+        diffuseColor.rgb *= mix(1.0, 0.66, uWet * 0.5);                      // wet darkening`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.12, uWet * 0.6); // wet stone glistens`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#ifdef USE_NORMALMAP_TANGENTSPACE
+          vec3 mapN = texture2D( normalMap, cbStoneUv ).xyz * 2.0 - 1.0;
+          vec3 cbDetN = texture2D( cbStoneDetail, cbStoneUv * cbStoneDetailRepeat ).xyz * 2.0 - 1.0;
+          float cbDetFade = 1.0 - smoothstep(10.0, 30.0, length(vViewPosition));
+          mapN.xy += cbDetN.xy * 0.5 * cbDetFade;
+          mapN.xy *= normalScale;
+          normal = normalize( tbn * mapN );
+        #endif`,
+      )
+  }
+  m.customProgramCacheKey = () => key
+  return m
+}
+
 // ---------- road surfaces (shared per set; per-segment UV offset via clone) ----------
 
 const ROAD_MATERIALS: Record<RoadSurfaceSet, THREE.MeshStandardMaterial> = {
   'asphalt-new': withMacroVariation(std({ map: surf.asphaltNew.albedo, normalMap: surf.asphaltNew.normal, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }), 'cb-asphalt-new'),
   'asphalt-worn': withMacroVariation(std({ map: surf.asphaltWorn.albedo, normalMap: surf.asphaltWorn.normal, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }), 'cb-asphalt-worn'),
   'asphalt-patched': withMacroVariation(std({ map: surf.asphaltPatched.albedo, normalMap: surf.asphaltPatched.normal, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }), 'cb-asphalt-patched'),
-  cobble: std({ map: surf.cobble.albedo, normalMap: surf.cobble.normal, roughnessMap: surf.cobble.mr, metalnessMap: surf.cobble.mr, roughness: 1, metalness: 1 }),
-  pavers: std({ map: surf.pavers.albedo, normalMap: surf.pavers.normal, roughnessMap: surf.pavers.mr, metalnessMap: surf.pavers.mr, roughness: 1, metalness: 1 }),
+  cobble: withStoneRelief(std({ map: surf.cobble.albedo, normalMap: surf.cobble.normal, normalScale: new THREE.Vector2(1.45, 1.45), roughnessMap: surf.cobble.mr, metalnessMap: surf.cobble.mr, roughness: 1, metalness: 1 }), 'cb-cobble', surf.cobble.height),
+  pavers: withStoneRelief(std({ map: surf.pavers.albedo, normalMap: surf.pavers.normal, normalScale: new THREE.Vector2(1.35, 1.35), roughnessMap: surf.pavers.mr, metalnessMap: surf.pavers.mr, roughness: 1, metalness: 1 }), 'cb-pavers', surf.pavers.height),
   gravel: std({ map: surf.gravel.albedo, roughnessMap: surf.gravel.mr, metalnessMap: surf.gravel.mr, roughness: 1, metalness: 1 }),
 }
 

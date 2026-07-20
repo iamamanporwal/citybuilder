@@ -16,8 +16,10 @@ import { createHash } from 'node:crypto'
 import type { BBox } from '../ingest/overpassFetch'
 
 // Bump when the output contract changes so cached maps regenerate.
-// w = world-api manifest, s = semanticsVersion, c = collider formatVersion.
-export const CONTRACT = 'w1.s3.c2'
+// w = world-api manifest, s = semanticsVersion, c = collider formatVersion,
+// a = visual asset revision (baked textures/materials in the exported GLBs).
+// a1: domed cobble/paver albedo + stronger stone normals.
+export const CONTRACT = 'w1.s3.c2.a1'
 export const MANIFEST_VERSION = 1
 
 /** How long a running job may go without finishing before a re-POST restarts it. */

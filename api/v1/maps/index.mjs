@@ -60,6 +60,51 @@ installDomShims();
 
 // src/procgen/geometry.ts
 import * as THREE from "three";
+
+// src/procgen/crossSection.ts
+var CROSS_SECTION = { enabled: false };
+function setCrossSectionEnabled(v) {
+  CROSS_SECTION.enabled = v;
+}
+var CROWN_SLOPE = 0.02;
+var SUPERELEV_MAX = 0.06;
+var CURV_REF = 0.02;
+var TAPER_M = 6;
+var CROSS_K = 5;
+function crossOffset(ln, halfWidth, bank) {
+  const crown = CROWN_SLOPE * halfWidth * (1 - ln * ln);
+  const superelev = bank * halfWidth * ln;
+  return crown + superelev;
+}
+function crossFade(station, length) {
+  if (length <= 0) return 0;
+  return Math.max(0, Math.min(1, station / TAPER_M, (length - station) / TAPER_M));
+}
+function bankProfile(pts) {
+  const n = pts.length;
+  const bank = new Array(n).fill(0);
+  for (let i = 1; i < n - 1; i++) {
+    const ax = pts[i].x - pts[i - 1].x;
+    const az = pts[i].z - pts[i - 1].z;
+    const bx = pts[i + 1].x - pts[i].x;
+    const bz = pts[i + 1].z - pts[i].z;
+    const la = Math.hypot(ax, az) || 1;
+    const lb = Math.hypot(bx, bz) || 1;
+    const cross = (ax * bz - az * bx) / (la * lb);
+    const turn = Math.asin(Math.max(-1, Math.min(1, cross)));
+    const segLen2 = 0.5 * (la + lb);
+    const curvature = segLen2 > 0 ? turn / segLen2 : 0;
+    const mag = Math.min(Math.abs(curvature) / CURV_REF, 1) * SUPERELEV_MAX;
+    bank[i] = -Math.sign(curvature) * mag;
+  }
+  if (n > 2) {
+    bank[0] = bank[1] * 0.5;
+    bank[n - 1] = bank[n - 2] * 0.5;
+  }
+  return bank;
+}
+
+// src/procgen/geometry.ts
 function offsetPolyline(pts, offset) {
   const n = pts.length;
   const out = [];
@@ -143,6 +188,50 @@ function ribbonGeometry(left, right, y) {
   }
   return g;
 }
+function crownedRibbonGeometry(left, right, profile, halfWidth, fades, banks) {
+  const n = Math.min(left.length, right.length);
+  const K = CROSS_K;
+  const positions = new Float32Array(n * K * 3);
+  const uvs = new Float32Array(n * K * 2);
+  const lane = new Float32Array(n * K);
+  let dist = 0;
+  for (let i = 0; i < n; i++) {
+    if (i > 0) dist += Math.hypot(left[i].x - left[i - 1].x, left[i].z - left[i - 1].z);
+    const base = typeof profile === "number" ? profile : profile[Math.min(i, profile.length - 1)];
+    const w = Math.hypot(right[i].x - left[i].x, right[i].z - left[i].z);
+    const fade = fades[Math.min(i, fades.length - 1)] ?? 1;
+    const bank = banks[Math.min(i, banks.length - 1)] ?? 0;
+    for (let k = 0; k < K; k++) {
+      const s = k / (K - 1);
+      const ln = s * 2 - 1;
+      const x = left[i].x + (right[i].x - left[i].x) * s;
+      const z = left[i].z + (right[i].z - left[i].z) * s;
+      const y = base + fade * crossOffset(ln, halfWidth, bank);
+      const o = (i * K + k) * 3;
+      positions[o] = x;
+      positions[o + 1] = y;
+      positions[o + 2] = z;
+      uvs[(i * K + k) * 2] = w * s;
+      uvs[(i * K + k) * 2 + 1] = dist;
+      lane[i * K + k] = ln;
+    }
+  }
+  const indices = [];
+  const vid = (i, k) => i * K + k;
+  for (let i = 0; i < n - 1; i++) {
+    for (let k = 0; k < K - 1; k++) {
+      indices.push(vid(i, k), vid(i, k + 1), vid(i + 1, k));
+      indices.push(vid(i, k + 1), vid(i + 1, k + 1), vid(i + 1, k));
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  g.setAttribute("aLane", new THREE.BufferAttribute(lane, 1));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
 function planarUvXZ(g) {
   const p = g.getAttribute("position");
   const uv = new Float32Array(p.count * 2);
@@ -191,6 +280,7 @@ function mergeGeometries(geoms) {
   let vtx = 0;
   let idx = 0;
   const hasUv = geoms.every((g) => g.getAttribute("uv"));
+  const allHaveNormals = geoms.every((g) => g.getAttribute("normal"));
   for (const g of geoms) {
     vtx += g.getAttribute("position").count;
     idx += g.getIndex() ? g.getIndex().count : g.getAttribute("position").count;
@@ -222,6 +312,7 @@ function mergeGeometries(geoms) {
   out.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   if (uvs) out.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
   out.setIndex(new THREE.BufferAttribute(indices, 1));
+  if (!allHaveNormals) out.computeVertexNormals();
   return out;
 }
 function smoothPolyline(pts, spacing = 4) {
@@ -249,6 +340,36 @@ function densifyPolyline(pts, maxSpacing) {
       const t = k / n;
       out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
     }
+  }
+  return out;
+}
+function roundPolygon(ring, radius, segs = 4) {
+  const n = ring.length;
+  if (n < 3 || radius <= 0) return ring;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const prev = ring[(i - 1 + n) % n];
+    const cur = ring[i];
+    const next = ring[(i + 1) % n];
+    const vpx = prev.x - cur.x;
+    const vpz = prev.z - cur.z;
+    const vnx = next.x - cur.x;
+    const vnz = next.z - cur.z;
+    const lp = Math.hypot(vpx, vpz) || 1;
+    const ln = Math.hypot(vnx, vnz) || 1;
+    const cut = Math.min(radius, lp / 2, ln / 2);
+    const a = { x: cur.x + vpx / lp * cut, z: cur.z + vpz / lp * cut };
+    const b = { x: cur.x + vnx / ln * cut, z: cur.z + vnz / ln * cut };
+    out.push(a);
+    for (let s = 1; s < segs; s++) {
+      const t = s / segs;
+      const mt = 1 - t;
+      out.push({
+        x: mt * mt * a.x + 2 * mt * t * cur.x + t * t * b.x,
+        z: mt * mt * a.z + 2 * mt * t * cur.z + t * t * b.z
+      });
+    }
+    out.push(b);
   }
   return out;
 }
@@ -855,6 +976,7 @@ function ingestOverpass(raw, cityName) {
       continue;
     }
     if (el.tags.building) {
+      if (el.tags.historic === "ship") continue;
       const ring = el.geometry.map((g) => toLocal(g.lat, g.lon));
       const first = ring[0];
       const last = ring[ring.length - 1];
@@ -2008,12 +2130,3326 @@ var manifest_default = {
   generated: "run: node tools/build-asset-manifest.mjs",
   pickContract: "pickWeighted(pool.entries, hash01(featureId + '|' + poolKey)) \u2014 deterministic per feature; scale = clamp(featureSize / sizeMeters); ground with groundOffsetY. Entries with normalizeScale:true are non-metric and MUST be scaled to real bounds on placement.",
   counts: {
-    assets: 161,
-    pooled: 161,
-    flaggedForReview: 4,
-    pools: 44
+    assets: 350,
+    pooled: 350,
+    flaggedForReview: 10,
+    pools: 60
   },
   assets: [
+    {
+      id: "kenney-city-kit-roads/bridge-pillar-wide",
+      path: "assets/library/kenney-city-kit-roads/glb/bridge-pillar-wide.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 0.14,
+        y: 0.5,
+        z: 0.14
+      },
+      bbox: {
+        min: [
+          -0.07,
+          0,
+          -0.07
+        ],
+        max: [
+          0.07,
+          0.5,
+          0.07
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 40,
+      bytes: 5700,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/bridge-pillar",
+      path: "assets/library/kenney-city-kit-roads/glb/bridge-pillar.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 0.1,
+        y: 0.5,
+        z: 0.1
+      },
+      bbox: {
+        min: [
+          -0.05,
+          0,
+          -0.05
+        ],
+        max: [
+          0.05,
+          0.5,
+          0.05
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 40,
+      bytes: 5680,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/construction-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/construction-barrier.glb",
+      semantic: "barrier",
+      role: "barrier",
+      style: "kenney",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [
+        "temporary_barrier"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.104,
+        y: 0.119,
+        z: 0.224
+      },
+      bbox: {
+        min: [
+          -0.052,
+          0,
+          -0.112
+        ],
+        max: [
+          0.052,
+          0.119,
+          0.112
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 60,
+      bytes: 6556,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/construction-cone",
+      path: "assets/library/kenney-city-kit-roads/glb/construction-cone.glb",
+      semantic: "street_furniture",
+      role: "cone",
+      style: "kenney",
+      osmTags: [],
+      internalTags: [
+        "traffic_cone"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.076,
+        y: 0.094,
+        z: 0.076
+      },
+      bbox: {
+        min: [
+          -0.038,
+          0,
+          -0.038
+        ],
+        max: [
+          0.038,
+          0.094,
+          0.038
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 66,
+      bytes: 7068,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/construction-light",
+      path: "assets/library/kenney-city-kit-roads/glb/construction-light.glb",
+      semantic: "street_furniture",
+      role: "cone",
+      style: "kenney",
+      osmTags: [],
+      internalTags: [
+        "traffic_cone"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.076,
+        y: 0.234,
+        z: 0.076
+      },
+      bbox: {
+        min: [
+          -0.038,
+          0,
+          -0.038
+        ],
+        max: [
+          0.038,
+          0.234,
+          0.038
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 100,
+      bytes: 10516,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/light-curved-cross",
+      path: "assets/library/kenney-city-kit-roads/glb/light-curved-cross.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "kenney-modern",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.4,
+        y: 0.675,
+        z: 0.4
+      },
+      bbox: {
+        min: [
+          -0.2,
+          0,
+          -0.2
+        ],
+        max: [
+          0.2,
+          0.675,
+          0.2
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 270,
+      bytes: 24916,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/light-curved-double",
+      path: "assets/library/kenney-city-kit-roads/glb/light-curved-double.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "kenney-modern",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.05,
+        y: 0.675,
+        z: 0.4
+      },
+      bbox: {
+        min: [
+          -0.025,
+          0,
+          -0.2
+        ],
+        max: [
+          0.025,
+          0.675,
+          0.2
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 152,
+      bytes: 14212,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/light-curved",
+      path: "assets/library/kenney-city-kit-roads/glb/light-curved.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "kenney-modern",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.05,
+        y: 0.675,
+        z: 0.225
+      },
+      bbox: {
+        min: [
+          -0.025,
+          0,
+          -0.2
+        ],
+        max: [
+          0.025,
+          0.675,
+          0.025
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 92,
+      bytes: 9496,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/light-square-cross",
+      path: "assets/library/kenney-city-kit-roads/glb/light-square-cross.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "kenney-modern",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.424,
+        y: 0.6,
+        z: 0.424
+      },
+      bbox: {
+        min: [
+          -0.212,
+          0,
+          -0.212
+        ],
+        max: [
+          0.212,
+          0.6,
+          0.212
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 134,
+      bytes: 13516,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/light-square-double",
+      path: "assets/library/kenney-city-kit-roads/glb/light-square-double.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "kenney-modern",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.05,
+        y: 0.6,
+        z: 0.424
+      },
+      bbox: {
+        min: [
+          -0.025,
+          0,
+          -0.212
+        ],
+        max: [
+          0.025,
+          0.6,
+          0.212
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 88,
+      bytes: 9216,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/light-square",
+      path: "assets/library/kenney-city-kit-roads/glb/light-square.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "kenney-modern",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.05,
+        y: 0.6,
+        z: 0.237
+      },
+      bbox: {
+        min: [
+          -0.025,
+          0,
+          -0.212
+        ],
+        max: [
+          0.025,
+          0.6,
+          0.025
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 60,
+      bytes: 6996,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-bend-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-bend-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 128,
+      bytes: 11932,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-bend-sidewalk",
+      path: "assets/library/kenney-city-kit-roads/glb/road-bend-sidewalk.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 220,
+      bytes: 17040,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-bend-square-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-bend-square-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 48,
+      bytes: 5896,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-bend-square",
+      path: "assets/library/kenney-city-kit-roads/glb/road-bend-square.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 60,
+      bytes: 6284,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-bend",
+      path: "assets/library/kenney-city-kit-roads/glb/road-bend.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 260,
+      bytes: 20184,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-bridge",
+      path: "assets/library/kenney-city-kit-roads/glb/road-bridge.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.52,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.52,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 248,
+      bytes: 25628,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-crossing",
+      path: "assets/library/kenney-city-kit-roads/glb/road-crossing.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 104,
+      bytes: 8720,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-crossroad-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-crossroad-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 112,
+      bytes: 11272,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-crossroad-line",
+      path: "assets/library/kenney-city-kit-roads/glb/road-crossroad-line.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 108,
+      bytes: 9708,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-crossroad-path",
+      path: "assets/library/kenney-city-kit-roads/glb/road-crossroad-path.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 276,
+      bytes: 18724,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-crossroad",
+      path: "assets/library/kenney-city-kit-roads/glb/road-crossroad.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 116,
+      bytes: 10100,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-curve-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-curve-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.08,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -1
+        ],
+        max: [
+          1,
+          0.08,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 200,
+      bytes: 17936,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-curve-intersection-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-curve-intersection-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.08,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -1
+        ],
+        max: [
+          1,
+          0.08,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 166,
+      bytes: 15500,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-curve-intersection",
+      path: "assets/library/kenney-city-kit-roads/glb/road-curve-intersection.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.02,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -1
+        ],
+        max: [
+          1,
+          0.02,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 298,
+      bytes: 22804,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-curve-pavement",
+      path: "assets/library/kenney-city-kit-roads/glb/road-curve-pavement.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.02,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -1
+        ],
+        max: [
+          1,
+          0.02,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 220,
+      bytes: 17044,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-curve",
+      path: "assets/library/kenney-city-kit-roads/glb/road-curve.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.02,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -1
+        ],
+        max: [
+          1,
+          0.02,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 308,
+      bytes: 23932,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-driveway-double-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-driveway-double-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 48,
+      bytes: 6448,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-driveway-double",
+      path: "assets/library/kenney-city-kit-roads/glb/road-driveway-double.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 72,
+      bytes: 7684,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-driveway-single-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-driveway-single-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 36,
+      bytes: 5260,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-driveway-single",
+      path: "assets/library/kenney-city-kit-roads/glb/road-driveway-single.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 60,
+      bytes: 6584,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-end-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-end-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 28,
+      bytes: 4044,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-end-round-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-end-round-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 160,
+      bytes: 16316,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-end-round",
+      path: "assets/library/kenney-city-kit-roads/glb/road-end-round.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 218,
+      bytes: 17548,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-end",
+      path: "assets/library/kenney-city-kit-roads/glb/road-end.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 42,
+      bytes: 4960,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-intersection-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-intersection-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 68,
+      bytes: 7692,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-intersection-line",
+      path: "assets/library/kenney-city-kit-roads/glb/road-intersection-line.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 76,
+      bytes: 7508,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-intersection-path",
+      path: "assets/library/kenney-city-kit-roads/glb/road-intersection-path.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 204,
+      bytes: 13752,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-intersection",
+      path: "assets/library/kenney-city-kit-roads/glb/road-intersection.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 84,
+      bytes: 7900,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-roundabout-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-roundabout-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 3,
+        y: 0.08,
+        z: 3
+      },
+      bbox: {
+        min: [
+          -1.5,
+          0,
+          -1.5
+        ],
+        max: [
+          1.5,
+          0.08,
+          1.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 754,
+      bytes: 61652,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-roundabout",
+      path: "assets/library/kenney-city-kit-roads/glb/road-roundabout.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 3,
+        y: 0.02,
+        z: 3
+      },
+      bbox: {
+        min: [
+          -1.5,
+          0,
+          -1.5
+        ],
+        max: [
+          1.5,
+          0.02,
+          1.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1636,
+      bytes: 105896,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-side-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-side-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1.31
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.81
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 24,
+      bytes: 4220,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-side-entry-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-side-entry-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1.31
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.81
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 232,
+      bytes: 20316,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-side-entry",
+      path: "assets/library/kenney-city-kit-roads/glb/road-side-entry.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1.31
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.81
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 306,
+      bytes: 24304,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-side-exit-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-side-exit-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1.31
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.81
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 232,
+      bytes: 20312,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-side-exit",
+      path: "assets/library/kenney-city-kit-roads/glb/road-side-exit.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1.31
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.81
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 306,
+      bytes: 24300,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-side",
+      path: "assets/library/kenney-city-kit-roads/glb/road-side.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1.31
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.81
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5288,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.33,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.33,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 24,
+      bytes: 4068,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-curve-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-curve-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.58,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -0.5
+        ],
+        max: [
+          1,
+          0.58,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 420,
+      bytes: 38840,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-curve",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-curve.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.52,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -0.5
+        ],
+        max: [
+          1,
+          0.52,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 544,
+      bytes: 47896,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-flat-curve",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-flat-curve.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 2,
+        y: 0.52,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -1,
+          0,
+          -0.5
+        ],
+        max: [
+          1,
+          0.52,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 648,
+      bytes: 55880,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-flat-high",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-flat-high.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.52,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.52,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5316,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-flat",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-flat.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.27,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.27,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5304,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-high-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-high-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.58,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.58,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 24,
+      bytes: 4084,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant-high",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant-high.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.52,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.52,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5288,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-slant",
+      path: "assets/library/kenney-city-kit-roads/glb/road-slant.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.27,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.27,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5272,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-split-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-split-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -1
+        ],
+        max: [
+          0.5,
+          0.08,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 512,
+      bytes: 41356,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-split",
+      path: "assets/library/kenney-city-kit-roads/glb/road-split.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 2
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -1
+        ],
+        max: [
+          0.5,
+          0.02,
+          1
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 862,
+      bytes: 60144,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-square-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-square-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 32,
+      bytes: 4064,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-square",
+      path: "assets/library/kenney-city-kit-roads/glb/road-square.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 36,
+      bytes: 4468,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-straight-barrier-end",
+      path: "assets/library/kenney-city-kit-roads/glb/road-straight-barrier-end.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 16,
+      bytes: 3656,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-straight-barrier-half",
+      path: "assets/library/kenney-city-kit-roads/glb/road-straight-barrier-half.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 0.5,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.25,
+          0,
+          -0.5
+        ],
+        max: [
+          0.25,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 24,
+      bytes: 4124,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-straight-barrier",
+      path: "assets/library/kenney-city-kit-roads/glb/road-straight-barrier.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.08,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.08,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 24,
+      bytes: 4232,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-straight-half",
+      path: "assets/library/kenney-city-kit-roads/glb/road-straight-half.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 0.5,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.25,
+          0,
+          -0.5
+        ],
+        max: [
+          0.25,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5284,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/road-straight",
+      path: "assets/library/kenney-city-kit-roads/glb/road-straight.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 5264,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/sign-highway-detailed",
+      path: "assets/library/kenney-city-kit-roads/glb/sign-highway-detailed.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "kenney",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.132,
+        y: 0.822,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.107,
+          0,
+          -0.5
+        ],
+        max: [
+          0.025,
+          0.822,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 256,
+      bytes: 23552,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/sign-highway-wide",
+      path: "assets/library/kenney-city-kit-roads/glb/sign-highway-wide.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "kenney",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.132,
+        y: 0.707,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.107,
+          0,
+          -0.5
+        ],
+        max: [
+          0.025,
+          0.707,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 144,
+      bytes: 13984,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/sign-highway",
+      path: "assets/library/kenney-city-kit-roads/glb/sign-highway.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "kenney",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.132,
+        y: 0.707,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.107,
+          0,
+          -0.5
+        ],
+        max: [
+          0.025,
+          0.707,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 180,
+      bytes: 17308,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/tile-high",
+      path: "assets/library/kenney-city-kit-roads/glb/tile-high.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.25,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.25,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 12,
+      bytes: 2804,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/tile-low",
+      path: "assets/library/kenney-city-kit-roads/glb/tile-low.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.02,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.02,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 12,
+      bytes: 2816,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/tile-slant",
+      path: "assets/library/kenney-city-kit-roads/glb/tile-slant.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.27,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.27,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 12,
+      bytes: 2840,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
+    {
+      id: "kenney-city-kit-roads/tile-slantHigh",
+      path: "assets/library/kenney-city-kit-roads/glb/tile-slantHigh.glb",
+      semantic: "road_module",
+      role: "road-tile",
+      style: "kenney-asphalt",
+      osmTags: [
+        "highway=residential"
+      ],
+      internalTags: [],
+      referenceOnly: true,
+      sizeMeters: {
+        x: 1,
+        y: 0.52,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0.52,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 12,
+      bytes: 2852,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "colormap"
+      ],
+      textures: [
+        "Textures/colormap.png"
+      ],
+      source: "Kenney \u2014 City Kit Roads (CC0)",
+      license: "CC0-1.0",
+      attribution: "Kenney (kenney.nl)",
+      sourceUrl: "https://kenney.nl/assets/city-kit-roads",
+      flags: []
+    },
     {
       id: "quaternius-downtown-city-megakit/Brick_90Angle_L",
       path: "assets/library/quaternius-downtown-city-megakit/gltf/Brick_90Angle_L.gltf",
@@ -2049,6 +5485,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 18,
+      bytes: 4650,
       lods: [
         "LOD0"
       ],
@@ -2100,6 +5537,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 18,
+      bytes: 4695,
       lods: [
         "LOD0"
       ],
@@ -2151,6 +5589,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 52,
+      bytes: 6828,
       lods: [
         "LOD0"
       ],
@@ -2206,6 +5645,7 @@ var manifest_default = {
       },
       groundOffsetY: 2e-3,
       triangles: 380,
+      bytes: 2399,
       lods: [
         "LOD0"
       ],
@@ -2256,6 +5696,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 32,
+      bytes: 2333,
       lods: [
         "LOD0"
       ],
@@ -2306,6 +5747,7 @@ var manifest_default = {
       },
       groundOffsetY: 2e-3,
       triangles: 298,
+      bytes: 4197,
       lods: [
         "LOD0"
       ],
@@ -2360,6 +5802,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 12,
+      bytes: 4623,
       lods: [
         "LOD0"
       ],
@@ -2411,6 +5854,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 80,
+      bytes: 5016,
       lods: [
         "LOD0"
       ],
@@ -2465,6 +5909,7 @@ var manifest_default = {
       },
       groundOffsetY: -2,
       triangles: 108,
+      bytes: 5016,
       lods: [
         "LOD0"
       ],
@@ -2519,6 +5964,7 @@ var manifest_default = {
       },
       groundOffsetY: -2.8,
       triangles: 60,
+      bytes: 2781,
       lods: [
         "LOD0"
       ],
@@ -2569,6 +6015,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 32,
+      bytes: 2888,
       lods: [
         "LOD0"
       ],
@@ -2619,6 +6066,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 32,
+      bytes: 2776,
       lods: [
         "LOD0"
       ],
@@ -2669,6 +6117,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 80,
+      bytes: 5008,
       lods: [
         "LOD0"
       ],
@@ -2723,6 +6172,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 84,
+      bytes: 4181,
       lods: [
         "LOD0"
       ],
@@ -2777,6 +6227,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 48,
+      bytes: 2387,
       lods: [
         "LOD0"
       ],
@@ -2827,6 +6278,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 84,
+      bytes: 4189,
       lods: [
         "LOD0"
       ],
@@ -2881,6 +6333,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 24,
+      bytes: 6841,
       lods: [
         "LOD0"
       ],
@@ -2936,6 +6389,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 568,
+      bytes: 10724,
       lods: [
         "LOD0"
       ],
@@ -2993,6 +6447,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 656,
+      bytes: 9650,
       lods: [
         "LOD0"
       ],
@@ -3050,6 +6505,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 488,
+      bytes: 9646,
       lods: [
         "LOD0"
       ],
@@ -3107,6 +6563,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 72,
+      bytes: 6854,
       lods: [
         "LOD0"
       ],
@@ -3162,6 +6619,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 2,
+      bytes: 2727,
       lods: [
         "LOD0"
       ],
@@ -3212,6 +6670,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 4,
+      bytes: 2728,
       lods: [
         "LOD0"
       ],
@@ -3262,6 +6721,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 4,
+      bytes: 2728,
       lods: [
         "LOD0"
       ],
@@ -3312,6 +6772,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.168,
       triangles: 312,
+      bytes: 2370,
       lods: [
         "LOD0"
       ],
@@ -3362,6 +6823,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 4,
+      bytes: 4576,
       lods: [
         "LOD0"
       ],
@@ -3413,6 +6875,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 4171,
       lods: [
         "LOD0"
       ],
@@ -3464,6 +6927,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 4157,
       lods: [
         "LOD0"
       ],
@@ -3515,6 +6979,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 8,
+      bytes: 4599,
       lods: [
         "LOD0"
       ],
@@ -3566,6 +7031,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 794,
+      bytes: 13012,
       lods: [
         "LOD0"
       ],
@@ -3627,6 +7093,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 38,
+      bytes: 6883,
       lods: [
         "LOD0"
       ],
@@ -3682,6 +7149,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 38,
+      bytes: 6877,
       lods: [
         "LOD0"
       ],
@@ -3737,6 +7205,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 24,
+      bytes: 6848,
       lods: [
         "LOD0"
       ],
@@ -3792,6 +7261,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 16,
+      bytes: 6806,
       lods: [
         "LOD0"
       ],
@@ -3847,6 +7317,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 1137,
+      bytes: 9758,
       lods: [
         "LOD0"
       ],
@@ -3904,6 +7375,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 190,
+      bytes: 10672,
       lods: [
         "LOD0"
       ],
@@ -3961,6 +7433,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 426,
+      bytes: 10746,
       lods: [
         "LOD0"
       ],
@@ -4018,6 +7491,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 652,
+      bytes: 11678,
       lods: [
         "LOD0"
       ],
@@ -4077,6 +7551,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 45122,
+      bytes: 22880,
       lods: [
         "LOD0"
       ],
@@ -4155,6 +7630,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.01,
       triangles: 25612,
+      bytes: 25244,
       lods: [
         "LOD0"
       ],
@@ -4230,6 +7706,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.012,
       triangles: 18344,
+      bytes: 27435,
       lods: [
         "LOD0"
       ],
@@ -4308,6 +7785,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 29,
+      bytes: 2735,
       lods: [
         "LOD0"
       ],
@@ -4358,6 +7836,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 29,
+      bytes: 2735,
       lods: [
         "LOD0"
       ],
@@ -4408,6 +7887,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 2719,
       lods: [
         "LOD0"
       ],
@@ -4458,6 +7938,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 2709,
       lods: [
         "LOD0"
       ],
@@ -4508,6 +7989,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 2709,
       lods: [
         "LOD0"
       ],
@@ -4558,6 +8040,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 90,
+      bytes: 2612,
       lods: [
         "LOD0"
       ],
@@ -4608,6 +8091,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 90,
+      bytes: 2612,
       lods: [
         "LOD0"
       ],
@@ -4658,6 +8142,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 30,
+      bytes: 2595,
       lods: [
         "LOD0"
       ],
@@ -4708,6 +8193,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 72,
+      bytes: 2611,
       lods: [
         "LOD0"
       ],
@@ -4758,6 +8244,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 72,
+      bytes: 2611,
       lods: [
         "LOD0"
       ],
@@ -4808,6 +8295,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 160,
+      bytes: 2327,
       lods: [
         "LOD0"
       ],
@@ -4858,6 +8346,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 160,
+      bytes: 2343,
       lods: [
         "LOD0"
       ],
@@ -4908,6 +8397,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 112,
+      bytes: 2303,
       lods: [
         "LOD0"
       ],
@@ -4958,6 +8448,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 116,
+      bytes: 2310,
       lods: [
         "LOD0"
       ],
@@ -5008,6 +8499,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 116,
+      bytes: 2310,
       lods: [
         "LOD0"
       ],
@@ -5057,6 +8549,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 10,
+      bytes: 1881,
       lods: [
         "LOD0"
       ],
@@ -5104,6 +8597,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 10,
+      bytes: 1883,
       lods: [
         "LOD0"
       ],
@@ -5151,6 +8645,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 2,
+      bytes: 1871,
       lods: [
         "LOD0"
       ],
@@ -5198,6 +8693,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 4,
+      bytes: 1872,
       lods: [
         "LOD0"
       ],
@@ -5245,6 +8741,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 4,
+      bytes: 2082,
       lods: [
         "LOD0"
       ],
@@ -5292,6 +8789,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 8,
+      bytes: 1868,
       lods: [
         "LOD0"
       ],
@@ -5339,6 +8837,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 2,
+      bytes: 2039,
       lods: [
         "LOD0"
       ],
@@ -5387,6 +8886,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 4,
+      bytes: 1929,
       lods: [
         "LOD0"
       ],
@@ -5435,6 +8935,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 2,
+      bytes: 1863,
       lods: [
         "LOD0"
       ],
@@ -5482,6 +8983,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 32,
+      bytes: 2085,
       lods: [
         "LOD0"
       ],
@@ -5529,6 +9031,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 48,
+      bytes: 2094,
       lods: [
         "LOD0"
       ],
@@ -5576,6 +9079,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 48,
+      bytes: 2099,
       lods: [
         "LOD0"
       ],
@@ -5623,6 +9127,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 48,
+      bytes: 2063,
       lods: [
         "LOD0"
       ],
@@ -5670,6 +9175,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.11,
       triangles: 2,
+      bytes: 1856,
       lods: [
         "LOD0"
       ],
@@ -5717,6 +9223,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 2,
+      bytes: 1852,
       lods: [
         "LOD0"
       ],
@@ -5764,6 +9271,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 2,
+      bytes: 1852,
       lods: [
         "LOD0"
       ],
@@ -5811,6 +9319,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.13,
       triangles: 2,
+      bytes: 1850,
       lods: [
         "LOD0"
       ],
@@ -5859,6 +9368,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 676,
+      bytes: 2372,
       lods: [
         "LOD0"
       ],
@@ -5909,6 +9419,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 186,
+      bytes: 4722,
       lods: [
         "LOD0"
       ],
@@ -5960,6 +9471,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 278,
+      bytes: 4722,
       lods: [
         "LOD0"
       ],
@@ -6011,6 +9523,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 239,
+      bytes: 4713,
       lods: [
         "LOD0"
       ],
@@ -6062,6 +9575,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 860,
+      bytes: 7990,
       lods: [
         "LOD0"
       ],
@@ -6118,6 +9632,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 438,
+      bytes: 3810,
       lods: [
         "LOD0"
       ],
@@ -6169,6 +9684,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 12,
+      bytes: 2395,
       lods: [
         "LOD0"
       ],
@@ -6219,6 +9735,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 12,
+      bytes: 2391,
       lods: [
         "LOD0"
       ],
@@ -6269,6 +9786,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.1,
       triangles: 4,
+      bytes: 3641,
       lods: [
         "LOD0"
       ],
@@ -6323,6 +9841,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.1,
       triangles: 16,
+      bytes: 4043,
       lods: [
         "LOD0"
       ],
@@ -6377,6 +9896,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.1,
       triangles: 8,
+      bytes: 4098,
       lods: [
         "LOD0"
       ],
@@ -6431,6 +9951,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 112,
+      bytes: 2403,
       lods: [
         "LOD0"
       ],
@@ -6481,6 +10002,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 16,
+      bytes: 2394,
       lods: [
         "LOD0"
       ],
@@ -6531,6 +10053,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 112,
+      bytes: 2417,
       lods: [
         "LOD0"
       ],
@@ -6581,6 +10104,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 16,
+      bytes: 2407,
       lods: [
         "LOD0"
       ],
@@ -6631,6 +10155,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 120,
+      bytes: 2412,
       lods: [
         "LOD0"
       ],
@@ -6681,6 +10206,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 120,
+      bytes: 2400,
       lods: [
         "LOD0"
       ],
@@ -6731,6 +10257,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 8,
+      bytes: 4482,
       lods: [
         "LOD0"
       ],
@@ -6785,6 +10312,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 36,
+      bytes: 6566,
       lods: [
         "LOD0"
       ],
@@ -6843,6 +10371,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 156,
+      bytes: 9945,
       lods: [
         "LOD0"
       ],
@@ -6903,6 +10432,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 210,
+      bytes: 6571,
       lods: [
         "LOD0"
       ],
@@ -6955,6 +10485,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 4978,
       lods: [
         "LOD0"
       ],
@@ -7009,6 +10540,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 18,
+      bytes: 5040,
       lods: [
         "LOD0"
       ],
@@ -7063,6 +10595,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 312,
+      bytes: 6633,
       lods: [
         "LOD0"
       ],
@@ -7115,6 +10648,7 @@ var manifest_default = {
       },
       groundOffsetY: 1e-3,
       triangles: 578,
+      bytes: 10718,
       lods: [
         "LOD0"
       ],
@@ -7171,6 +10705,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 136,
+      bytes: 2376,
       lods: [
         "LOD0"
       ],
@@ -7220,6 +10755,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 190,
+      bytes: 2394,
       lods: [
         "LOD0"
       ],
@@ -7270,6 +10806,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 10,
+      bytes: 2149,
       lods: [
         "LOD0"
       ],
@@ -7319,6 +10856,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.014,
       triangles: 118,
+      bytes: 2198,
       lods: [
         "LOD0"
       ],
@@ -7368,6 +10906,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 118,
+      bytes: 4132,
       lods: [
         "LOD0"
       ],
@@ -7422,6 +10961,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.2,
       triangles: 2,
+      bytes: 2143,
       lods: [
         "LOD0"
       ],
@@ -7472,6 +11012,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.2,
       triangles: 6,
+      bytes: 2118,
       lods: [
         "LOD0"
       ],
@@ -7522,6 +11063,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.2,
       triangles: 6,
+      bytes: 2118,
       lods: [
         "LOD0"
       ],
@@ -7572,6 +11114,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.2,
       triangles: 2,
+      bytes: 2096,
       lods: [
         "LOD0"
       ],
@@ -7622,6 +11165,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.2,
       triangles: 8,
+      bytes: 2105,
       lods: [
         "LOD0"
       ],
@@ -7672,6 +11216,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 6,
+      bytes: 4037,
       lods: [
         "LOD0"
       ],
@@ -7726,6 +11271,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.014,
       triangles: 44,
+      bytes: 2345,
       lods: [
         "LOD0"
       ],
@@ -7776,6 +11322,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 10,
+      bytes: 4146,
       lods: [
         "LOD0"
       ],
@@ -7830,6 +11377,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 370,
+      bytes: 8847,
       lods: [
         "LOD0"
       ],
@@ -7890,6 +11438,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 26,
+      bytes: 5827,
       lods: [
         "LOD0"
       ],
@@ -7948,6 +11497,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.014,
       triangles: 76,
+      bytes: 4132,
       lods: [
         "LOD0"
       ],
@@ -8002,6 +11552,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 42,
+      bytes: 5984,
       lods: [
         "LOD0"
       ],
@@ -8060,6 +11611,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 390,
+      bytes: 8826,
       lods: [
         "LOD0"
       ],
@@ -8120,6 +11672,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 14,
+      bytes: 2063,
       lods: [
         "LOD0"
       ],
@@ -8168,6 +11721,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 97,
+      bytes: 2630,
       lods: [
         "LOD0"
       ],
@@ -8218,6 +11772,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.146,
       triangles: 24,
+      bytes: 1905,
       lods: [
         "LOD0"
       ],
@@ -8266,6 +11821,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 177,
+      bytes: 2636,
       lods: [
         "LOD0"
       ],
@@ -8316,6 +11872,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 42,
+      bytes: 2356,
       lods: [
         "LOD0"
       ],
@@ -8365,6 +11922,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 598,
+      bytes: 4215,
       lods: [
         "LOD0"
       ],
@@ -8419,6 +11977,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.148,
       triangles: 2,
+      bytes: 1856,
       lods: [
         "LOD0"
       ],
@@ -8467,6 +12026,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 60,
+      bytes: 2586,
       lods: [
         "LOD0"
       ],
@@ -8517,6 +12077,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 128,
+      bytes: 4227,
       lods: [
         "LOD0"
       ],
@@ -8571,6 +12132,7 @@ var manifest_default = {
       },
       groundOffsetY: -0.971,
       triangles: 168,
+      bytes: 2410,
       lods: [
         "LOD0"
       ],
@@ -8621,6 +12183,7 @@ var manifest_default = {
       },
       groundOffsetY: -0.971,
       triangles: 320,
+      bytes: 2412,
       lods: [
         "LOD0"
       ],
@@ -8671,6 +12234,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.012,
       triangles: 564,
+      bytes: 2412,
       lods: [
         "LOD0"
       ],
@@ -8721,6 +12285,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 16,
+      bytes: 4301,
       lods: [
         "LOD0"
       ],
@@ -8773,6 +12338,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 220,
+      bytes: 6364,
       lods: [
         "LOD0"
       ],
@@ -8829,6 +12395,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 12,
+      bytes: 4275,
       lods: [
         "LOD0"
       ],
@@ -8881,6 +12448,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 252,
+      bytes: 6307,
       lods: [
         "LOD0"
       ],
@@ -8936,6 +12504,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 892,
+      bytes: 6432,
       lods: [
         "LOD0"
       ],
@@ -8991,6 +12560,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 2,
+      bytes: 2132,
       lods: [
         "LOD0"
       ],
@@ -9040,6 +12610,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 2,
+      bytes: 2136,
       lods: [
         "LOD0"
       ],
@@ -9090,6 +12661,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 48,
+      bytes: 2570,
       lods: [
         "LOD0"
       ],
@@ -9140,6 +12712,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 49,
+      bytes: 2581,
       lods: [
         "LOD0"
       ],
@@ -9190,6 +12763,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 224,
+      bytes: 2654,
       lods: [
         "LOD0"
       ],
@@ -9240,6 +12814,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 505,
+      bytes: 6437,
       lods: [
         "LOD0"
       ],
@@ -9296,6 +12871,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 336,
+      bytes: 2653,
       lods: [
         "LOD0"
       ],
@@ -9346,6 +12922,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 634,
+      bytes: 6433,
       lods: [
         "LOD0"
       ],
@@ -9401,6 +12978,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.15,
       triangles: 858,
+      bytes: 6406,
       lods: [
         "LOD0"
       ],
@@ -9457,6 +13035,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.02,
       triangles: 10,
+      bytes: 4918,
       lods: [
         "LOD0"
       ],
@@ -9511,6 +13090,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 216,
+      bytes: 2346,
       lods: [
         "LOD0"
       ],
@@ -9561,6 +13141,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 64,
+      bytes: 2315,
       lods: [
         "LOD0"
       ],
@@ -9611,6 +13192,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 216,
+      bytes: 2354,
       lods: [
         "LOD0"
       ],
@@ -9661,6 +13243,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 68,
+      bytes: 4905,
       lods: [
         "LOD0"
       ],
@@ -9715,6 +13298,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 50,
+      bytes: 4920,
       lods: [
         "LOD0"
       ],
@@ -9769,6 +13353,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.01,
       triangles: 160,
+      bytes: 7915,
       lods: [
         "LOD0"
       ],
@@ -9825,6 +13410,7 @@ var manifest_default = {
       },
       groundOffsetY: -0.59,
       triangles: 32,
+      bytes: 2586,
       lods: [
         "LOD0"
       ],
@@ -9875,6 +13461,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 34,
+      bytes: 4904,
       lods: [
         "LOD0"
       ],
@@ -9929,6 +13516,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 32,
+      bytes: 2504,
       lods: [
         "LOD0"
       ],
@@ -9979,6 +13567,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 574,
+      bytes: 10727,
       lods: [
         "LOD0"
       ],
@@ -10031,6 +13620,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 224,
+      bytes: 5147332,
       lods: [
         "LOD0"
       ],
@@ -10074,6 +13664,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.014,
       triangles: 606,
+      bytes: 2708140,
       lods: [
         "LOD0"
       ],
@@ -10117,6 +13708,7 @@ var manifest_default = {
       },
       groundOffsetY: 4.118,
       triangles: 528,
+      bytes: 2989244,
       lods: [
         "LOD0"
       ],
@@ -10162,6 +13754,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 157,
+      bytes: 19780,
       lods: [
         "LOD0"
       ],
@@ -10205,6 +13798,7 @@ var manifest_default = {
       },
       groundOffsetY: 0.015,
       triangles: 608,
+      bytes: 3085724,
       lods: [
         "LOD0"
       ],
@@ -10250,6 +13844,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 702,
+      bytes: 34572,
       lods: [
         "LOD0"
       ],
@@ -10303,6 +13898,7 @@ var manifest_default = {
       },
       groundOffsetY: 0,
       triangles: 38,
+      bytes: 8072,
       lods: [
         "LOD0"
       ],
@@ -10346,6 +13942,7 @@ var manifest_default = {
       },
       groundOffsetY: 106.582,
       triangles: 876,
+      bytes: 395104,
       lods: [
         "LOD0"
       ],
@@ -10360,9 +13957,5643 @@ var manifest_default = {
       flags: [
         "oversized"
       ]
+    },
+    {
+      id: "toxsam-polygonal-mind/bench_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/bench_01.glb",
+      semantic: "street_furniture",
+      role: "bench",
+      style: "stylized",
+      osmTags: [
+        "amenity=bench"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.182,
+        y: 1.001,
+        z: 0.928
+      },
+      bbox: {
+        min: [
+          -0.579,
+          1e-3,
+          -0.43
+        ],
+        max: [
+          0.603,
+          1.002,
+          0.498
+        ]
+      },
+      groundOffsetY: -1e-3,
+      triangles: 300,
+      bytes: 312620,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Seat_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Seat.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/bench_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/bench_02.glb",
+      semantic: "street_furniture",
+      role: "bench",
+      style: "stylized",
+      osmTags: [
+        "amenity=bench"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.92,
+        y: 0.55,
+        z: 0.72
+      },
+      bbox: {
+        min: [
+          -0.96,
+          0,
+          -0.36
+        ],
+        max: [
+          0.96,
+          0.55,
+          0.36
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 136,
+      bytes: 412948,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Launch_Atlas_2_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/bench_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/bench_03.glb",
+      semantic: "street_furniture",
+      role: "bench",
+      style: "stylized",
+      osmTags: [
+        "amenity=bench"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.054,
+        y: 0.751,
+        z: 0.72
+      },
+      bbox: {
+        min: [
+          -1.054,
+          0,
+          -0.36
+        ],
+        max: [
+          1,
+          0.751,
+          0.36
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 154,
+      bytes: 413208,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Launch_Atlas_2_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/bench_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/bench_04.glb",
+      semantic: "street_furniture",
+      role: "bench",
+      style: "stylized",
+      osmTags: [
+        "amenity=bench"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.136,
+        y: 0.892,
+        z: 0.946
+      },
+      bbox: {
+        min: [
+          -1.068,
+          0,
+          -0.627
+        ],
+        max: [
+          1.068,
+          0.892,
+          0.319
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 152,
+      bytes: 585748,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Tower_Station_PropSet_01_Mat "
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Bench_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/bench_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/bench_05.glb",
+      semantic: "street_furniture",
+      role: "bench",
+      style: "stylized",
+      osmTags: [
+        "amenity=bench"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4.038,
+        y: 0.805,
+        z: 1.5
+      },
+      bbox: {
+        min: [
+          -2.019,
+          -0.041,
+          -0.775
+        ],
+        max: [
+          2.019,
+          0.764,
+          0.725
+        ]
+      },
+      groundOffsetY: 0.041,
+      triangles: 452,
+      bytes: 878104,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BlackOutline",
+        "Rock01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bench_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/bench_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/bench_06.glb",
+      semantic: "street_furniture",
+      role: "bench",
+      style: "stylized",
+      osmTags: [
+        "amenity=bench"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.974,
+        y: 0.55,
+        z: 0.774
+      },
+      bbox: {
+        min: [
+          -0.987,
+          0,
+          -0.387
+        ],
+        max: [
+          0.987,
+          0.55,
+          0.387
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 26,
+      bytes: 1548176,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Bench_01_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Bench_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/bin_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/bin_01.glb",
+      semantic: "street_furniture",
+      role: "bin",
+      style: "stylized",
+      osmTags: [
+        "amenity=waste_basket"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1,
+        y: 0,
+        z: 1
+      },
+      bbox: {
+        min: [
+          -0.5,
+          0,
+          -0.5
+        ],
+        max: [
+          0.5,
+          0,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 2,
+      bytes: 175092,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Computer_01_Blend"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Icon_TrashBin_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_01.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.144,
+        y: 1.481,
+        z: 0.648
+      },
+      bbox: {
+        min: [
+          -1.572,
+          0,
+          -0.648
+        ],
+        max: [
+          1.572,
+          1.481,
+          0
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 6,
+      bytes: 45072,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Fence"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/Fence.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_02.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.202,
+        y: 1.047,
+        z: 0.12
+      },
+      bbox: {
+        min: [
+          -1.042,
+          0,
+          -0.06
+        ],
+        max: [
+          1.16,
+          1.047,
+          0.06
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 100,
+      bytes: 583272,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Tower_Station_PropSet_01_Mat "
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Tower_Station_Fence_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_03.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.895,
+        y: 1.126,
+        z: 1.794
+      },
+      bbox: {
+        min: [
+          -1.949,
+          0,
+          -0.749
+        ],
+        max: [
+          1.946,
+          1.126,
+          1.045
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 652,
+      bytes: 615332,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Tower_Station_PropSet_01_Mat "
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Tower_Ornamental_Fence_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_04.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.452,
+        y: 0.815,
+        z: 0.096
+      },
+      bbox: {
+        min: [
+          -1.226,
+          -2e-3,
+          -0.048
+        ],
+        max: [
+          1.226,
+          0.813,
+          0.048
+        ]
+      },
+      groundOffsetY: 2e-3,
+      triangles: 384,
+      bytes: 788692,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "WoodClean",
+        "BlackOutline"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Fence_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_05.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.726,
+        y: 1.364,
+        z: 0.722
+      },
+      bbox: {
+        min: [
+          -0.363,
+          -0.025,
+          -0.361
+        ],
+        max: [
+          0.363,
+          1.339,
+          0.361
+        ]
+      },
+      groundOffsetY: 0.025,
+      triangles: 324,
+      bytes: 1072020,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BlackOutline",
+        "WoodClean",
+        "Mushroom02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Fence_01_Post_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_06.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 6.105,
+        y: 1.858,
+        z: 0.584
+      },
+      bbox: {
+        min: [
+          -3.053,
+          0,
+          -0.292
+        ],
+        max: [
+          3.052,
+          1.858,
+          0.292
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 108,
+      bytes: 1149004,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim01",
+        "Trim02",
+        "Trim03"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Fence01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_07.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 15.465,
+        y: 1.858,
+        z: 22.755
+      },
+      bbox: {
+        min: [
+          -7.725,
+          -4e-3,
+          -11.396
+        ],
+        max: [
+          7.74,
+          1.854,
+          11.359
+        ]
+      },
+      groundOffsetY: 4e-3,
+      triangles: 498,
+      bytes: 1167348,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim01",
+        "Trim02",
+        "Trim03"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Fence02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_08",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_08.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4,
+        y: 1.081,
+        z: 0.385
+      },
+      bbox: {
+        min: [
+          -2,
+          0,
+          -0.205
+        ],
+        max: [
+          2,
+          1.081,
+          0.18
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 730,
+      bytes: 1288196,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Railing"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Railing_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_09",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_09.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.266,
+        y: 1.116,
+        z: 2.001
+      },
+      bbox: {
+        min: [
+          -0.133,
+          0,
+          -0.139
+        ],
+        max: [
+          0.133,
+          1.116,
+          1.862
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 60,
+      bytes: 2371768,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BC_Wood_Bare_Mat",
+        "Colony_Marbres_01_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/LoveDeath_Fence_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_10",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_10.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.6,
+        y: 1.412,
+        z: 0.182
+      },
+      bbox: {
+        min: [
+          -1.3,
+          0,
+          -0.091
+        ],
+        max: [
+          1.3,
+          1.412,
+          0.091
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 44,
+      bytes: 2399400,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Launch_Iron_Mat",
+        "Launch_Atlas_2_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Railing_02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fence_11",
+      path: "assets/library/toxsam-polygonal-mind/glb/fence_11.glb",
+      semantic: "barrier",
+      role: "fence",
+      style: "stylized",
+      osmTags: [
+        "barrier=fence"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.466,
+        y: 1.193,
+        z: 0.36
+      },
+      bbox: {
+        min: [
+          -0.18,
+          0,
+          -0.18
+        ],
+        max: [
+          1.286,
+          1.193,
+          0.18
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 748,
+      bytes: 2525684,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Spooky_Stone_01_Mat",
+        "Shared_Metal_01_Steel_Mat",
+        "Shared_Emissive_Orange_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/Spooky_Fence_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_01.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 5.118,
+        y: 14.871,
+        z: 2.774
+      },
+      bbox: {
+        min: [
+          -2.52,
+          -14.873,
+          -1.815
+        ],
+        max: [
+          2.598,
+          -2e-3,
+          0.959
+        ]
+      },
+      groundOffsetY: 14.873,
+      triangles: 10,
+      bytes: 590956,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Water"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_01_Art.glb",
+      flags: [
+        "oversized"
+      ]
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_02.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.591,
+        y: 14.871,
+        z: 3.38
+      },
+      bbox: {
+        min: [
+          -1.303,
+          -14.859,
+          -2.59
+        ],
+        max: [
+          1.288,
+          0.012,
+          0.79
+        ]
+      },
+      groundOffsetY: 14.859,
+      triangles: 10,
+      bytes: 590956,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Water"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_02_Art.glb",
+      flags: [
+        "oversized"
+      ]
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_03.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 5.118,
+        y: 14.871,
+        z: 2.774
+      },
+      bbox: {
+        min: [
+          -2.52,
+          -14.873,
+          -1.815
+        ],
+        max: [
+          2.598,
+          -2e-3,
+          0.959
+        ]
+      },
+      groundOffsetY: 14.873,
+      triangles: 10,
+      bytes: 590984,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Water"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_Fall_01_Art.001.glb",
+      flags: [
+        "oversized"
+      ]
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_04.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.5,
+        y: 0,
+        z: 4
+      },
+      bbox: {
+        min: [
+          -0.75,
+          0,
+          -2
+        ],
+        max: [
+          0.75,
+          0,
+          2
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 2,
+      bytes: 600456,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "WaterFX"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Water_FX_2_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_05.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 6.734,
+        y: 1.521,
+        z: 6.747
+      },
+      bbox: {
+        min: [
+          -3.367,
+          -0.042,
+          -3.365
+        ],
+        max: [
+          3.367,
+          1.479,
+          3.382
+        ]
+      },
+      groundOffsetY: 0.042,
+      triangles: 1112,
+      bytes: 1229500,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Path01",
+        "Water"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Str_Fountain_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_06.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 17.343,
+        y: 5.34,
+        z: 7.431
+      },
+      bbox: {
+        min: [
+          -7.526,
+          -0.575,
+          -3.238
+        ],
+        max: [
+          9.817,
+          4.765,
+          4.193
+        ]
+      },
+      groundOffsetY: 0.575,
+      triangles: 1800,
+      bytes: 1703060,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Foam"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/WaterfallFoam01.glb",
+      flags: [
+        "oversized"
+      ]
+    },
+    {
+      id: "toxsam-polygonal-mind/fountain_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/fountain_07.glb",
+      semantic: "street_furniture",
+      role: "fountain",
+      style: "stylized",
+      osmTags: [
+        "amenity=fountain"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 17.7,
+        y: 6.519,
+        z: 15.688
+      },
+      bbox: {
+        min: [
+          -8.85,
+          0,
+          -9.5
+        ],
+        max: [
+          8.85,
+          6.519,
+          6.188
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 5226,
+      bytes: 5700424,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Water_01_Mat",
+        "Launch_Stairs_Mat",
+        "Launch_Iron_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Stairs_Hall_01_Fountain_Water.glb",
+      flags: [
+        "oversized"
+      ]
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_01.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.069,
+        y: 1.839,
+        z: 1.007
+      },
+      bbox: {
+        min: [
+          -0.522,
+          0,
+          -0.332
+        ],
+        max: [
+          0.547,
+          1.839,
+          0.675
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1792,
+      bytes: 388212,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Trans_Mat",
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_02.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.758,
+        y: 1.21,
+        z: 0.724
+      },
+      bbox: {
+        min: [
+          -0.355,
+          0,
+          -0.361
+        ],
+        max: [
+          0.403,
+          1.21,
+          0.363
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1800,
+      bytes: 388552,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Mat",
+        "Atlas_01_Trans_Mat",
+        "Seam_Sand_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_03.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.851,
+        y: 1.514,
+        z: 1.193
+      },
+      bbox: {
+        min: [
+          -0.449,
+          0,
+          -0.664
+        ],
+        max: [
+          0.402,
+          1.514,
+          0.529
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1800,
+      bytes: 388556,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Mat",
+        "Atlas_01_Trans_Mat",
+        "Seam_Sand_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Small_02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_04.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.586,
+        y: 2.428,
+        z: 1.484
+      },
+      bbox: {
+        min: [
+          -0.745,
+          -0.017,
+          -0.691
+        ],
+        max: [
+          0.841,
+          2.411,
+          0.793
+        ]
+      },
+      groundOffsetY: 0.017,
+      triangles: 106,
+      bytes: 405176,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Plants_01_Albedo",
+        "Atlas_Pot_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_01_Art.001_Vapor.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_05.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.586,
+        y: 2.428,
+        z: 1.484
+      },
+      bbox: {
+        min: [
+          -0.745,
+          -0.017,
+          -0.691
+        ],
+        max: [
+          0.841,
+          2.411,
+          0.793
+        ]
+      },
+      groundOffsetY: 0.017,
+      triangles: 106,
+      bytes: 405552,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Plants_01_Albedo1",
+        "Atlas_Pot_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Vapor_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_06.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.37,
+        y: 4.425,
+        z: 2.552
+      },
+      bbox: {
+        min: [
+          -0.58,
+          0,
+          -1.182
+        ],
+        max: [
+          0.79,
+          4.425,
+          1.37
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 113,
+      bytes: 406336,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Plants_01_Albedo2",
+        "Atlas_Pot_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Retro_03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_07.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.088,
+        y: 2.987,
+        z: 2.102
+      },
+      bbox: {
+        min: [
+          -0.986,
+          0.03,
+          -1.063
+        ],
+        max: [
+          1.102,
+          3.017,
+          1.039
+        ]
+      },
+      groundOffsetY: -0.03,
+      triangles: 132,
+      bytes: 407284,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Pot_03",
+        "Atlas_Plants_01_Albedo2"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Pot_Vapor_02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_08",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_08.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.441,
+        y: 1.171,
+        z: 0.446
+      },
+      bbox: {
+        min: [
+          -0.227,
+          0,
+          -0.223
+        ],
+        max: [
+          0.214,
+          1.171,
+          0.223
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 352,
+      bytes: 582736,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Pot_Plant_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Pot_Plant.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_09",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_09.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4.047,
+        y: 4.323,
+        z: 2.07
+      },
+      bbox: {
+        min: [
+          -2.029,
+          -3.05,
+          -0.873
+        ],
+        max: [
+          2.018,
+          1.273,
+          1.197
+        ]
+      },
+      groundOffsetY: 3.05,
+      triangles: 7530,
+      bytes: 599152,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_10",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_10.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4.35,
+        y: 4.47,
+        z: 2.227
+      },
+      bbox: {
+        min: [
+          -1.941,
+          -2.989,
+          -0.965
+        ],
+        max: [
+          2.409,
+          1.481,
+          1.262
+        ]
+      },
+      groundOffsetY: 2.989,
+      triangles: 7530,
+      bytes: 599152,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_11",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_11.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.815,
+        y: 4.322,
+        z: 4.047
+      },
+      bbox: {
+        min: [
+          -1.146,
+          -3.049,
+          -2.029
+        ],
+        max: [
+          0.669,
+          1.273,
+          2.018
+        ]
+      },
+      groundOffsetY: 3.049,
+      triangles: 7530,
+      bytes: 599348,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Narrow_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/planter_12",
+      path: "assets/library/toxsam-polygonal-mind/glb/planter_12.glb",
+      semantic: "street_furniture",
+      role: "planter",
+      style: "stylized",
+      osmTags: [
+        "man_made=planter"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4.027,
+        y: 3.931,
+        z: 2.13
+      },
+      bbox: {
+        min: [
+          -2.082,
+          -2.474,
+          -1.293
+        ],
+        max: [
+          1.945,
+          1.457,
+          0.837
+        ]
+      },
+      groundOffsetY: 2.474,
+      triangles: 7530,
+      bytes: 602216,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_01_Mat",
+        "Seam_Sand_Mat",
+        "Atlas_01_Trans_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/crystal-crossroads/FlowerPot_Large_02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_01.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.374,
+        y: 0.188,
+        z: 0.062
+      },
+      bbox: {
+        min: [
+          -0.187,
+          0,
+          -0.031
+        ],
+        max: [
+          0.187,
+          0.188,
+          0.031
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 10,
+      bytes: 7956,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Sign_07_Exit_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Sign_07_Exit.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_02.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 5.51,
+        y: 1.004,
+        z: 0.531
+      },
+      bbox: {
+        min: [
+          -2.755,
+          -1e-3,
+          -0.263
+        ],
+        max: [
+          2.755,
+          1.003,
+          0.268
+        ]
+      },
+      groundOffsetY: 1e-3,
+      triangles: 26,
+      bytes: 441448,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Wood"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/StoreCartel.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_03.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.884,
+        y: 2.084,
+        z: 0.764
+      },
+      bbox: {
+        min: [
+          -0.442,
+          0,
+          -0.382
+        ],
+        max: [
+          0.442,
+          2.084,
+          0.382
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 346,
+      bytes: 534960,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Launch_SignBook_Grid_Mat",
+        "Launch_Signbook_Mat",
+        "Launch_Floor_d_light_on_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Sign_book.001.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_04.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.996,
+        y: 3.325,
+        z: 0.229
+      },
+      bbox: {
+        min: [
+          -0.503,
+          0,
+          -0.097
+        ],
+        max: [
+          0.493,
+          3.325,
+          0.132
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 496,
+      bytes: 1739728,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_05",
+        "Atlas_02",
+        "Atlas_03",
+        "Lettering"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/SignPost.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_05.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.248,
+        y: 1.827,
+        z: 0.965
+      },
+      bbox: {
+        min: [
+          -0.624,
+          0,
+          -0.505
+        ],
+        max: [
+          0.624,
+          1.827,
+          0.46
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 124,
+      bytes: 2447112,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_05",
+        "Atlas_02",
+        "Atlas_04",
+        "Atlas_01",
+        "Glass",
+        "Logo_Polygonal"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/EntranceBoard.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_06.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.382,
+        y: 0.878,
+        z: 0.108
+      },
+      bbox: {
+        min: [
+          -0.045,
+          -0.433,
+          -0.054
+        ],
+        max: [
+          1.337,
+          0.445,
+          0.054
+        ]
+      },
+      groundOffsetY: 0.433,
+      triangles: 168,
+      bytes: 6737552,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_13.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_07.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.095,
+        y: 0.676,
+        z: 0.126
+      },
+      bbox: {
+        min: [
+          -0.291,
+          -0.189,
+          -0.068
+        ],
+        max: [
+          0.804,
+          0.487,
+          0.058
+        ]
+      },
+      groundOffsetY: 0.189,
+      triangles: 70,
+      bytes: 7760740,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_09.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_08",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_08.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.523,
+        y: 1.729,
+        z: 0.127
+      },
+      bbox: {
+        min: [
+          -0.093,
+          -0.504,
+          -0.069
+        ],
+        max: [
+          0.43,
+          1.225,
+          0.058
+        ]
+      },
+      groundOffsetY: 0.504,
+      triangles: 70,
+      bytes: 7760740,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_10.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_09",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_09.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.779,
+        y: 1.066,
+        z: 0.126
+      },
+      bbox: {
+        min: [
+          -0.124,
+          -0.368,
+          -0.068
+        ],
+        max: [
+          1.655,
+          0.698,
+          0.058
+        ]
+      },
+      groundOffsetY: 0.368,
+      triangles: 70,
+      bytes: 7760744,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "SciFi_Trim",
+        "Atlas_Sign"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_06.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_10",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_10.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.599,
+        y: 0.676,
+        z: 0.126
+      },
+      bbox: {
+        min: [
+          -0.133,
+          -0.194,
+          -0.067
+        ],
+        max: [
+          1.466,
+          0.482,
+          0.059
+        ]
+      },
+      groundOffsetY: 0.194,
+      triangles: 70,
+      bytes: 7760744,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_08.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_11",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_11.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.859,
+        y: 0.611,
+        z: 0.126
+      },
+      bbox: {
+        min: [
+          -0.621,
+          -0.578,
+          -0.064
+        ],
+        max: [
+          0.238,
+          0.033,
+          0.062
+        ]
+      },
+      groundOffsetY: 0.578,
+      triangles: 70,
+      bytes: 7760748,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_05.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_12",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_12.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.947,
+        y: 1.319,
+        z: 0.127
+      },
+      bbox: {
+        min: [
+          -0.164,
+          -0.377,
+          -0.069
+        ],
+        max: [
+          0.783,
+          0.942,
+          0.058
+        ]
+      },
+      groundOffsetY: 0.377,
+      triangles: 70,
+      bytes: 7760748,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "SciFi_Trim",
+        "Atlas_Sign"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_07.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_13",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_13.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.898,
+        y: 1.319,
+        z: 0.127
+      },
+      bbox: {
+        min: [
+          -0.744,
+          -0.374,
+          -0.071
+        ],
+        max: [
+          0.154,
+          0.945,
+          0.056
+        ]
+      },
+      groundOffsetY: 0.374,
+      triangles: 70,
+      bytes: 7760820,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_16.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_14",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_14.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.284,
+        y: 0.476,
+        z: 0.284
+      },
+      bbox: {
+        min: [
+          -0.144,
+          -0.131,
+          -0.143
+        ],
+        max: [
+          0.14,
+          0.345,
+          0.141
+        ]
+      },
+      groundOffsetY: 0.131,
+      triangles: 72,
+      bytes: 7761284,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_15",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_15.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.531,
+        y: 0.74,
+        z: 0.049
+      },
+      bbox: {
+        min: [
+          -2.422,
+          -0.345,
+          -0.024
+        ],
+        max: [
+          0.109,
+          0.395,
+          0.025
+        ]
+      },
+      groundOffsetY: 0.345,
+      triangles: 628,
+      bytes: 7797784,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "SciFi_Trim",
+        "Atlas_Sign"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_16",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_16.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.449,
+        y: 2.094,
+        z: 0.056
+      },
+      bbox: {
+        min: [
+          -0.224,
+          1e-3,
+          -0.03
+        ],
+        max: [
+          0.225,
+          2.095,
+          0.026
+        ]
+      },
+      groundOffsetY: -1e-3,
+      triangles: 36,
+      bytes: 19531700,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Urban_Trim"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_04.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_17",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_17.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.669,
+        y: 0.883,
+        z: 0.094
+      },
+      bbox: {
+        min: [
+          -0.583,
+          -0.439,
+          -0.051
+        ],
+        max: [
+          0.086,
+          0.444,
+          0.043
+        ]
+      },
+      groundOffsetY: 0.439,
+      triangles: 66,
+      bytes: 19533792,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Eclipse"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_14.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_18",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_18.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.67,
+        y: 0.888,
+        z: 0.094
+      },
+      bbox: {
+        min: [
+          -0.6,
+          -0.437,
+          -0.049
+        ],
+        max: [
+          0.07,
+          0.451,
+          0.045
+        ]
+      },
+      groundOffsetY: 0.437,
+      triangles: 68,
+      bytes: 19535124,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Urban_Trim",
+        "Eclipse"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_15.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_19",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_19.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.379,
+        y: 0.384,
+        z: 0.094
+      },
+      bbox: {
+        min: [
+          -1.362,
+          -0.188,
+          -0.049
+        ],
+        max: [
+          0.017,
+          0.196,
+          0.045
+        ]
+      },
+      groundOffsetY: 0.188,
+      triangles: 68,
+      bytes: 19535136,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "SciFi_Trim",
+        "Urban_Trim",
+        "Eclipse",
+        "Atlas_Sign"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/sign_20",
+      path: "assets/library/toxsam-polygonal-mind/glb/sign_20.glb",
+      semantic: "street_furniture",
+      role: "sign",
+      style: "stylized",
+      osmTags: [],
+      internalTags: [
+        "street_sign"
+      ],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.669,
+        y: 0.712,
+        z: 0.094
+      },
+      bbox: {
+        min: [
+          -0.602,
+          -0.354,
+          -0.049
+        ],
+        max: [
+          0.067,
+          0.358,
+          0.045
+        ]
+      },
+      groundOffsetY: 0.354,
+      triangles: 70,
+      bytes: 19535200,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas_Sign",
+        "SciFi_Trim",
+        "Urban_Trim",
+        "Eclipse"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/cryptoavatars-retro-booth/Japanese_Sign_12.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_01.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.808,
+        y: 1.749,
+        z: 1.442
+      },
+      bbox: {
+        min: [
+          -0.404,
+          -0.139,
+          -0.512
+        ],
+        max: [
+          0.404,
+          1.61,
+          0.93
+        ]
+      },
+      groundOffsetY: 0.139,
+      triangles: 1222,
+      bytes: 214736,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "GodsEyes",
+        "Gods"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodBastet_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_02.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.284,
+        y: 2.285,
+        z: 1.803
+      },
+      bbox: {
+        min: [
+          -0.642,
+          -0.251,
+          -0.594
+        ],
+        max: [
+          0.642,
+          2.034,
+          1.209
+        ]
+      },
+      groundOffsetY: 0.251,
+      triangles: 1468,
+      bytes: 222224,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "GodsEyes",
+        "Gods"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodAnubis_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_03.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.14,
+        y: 2.676,
+        z: 1.551
+      },
+      bbox: {
+        min: [
+          -0.57,
+          -0.233,
+          -0.505
+        ],
+        max: [
+          0.57,
+          2.443,
+          1.046
+        ]
+      },
+      groundOffsetY: 0.233,
+      triangles: 1650,
+      bytes: 232064,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Gods",
+        "GodsEyes"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/GodRa_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_04.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.724,
+        y: 6.05,
+        z: 2.724
+      },
+      bbox: {
+        min: [
+          -1.362,
+          0,
+          -1.362
+        ],
+        max: [
+          1.362,
+          6.05,
+          1.362
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 236,
+      bytes: 484820,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Obelisk"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/Obelisk_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_05.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.654,
+        y: 1.949,
+        z: 0.474
+      },
+      bbox: {
+        min: [
+          -0.327,
+          -0.015,
+          -0.242
+        ],
+        max: [
+          0.327,
+          1.934,
+          0.232
+        ]
+      },
+      groundOffsetY: 0.015,
+      triangles: 1982,
+      bytes: 493744,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Rockdark01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Statue_greek_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_06.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.726,
+        y: 1.998,
+        z: 0.512
+      },
+      bbox: {
+        min: [
+          -0.389,
+          -9e-3,
+          -0.281
+        ],
+        max: [
+          0.337,
+          1.989,
+          0.231
+        ]
+      },
+      groundOffsetY: 9e-3,
+      triangles: 2482,
+      bytes: 518392,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Rockdark01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Statue_greek_02_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_07.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.357,
+        y: 3.741,
+        z: 2.644
+      },
+      bbox: {
+        min: [
+          -1.704,
+          -0.018,
+          -0.92
+        ],
+        max: [
+          1.653,
+          3.723,
+          1.724
+        ]
+      },
+      groundOffsetY: 0.018,
+      triangles: 2366,
+      bytes: 1200100,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim_Retro_Ramp_01",
+        "Trim_Retro_Ramp_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/David_Retro.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_08",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_08.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.485,
+        y: 3.679,
+        z: 2.796
+      },
+      bbox: {
+        min: [
+          -1.187,
+          8e-3,
+          -1.17
+        ],
+        max: [
+          1.298,
+          3.687,
+          1.626
+        ]
+      },
+      groundOffsetY: -8e-3,
+      triangles: 5486,
+      bytes: 1273100,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim_Retro_Ramp_01",
+        "Trim_Retro_Ramp_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Venus_Retro.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/statue_09",
+      path: "assets/library/toxsam-polygonal-mind/glb/statue_09.glb",
+      semantic: "landmark_prop",
+      role: "statue",
+      style: "stylized",
+      osmTags: [
+        "historic=memorial",
+        "tourism=artwork"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.513,
+        y: 3.422,
+        z: 3.328
+      },
+      bbox: {
+        min: [
+          -1.257,
+          -0.479,
+          -1.15
+        ],
+        max: [
+          1.256,
+          2.943,
+          2.178
+        ]
+      },
+      groundOffsetY: 0.479,
+      triangles: 5742,
+      bytes: 1369096,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim_Retro_Ramp_02",
+        "Trim_Computer_01",
+        "Trim_Retro_Ramp_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/chromatic-chaos/Venus_01_Floating.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_01.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 6.324,
+        y: 8.21,
+        z: 6.563
+      },
+      bbox: {
+        min: [
+          -3.162,
+          0,
+          -0.801
+        ],
+        max: [
+          3.162,
+          8.21,
+          5.762
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 486,
+      bytes: 105260,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Aero_Light_Mat",
+        "Aero_Glow_01_Mat",
+        "Aero_Floor_01_Mat",
+        "Aero_Wall_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/aero-system/Aero_Lampost_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_02.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.739,
+        y: 3.456,
+        z: 0.64
+      },
+      bbox: {
+        min: [
+          -0.382,
+          -5e-3,
+          -0.32
+        ],
+        max: [
+          0.357,
+          3.451,
+          0.32
+        ]
+      },
+      groundOffsetY: 5e-3,
+      triangles: 262,
+      bytes: 158992,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Atlas02",
+        "LampChain"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/christmas/Lamp01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_03.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.47,
+        y: 1.872,
+        z: 0.424
+      },
+      bbox: {
+        min: [
+          -0.219,
+          0,
+          -0.212
+        ],
+        max: [
+          0.251,
+          1.872,
+          0.212
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 160,
+      bytes: 354052,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Lamp_Stand_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Lamp_Stand.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_04.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.4,
+        y: 1.78,
+        z: 1.27
+      },
+      bbox: {
+        min: [
+          -0.7,
+          -1e-3,
+          -0.636
+        ],
+        max: [
+          0.7,
+          1.779,
+          0.634
+        ]
+      },
+      groundOffsetY: 1e-3,
+      triangles: 221,
+      bytes: 472352,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_05.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.399,
+        y: 1.779,
+        z: 1.271
+      },
+      bbox: {
+        min: [
+          -0.699,
+          -1e-3,
+          -0.636
+        ],
+        max: [
+          0.7,
+          1.778,
+          0.635
+        ]
+      },
+      groundOffsetY: 1e-3,
+      triangles: 221,
+      bytes: 472352,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp04.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_06.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.28,
+        y: 1.85,
+        z: 1.1
+      },
+      bbox: {
+        min: [
+          -0.64,
+          7e-3,
+          -0.55
+        ],
+        max: [
+          0.64,
+          1.857,
+          0.55
+        ]
+      },
+      groundOffsetY: -7e-3,
+      triangles: 194,
+      bytes: 475620,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_07.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.284,
+        y: 1.847,
+        z: 1.095
+      },
+      bbox: {
+        min: [
+          -0.643,
+          2e-3,
+          -0.548
+        ],
+        max: [
+          0.641,
+          1.849,
+          0.547
+        ]
+      },
+      groundOffsetY: -2e-3,
+      triangles: 197,
+      bytes: 475672,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim04",
+        "AlphaTrim01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/Lamp02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_08",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_08.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.194,
+        y: 0.401,
+        z: 0.194
+      },
+      bbox: {
+        min: [
+          -0.097,
+          0,
+          -0.097
+        ],
+        max: [
+          0.097,
+          0.401,
+          0.097
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 544,
+      bytes: 532156,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Shared_Emissive_Orange_Mat",
+        "Shared_Black_Matte_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/Spooky_Tower_Lantern_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_09",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_09.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 7.204,
+        y: 4.98,
+        z: 7.205
+      },
+      bbox: {
+        min: [
+          -3.601,
+          0,
+          -3.602
+        ],
+        max: [
+          3.603,
+          4.98,
+          3.603
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 733,
+      bytes: 612264,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BoardCutout",
+        "Atlas_03",
+        "Atlas_FX"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/medieval-fair/Lamp.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_10",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_10.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.748,
+        y: 2.345,
+        z: 1.662
+      },
+      bbox: {
+        min: [
+          -0.874,
+          0,
+          -0.831
+        ],
+        max: [
+          0.874,
+          2.345,
+          0.831
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 578,
+      bytes: 791028,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Trim03",
+        "LunarYearBricks"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/OutterLamp.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_11",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_11.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 6.659,
+        y: 2.149,
+        z: 0.82
+      },
+      bbox: {
+        min: [
+          -3.518,
+          1e-3,
+          -0.412
+        ],
+        max: [
+          3.141,
+          2.15,
+          0.408
+        ]
+      },
+      groundOffsetY: -1e-3,
+      triangles: 625,
+      bytes: 915152,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "AlphaTrim01",
+        "Atlas",
+        "Trim04"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/lunar-year/LampWreath.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_12",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_12.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.612,
+        y: 2.207,
+        z: 0.56
+      },
+      bbox: {
+        min: [
+          -0.306,
+          0,
+          -0.28
+        ],
+        max: [
+          0.306,
+          2.207,
+          0.28
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 134,
+      bytes: 2665244,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Launch_Iron_Mat",
+        "Launch_Light_Emissive_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/ca-world/Light_Streetlight_01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_13",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_13.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.516,
+        y: 0.516,
+        z: 0.128
+      },
+      bbox: {
+        min: [
+          -0.258,
+          -0.258,
+          -0.067
+        ],
+        max: [
+          0.258,
+          0.258,
+          0.061
+        ]
+      },
+      groundOffsetY: 0.258,
+      triangles: 80,
+      bytes: 6128132,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Iron_02",
+        "Yellow_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Lamp_Wall.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_14",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_14.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.09,
+        y: 0.395,
+        z: 0.318
+      },
+      bbox: {
+        min: [
+          -0.045,
+          0,
+          -0.159
+        ],
+        max: [
+          0.045,
+          0.395,
+          0.159
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 166,
+      bytes: 6133276,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Iron_02",
+        "Yellow_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/TableLamp.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/street_lamp_15",
+      path: "assets/library/toxsam-polygonal-mind/glb/street_lamp_15.glb",
+      semantic: "street_furniture",
+      role: "street_lamp",
+      style: "stylized",
+      osmTags: [
+        "highway=street_lamp"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.887,
+        y: 1.299,
+        z: 1.248
+      },
+      bbox: {
+        min: [
+          -0.443,
+          0,
+          -0.784
+        ],
+        max: [
+          0.444,
+          1.299,
+          0.464
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 226,
+      bytes: 8739356,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Iron_01",
+        "Yellow_01",
+        "Iron_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-show/Studio_Lamp.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_01",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_01.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.088,
+        y: 0.803,
+        z: 0
+      },
+      bbox: {
+        min: [
+          -0.544,
+          -0.029,
+          0
+        ],
+        max: [
+          0.544,
+          0.774,
+          0
+        ]
+      },
+      groundOffsetY: 0.029,
+      triangles: 2,
+      bytes: 66348,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "HoloBush"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_02",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_02.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.809,
+        y: 0.598,
+        z: 0
+      },
+      bbox: {
+        min: [
+          -0.419,
+          -5e-3,
+          0
+        ],
+        max: [
+          0.39,
+          0.593,
+          0
+        ]
+      },
+      groundOffsetY: 5e-3,
+      triangles: 2,
+      bytes: 66352,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "HoloBush"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush02_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_03",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_03.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.232,
+        y: 0.69,
+        z: 0
+      },
+      bbox: {
+        min: [
+          -0.616,
+          0,
+          0
+        ],
+        max: [
+          0.616,
+          0.69,
+          0
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 2,
+      bytes: 66352,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "HoloBush"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/HoloBush03_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_04",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_04.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.928,
+        y: 1.323,
+        z: 1.162
+      },
+      bbox: {
+        min: [
+          -0.464,
+          -1e-3,
+          -0.436
+        ],
+        max: [
+          0.464,
+          1.322,
+          0.726
+        ]
+      },
+      groundOffsetY: 1e-3,
+      triangles: 620,
+      bytes: 77124,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "007_Starplant"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/xyz/007_Starplant_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_05",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_05.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.198,
+        y: 2.934,
+        z: 3.198
+      },
+      bbox: {
+        min: [
+          -1.601,
+          -1e-3,
+          -1.601
+        ],
+        max: [
+          1.597,
+          2.933,
+          1.597
+        ]
+      },
+      groundOffsetY: 1e-3,
+      triangles: 56,
+      bytes: 211496,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BC_Code_Bush_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/BlockChain_CodeBush_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_06",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_06.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.116,
+        y: 2.598,
+        z: 3.446
+      },
+      bbox: {
+        min: [
+          -1.753,
+          -0.013,
+          -2.258
+        ],
+        max: [
+          1.363,
+          2.585,
+          1.188
+        ]
+      },
+      groundOffsetY: 0.013,
+      triangles: 184,
+      bytes: 585600,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Plant_01_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Plant_02_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_07",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_07.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.699,
+        y: 1.544,
+        z: 1.375
+      },
+      bbox: {
+        min: [
+          -1.112,
+          -0.212,
+          -1.014
+        ],
+        max: [
+          1.587,
+          1.332,
+          0.361
+        ]
+      },
+      groundOffsetY: 0.212,
+      triangles: 32,
+      bytes: 591968,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Meme_Bridge_Light_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/towers/LoveDeath_Plant_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_08",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_08.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4.379,
+        y: 5.066,
+        z: 4.213
+      },
+      bbox: {
+        min: [
+          -2.276,
+          -0.075,
+          -2.04
+        ],
+        max: [
+          2.103,
+          4.991,
+          2.173
+        ]
+      },
+      groundOffsetY: 0.075,
+      triangles: 1698,
+      bytes: 752448,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "PalmTree"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/tomb-chaser-1/PalmTree_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_09",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_09.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.398,
+        y: 1.36,
+        z: 1.592
+      },
+      bbox: {
+        min: [
+          -1.181,
+          -0.335,
+          -0.859
+        ],
+        max: [
+          1.217,
+          1.025,
+          0.733
+        ]
+      },
+      groundOffsetY: 0.335,
+      triangles: 472,
+      bytes: 950736,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BlackOutline",
+        "TreeLeaves"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_10",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_10.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.853,
+        y: 1.356,
+        z: 1.573
+      },
+      bbox: {
+        min: [
+          -1.428,
+          -0.362,
+          -0.72
+        ],
+        max: [
+          1.425,
+          0.994,
+          0.853
+        ]
+      },
+      groundOffsetY: 0.362,
+      triangles: 696,
+      bytes: 955988,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "TreeLeaves",
+        "BlackOutline"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_02_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_11",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_11.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 15.933,
+        y: 12.098,
+        z: 9.755
+      },
+      bbox: {
+        min: [
+          -8.158,
+          -0.756,
+          -4.747
+        ],
+        max: [
+          7.775,
+          11.342,
+          5.008
+        ]
+      },
+      groundOffsetY: 0.756,
+      triangles: 882,
+      bytes: 1015560,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "TreeLeaves",
+        "TreeWood"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_12",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_12.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 12.795,
+        y: 11.77,
+        z: 14.031
+      },
+      bbox: {
+        min: [
+          -6.56,
+          -0.362,
+          -6.648
+        ],
+        max: [
+          6.235,
+          11.408,
+          7.383
+        ]
+      },
+      groundOffsetY: 0.362,
+      triangles: 928,
+      bytes: 1016476,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "TreeLeaves",
+        "TreeWood"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_02_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_13",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_13.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 15.934,
+        y: 12.099,
+        z: 9.755
+      },
+      bbox: {
+        min: [
+          -7.482,
+          -0.309,
+          -4.278
+        ],
+        max: [
+          8.452,
+          11.79,
+          5.477
+        ]
+      },
+      groundOffsetY: 0.309,
+      triangles: 802,
+      bytes: 1188440,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Aero_Wall_Mat",
+        "Aero_Leaves_02_Mat",
+        "Aero_Tree_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/aero-system/Tree_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_14",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_14.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.418,
+        y: 3.022,
+        z: 3.255
+      },
+      bbox: {
+        min: [
+          -1.658,
+          -0.194,
+          -1.884
+        ],
+        max: [
+          1.76,
+          2.828,
+          1.371
+        ]
+      },
+      groundOffsetY: 0.194,
+      triangles: 892,
+      bytes: 1230128,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BlackOutline",
+        "TreeWood",
+        "Mushroom02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_Trunk_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_15",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_15.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.797,
+        y: 1.679,
+        z: 1.403
+      },
+      bbox: {
+        min: [
+          -1.427,
+          -0.089,
+          -0.765
+        ],
+        max: [
+          1.37,
+          1.59,
+          0.638
+        ]
+      },
+      groundOffsetY: 0.089,
+      triangles: 744,
+      bytes: 1323492,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BlackOutline",
+        "TreeLeaves",
+        "WoodClean"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Bush_03_art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_16",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_16.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 8.572,
+        y: 14.522,
+        z: 6.639
+      },
+      bbox: {
+        min: [
+          -3.8,
+          -0.425,
+          -3.431
+        ],
+        max: [
+          4.772,
+          14.097,
+          3.208
+        ]
+      },
+      groundOffsetY: 0.425,
+      triangles: 616,
+      bytes: 1404148,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "TreeLeaves",
+        "TreeWood",
+        "BlackOutline"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_04_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_17",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_17.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.524,
+        y: 2.76,
+        z: 2.309
+      },
+      bbox: {
+        min: [
+          -1.237,
+          -9e-3,
+          -1.167
+        ],
+        max: [
+          1.287,
+          2.751,
+          1.142
+        ]
+      },
+      groundOffsetY: 9e-3,
+      triangles: 692,
+      bytes: 1406776,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "BlackOutline",
+        "TreeLeaves",
+        "TreeWood"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/MomusPark/Tree_03_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_18",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_18.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.328,
+        y: 1.194,
+        z: 2.28
+      },
+      bbox: {
+        min: [
+          -1.224,
+          -7e-3,
+          -1.123
+        ],
+        max: [
+          1.104,
+          1.187,
+          1.157
+        ]
+      },
+      groundOffsetY: 7e-3,
+      triangles: 216,
+      bytes: 1478328,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leaves_Atlas_0"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush04.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_19",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_19.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 58.629,
+        y: 84.126,
+        z: 64.796
+      },
+      bbox: {
+        min: [
+          -26.68,
+          -1.987,
+          -32.705
+        ],
+        max: [
+          31.949,
+          82.139,
+          32.091
+        ]
+      },
+      groundOffsetY: 1.987,
+      triangles: 5794,
+      bytes: 1719596,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Roots",
+        "Branches01",
+        "Branches02",
+        "Trunk01",
+        "Trunk02",
+        "Trunk03",
+        "BioLights"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/abm/Tree01_Art.glb",
+      flags: [
+        "oversized"
+      ]
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_20",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_20.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.952,
+        y: 0.786,
+        z: 1.96
+      },
+      bbox: {
+        min: [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        max: [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      groundOffsetY: 0.176,
+      triangles: 530,
+      bytes: 2285488,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leaves_Atlas_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_21",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_21.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.952,
+        y: 0.786,
+        z: 1.96
+      },
+      bbox: {
+        min: [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        max: [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      groundOffsetY: 0.176,
+      triangles: 530,
+      bytes: 2285488,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leaves_Atlas_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush07.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_22",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_22.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.952,
+        y: 0.786,
+        z: 1.96
+      },
+      bbox: {
+        min: [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        max: [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      groundOffsetY: 0.176,
+      triangles: 530,
+      bytes: 2285488,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leaves_Atlas_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush08.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_23",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_23.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.952,
+        y: 0.786,
+        z: 1.96
+      },
+      bbox: {
+        min: [
+          -0.976,
+          -0.176,
+          -0.98
+        ],
+        max: [
+          0.976,
+          0.61,
+          0.98
+        ]
+      },
+      groundOffsetY: 0.176,
+      triangles: 530,
+      bytes: 2285488,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leaves_Atlas_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush09.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_24",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_24.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.116,
+        y: 3.082,
+        z: 3.446
+      },
+      bbox: {
+        min: [
+          -1.753,
+          0,
+          -2.258
+        ],
+        max: [
+          1.363,
+          3.082,
+          1.188
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 298,
+      bytes: 2536880,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Plant_01_Mat",
+        "Tower_Station_Iron_01_Mat",
+        "Train_Tower_Dirt_Mat"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/transit/Plant_01_Art.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_25",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_25.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 2.449,
+        y: 1.342,
+        z: 1.936
+      },
+      bbox: {
+        min: [
+          -1.162,
+          0,
+          -1.055
+        ],
+        max: [
+          1.287,
+          1.342,
+          0.881
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 130,
+      bytes: 12858724,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Bush"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_26",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_26.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 10.824,
+        y: 25.277,
+        z: 11.083
+      },
+      bbox: {
+        min: [
+          -6.044,
+          0.012,
+          -5.657
+        ],
+        max: [
+          4.78,
+          25.289,
+          5.426
+        ]
+      },
+      groundOffsetY: -0.012,
+      triangles: 1632,
+      bytes: 13356104,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "PalmTree_Tree",
+        "Leaves_Atlas_0"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/BasePalmTree01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_27",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_27.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 11.1,
+        y: 9.693,
+        z: 10.349
+      },
+      bbox: {
+        min: [
+          -5.583,
+          -9e-3,
+          -5.142
+        ],
+        max: [
+          5.517,
+          9.684,
+          5.207
+        ]
+      },
+      groundOffsetY: 9e-3,
+      triangles: 1482,
+      bytes: 14147356,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leaves_Atlas_03",
+        "PalmTree_Tree"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree02.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_28",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_28.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 11,
+        y: 11.582,
+        z: 17.829
+      },
+      bbox: {
+        min: [
+          -5.391,
+          -0.026,
+          -2.609
+        ],
+        max: [
+          5.609,
+          11.556,
+          15.22
+        ]
+      },
+      groundOffsetY: 0.026,
+      triangles: 1558,
+      bytes: 14148244,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "PalmTree_Tree",
+        "Leaves_Atlas_03"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_29",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_29.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 9.219,
+        y: 34.412,
+        z: 8.755
+      },
+      bbox: {
+        min: [
+          -4.806,
+          -0.027,
+          -3.89
+        ],
+        max: [
+          4.413,
+          34.385,
+          4.865
+        ]
+      },
+      groundOffsetY: 0.027,
+      triangles: 1944,
+      bytes: 14163008,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "PalmTree_Tree",
+        "Leaves_Atlas_03"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/PalmTree04.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_30",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_30.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.286,
+        y: 2.509,
+        z: 0.973
+      },
+      bbox: {
+        min: [
+          -0.687,
+          0,
+          -0.46
+        ],
+        max: [
+          0.599,
+          2.509,
+          0.513
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 2010,
+      bytes: 16321032,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Leave_Atlas_0",
+        "Emisive_Fruit",
+        "Tree_Atlas_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_31",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_31.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 4.041,
+        y: 6.737,
+        z: 4.346
+      },
+      bbox: {
+        min: [
+          -1.989,
+          0,
+          -1.887
+        ],
+        max: [
+          2.052,
+          6.737,
+          2.459
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1200,
+      bytes: 19744908,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Tree_Topper01",
+        "Trunk_Atlas"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree01.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_32",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_32.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 5.88,
+        y: 6.069,
+        z: 5.567
+      },
+      bbox: {
+        min: [
+          -3.858,
+          0,
+          -2.118
+        ],
+        max: [
+          2.022,
+          6.069,
+          3.449
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1876,
+      bytes: 20651172,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "PalmTree_Tree",
+        "Tree_Topper01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree03.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_33",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_33.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 3.842,
+        y: 9.504,
+        z: 3.914
+      },
+      bbox: {
+        min: [
+          -1.94,
+          0,
+          -2.289
+        ],
+        max: [
+          1.902,
+          9.504,
+          1.625
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1768,
+      bytes: 23848152,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Bush_Atlas_01",
+        "Trunk_Atlas"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree04.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_34",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_34.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 0.798,
+        y: 1.6,
+        z: 0.917
+      },
+      bbox: {
+        min: [
+          -0.381,
+          0,
+          -0.417
+        ],
+        max: [
+          0.417,
+          1.6,
+          0.5
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 792,
+      bytes: 24711340,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Bush_Atlas_01",
+        "Tree_Atlas_01"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush06.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_35",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_35.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 1.997,
+        y: 1.289,
+        z: 0.786
+      },
+      bbox: {
+        min: [
+          -1.025,
+          0,
+          -0.375
+        ],
+        max: [
+          0.972,
+          1.289,
+          0.411
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 516,
+      bytes: 25405784,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "Bush_Atlas_01",
+        "Tree_Atlas_02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Bush05.glb",
+      flags: []
+    },
+    {
+      id: "toxsam-polygonal-mind/tree_36",
+      path: "assets/library/toxsam-polygonal-mind/glb/tree_36.glb",
+      semantic: "vegetation",
+      role: "tree",
+      style: "stylized",
+      osmTags: [
+        "natural=tree"
+      ],
+      internalTags: [],
+      referenceOnly: false,
+      sizeMeters: {
+        x: 5.88,
+        y: 6.069,
+        z: 5.567
+      },
+      bbox: {
+        min: [
+          -3.858,
+          0,
+          -2.118
+        ],
+        max: [
+          2.022,
+          6.069,
+          3.449
+        ]
+      },
+      groundOffsetY: 0,
+      triangles: 1876,
+      bytes: 26801604,
+      lods: [
+        "LOD0"
+      ],
+      materials: [
+        "PalmTree_Tree",
+        "Tree_Topper02"
+      ],
+      textures: [],
+      source: "ToxSam / Polygonal Mind \u2014 CC0",
+      license: "CC0-1.0",
+      attribution: "Polygonal Mind (via ToxSam open-source-3D-assets)",
+      sourceUrl: "https://raw.githubusercontent.com/ToxSam/cc0-models-Polygonal-Mind/main/projects/avatar-garden/Tree02.glb",
+      flags: []
     }
   ],
   pools: {
+    "highway=residential|kenney-asphalt": {
+      osmTag: "highway=residential",
+      style: "kenney-asphalt",
+      semantic: "road_module",
+      referenceOnly: true,
+      entries: [
+        {
+          id: "kenney-city-kit-roads/bridge-pillar-wide",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/bridge-pillar",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-bend-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-bend-sidewalk",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-bend-square-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-bend-square",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-bend",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-bridge",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-crossing",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-crossroad-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-crossroad-line",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-crossroad-path",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-crossroad",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-curve-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-curve-intersection-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-curve-intersection",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-curve-pavement",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-curve",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-driveway-double-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-driveway-double",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-driveway-single-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-driveway-single",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-end-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-end-round-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-end-round",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-end",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-intersection-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-intersection-line",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-intersection-path",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-intersection",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-roundabout-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-roundabout",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-side-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-side-entry-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-side-entry",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-side-exit-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-side-exit",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-side",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-curve-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-curve",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-flat-curve",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-flat-high",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-flat",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-high-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant-high",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-slant",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-split-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-split",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-square-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-square",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-straight-barrier-end",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-straight-barrier-half",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-straight-barrier",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-straight-half",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/road-straight",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/tile-high",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/tile-low",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/tile-slant",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/tile-slantHigh",
+          weight: 1
+        }
+      ]
+    },
+    "barrier=fence|kenney": {
+      osmTag: "barrier=fence",
+      style: "kenney",
+      semantic: "barrier",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "kenney-city-kit-roads/construction-barrier",
+          weight: 1
+        }
+      ]
+    },
+    "temporary_barrier|kenney": {
+      osmTag: "temporary_barrier",
+      style: "kenney",
+      semantic: "barrier",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "kenney-city-kit-roads/construction-barrier",
+          weight: 1
+        }
+      ]
+    },
+    "traffic_cone|kenney": {
+      osmTag: "traffic_cone",
+      style: "kenney",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "kenney-city-kit-roads/construction-cone",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/construction-light",
+          weight: 1
+        }
+      ]
+    },
+    "highway=street_lamp|kenney-modern": {
+      osmTag: "highway=street_lamp",
+      style: "kenney-modern",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "kenney-city-kit-roads/light-curved-cross",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/light-curved-double",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/light-curved",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/light-square-cross",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/light-square-double",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/light-square",
+          weight: 1
+        }
+      ]
+    },
+    "street_sign|kenney": {
+      osmTag: "street_sign",
+      style: "kenney",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "kenney-city-kit-roads/sign-highway-detailed",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/sign-highway-wide",
+          weight: 1
+        },
+        {
+          id: "kenney-city-kit-roads/sign-highway",
+          weight: 1
+        }
+      ]
+    },
     "building:part=yes|brick-red": {
       osmTag: "building:part=yes",
       style: "brick-red",
@@ -11890,6 +21121,596 @@ var manifest_default = {
           normalizeScale: true
         }
       ]
+    },
+    "amenity=bench|stylized": {
+      osmTag: "amenity=bench",
+      style: "stylized",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/bench_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/bench_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/bench_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/bench_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/bench_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/bench_06",
+          weight: 1
+        }
+      ]
+    },
+    "amenity=waste_basket|stylized": {
+      osmTag: "amenity=waste_basket",
+      style: "stylized",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/bin_01",
+          weight: 1
+        }
+      ]
+    },
+    "barrier=fence|stylized": {
+      osmTag: "barrier=fence",
+      style: "stylized",
+      semantic: "barrier",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/fence_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_09",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_10",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fence_11",
+          weight: 1
+        }
+      ]
+    },
+    "amenity=fountain|stylized": {
+      osmTag: "amenity=fountain",
+      style: "stylized",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/fountain_01",
+          weight: 1,
+          normalizeScale: true
+        },
+        {
+          id: "toxsam-polygonal-mind/fountain_02",
+          weight: 1,
+          normalizeScale: true
+        },
+        {
+          id: "toxsam-polygonal-mind/fountain_03",
+          weight: 1,
+          normalizeScale: true
+        },
+        {
+          id: "toxsam-polygonal-mind/fountain_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fountain_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/fountain_06",
+          weight: 1,
+          normalizeScale: true
+        },
+        {
+          id: "toxsam-polygonal-mind/fountain_07",
+          weight: 1,
+          normalizeScale: true
+        }
+      ]
+    },
+    "man_made=planter|stylized": {
+      osmTag: "man_made=planter",
+      style: "stylized",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/planter_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_09",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_10",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_11",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/planter_12",
+          weight: 1
+        }
+      ]
+    },
+    "street_sign|stylized": {
+      osmTag: "street_sign",
+      style: "stylized",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/sign_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_09",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_10",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_11",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_12",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_13",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_14",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_15",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_16",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_17",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_18",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_19",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/sign_20",
+          weight: 1
+        }
+      ]
+    },
+    "historic=memorial|stylized": {
+      osmTag: "historic=memorial",
+      style: "stylized",
+      semantic: "landmark_prop",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/statue_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_09",
+          weight: 1
+        }
+      ]
+    },
+    "tourism=artwork|stylized": {
+      osmTag: "tourism=artwork",
+      style: "stylized",
+      semantic: "landmark_prop",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/statue_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/statue_09",
+          weight: 1
+        }
+      ]
+    },
+    "highway=street_lamp|stylized": {
+      osmTag: "highway=street_lamp",
+      style: "stylized",
+      semantic: "street_furniture",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/street_lamp_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_09",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_10",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_11",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_12",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_13",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_14",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/street_lamp_15",
+          weight: 1
+        }
+      ]
+    },
+    "natural=tree|stylized": {
+      osmTag: "natural=tree",
+      style: "stylized",
+      semantic: "vegetation",
+      referenceOnly: false,
+      entries: [
+        {
+          id: "toxsam-polygonal-mind/tree_01",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_02",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_03",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_04",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_05",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_06",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_07",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_08",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_09",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_10",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_11",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_12",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_13",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_14",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_15",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_16",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_17",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_18",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_19",
+          weight: 1,
+          normalizeScale: true
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_20",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_21",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_22",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_23",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_24",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_25",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_26",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_27",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_28",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_29",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_30",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_31",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_32",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_33",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_34",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_35",
+          weight: 1
+        },
+        {
+          id: "toxsam-polygonal-mind/tree_36",
+          weight: 1
+        }
+      ]
     }
   }
 };
@@ -11899,11 +21720,26 @@ var assetsById = new Map(
   manifest_default.assets.map((a) => [a.id, a])
 );
 var pools = manifest_default.pools;
-function libraryAsset(id) {
-  return assetsById.get(id);
+var activeIds = null;
+function isAssetActive(id) {
+  return activeIds === null || activeIds.has(id);
 }
 function poolsForTag(osmTag) {
   return Object.entries(pools).filter(([, p]) => p.osmTag === osmTag).map(([key, pool]) => ({ key, pool }));
+}
+function pooledAssetsForTag(osmTag) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const { pool } of poolsForTag(osmTag)) {
+    if (pool.referenceOnly) continue;
+    for (const e of pool.entries) {
+      if (seen.has(e.id) || !isAssetActive(e.id)) continue;
+      seen.add(e.id);
+      const a = assetsById.get(e.id);
+      if (a) out.push(a);
+    }
+  }
+  return out;
 }
 function pooledAssetsOfSemantic(semantic) {
   const seen = /* @__PURE__ */ new Set();
@@ -11911,7 +21747,7 @@ function pooledAssetsOfSemantic(semantic) {
   for (const pool of Object.values(pools)) {
     if (pool.semantic !== semantic || pool.referenceOnly) continue;
     for (const e of pool.entries) {
-      if (seen.has(e.id)) continue;
+      if (seen.has(e.id) || !isAssetActive(e.id)) continue;
       seen.add(e.id);
       const a = assetsById.get(e.id);
       if (a) out.push(a);
@@ -11920,13 +21756,11 @@ function pooledAssetsOfSemantic(semantic) {
   return out;
 }
 function pickAssetFor(osmTag, featureId, style) {
-  const candidates = poolsForTag(osmTag).filter(
-    ({ pool: pool2 }) => !pool2.referenceOnly && (!style || pool2.style === style)
-  );
+  const candidates = poolsForTag(osmTag).filter(({ pool }) => !pool.referenceOnly && (!style || pool.style === style)).map(({ key: key2, pool }) => ({ key: key2, entries: pool.entries.filter((e) => isAssetActive(e.id)) })).filter((c) => c.entries.length);
   if (!candidates.length) return null;
-  const { key, pool } = candidates[Math.floor(hash01(featureId + "|style") * candidates.length)];
-  const entries = pool.entries.map((e) => ({ value: e.id, weight: e.weight }));
-  const id = pickWeighted(entries, hash01(featureId + "|" + key));
+  const { key, entries } = candidates[Math.floor(hash01(featureId + "|style") * candidates.length)];
+  const weighted = entries.map((e) => ({ value: e.id, weight: e.weight }));
+  const id = pickWeighted(weighted, hash01(featureId + "|" + key));
   return assetsById.get(id) ?? null;
 }
 
@@ -11958,8 +21792,17 @@ var MAX_LIBRARY_BUILDING_H = 45;
 function isLibraryEnabled() {
   return loadFlag;
 }
-function getTemplate(kind) {
-  return loadFlag ? templates.get(kind) : void 0;
+function getTemplates(kind) {
+  return loadFlag ? templates.get(kind) ?? [] : [];
+}
+function pickTemplateFor(kind, featureId) {
+  const variants2 = getTemplates(kind);
+  if (!variants2.length) return void 0;
+  if (variants2.length === 1) return variants2[0];
+  const tag = KIND_TAG[kind];
+  const picked = tag ? pickAssetFor(tag, featureId) : void 0;
+  const byId = picked && variants2.find((t) => t.assetId === picked.id);
+  return byId ?? variants2[Math.floor(hash01(featureId + "|" + kind) * variants2.length) % variants2.length];
 }
 function buildingSceneFor(b) {
   if (!loadFlag || !buildingScenes.size) return null;
@@ -11972,6 +21815,22 @@ function buildingSceneFor(b) {
 function clearLibraryTemplates() {
   templates.clear();
   buildingScenes.clear();
+}
+function collectProtectedResources(geoms, mats2) {
+  for (const variants2 of templates.values())
+    for (const t of variants2)
+      for (const p of t.parts) {
+        geoms.add(p.geometry);
+        mats2.add(p.material);
+      }
+  for (const scene of buildingScenes.values())
+    scene.traverse((o) => {
+      const mesh2 = o;
+      if (mesh2.geometry) geoms.add(mesh2.geometry);
+      const m = mesh2.material;
+      if (Array.isArray(m)) m.forEach((x) => mats2.add(x));
+      else if (m) mats2.add(m);
+    });
 }
 function assetUrl(a) {
   return "/assetlib/" + a.path.replace(/^assets\/library\//, "");
@@ -12007,24 +21866,34 @@ function normalize(parts, canonicalH) {
   for (const p of parts) p.geometry.applyMatrix4(full);
   return { x: size.x * scale, y: size.y * scale, z: size.z * scale };
 }
-async function loadOne(kind, loader) {
+async function loadKind(kind, loader) {
   const tag = KIND_TAG[kind];
   if (!tag) return;
-  const picked = pickAssetFor(tag, `libtemplate:${kind}`);
-  if (!picked) return;
-  const asset = libraryAsset(picked.id);
-  const gltf = await loader.loadAsync(assetUrl(asset));
-  const parts = flatten(gltf.scene);
-  if (!parts.length) return;
-  const sizeMeters = normalize(parts, CANONICAL_HEIGHT[kind] ?? 4);
-  templates.set(kind, {
-    kind,
-    assetId: asset.id,
-    name: asset.id.split("/").pop() ?? asset.id,
-    license: asset.license,
-    parts,
-    sizeMeters
-  });
+  const assets = pooledAssetsForTag(tag);
+  if (!assets.length) return;
+  const variants2 = [];
+  await Promise.all(
+    assets.map(async (asset) => {
+      try {
+        const gltf = await loader.loadAsync(assetUrl(asset));
+        const parts = flatten(gltf.scene);
+        if (!parts.length) return;
+        const sizeMeters = normalize(parts, CANONICAL_HEIGHT[kind] ?? 4);
+        variants2.push({
+          kind,
+          assetId: asset.id,
+          name: asset.id.split("/").pop() ?? asset.id,
+          license: asset.license,
+          parts,
+          sizeMeters
+        });
+      } catch (e) {
+        console.warn(`[library] ${kind} variant ${asset.id} load failed:`, e.message);
+      }
+    })
+  );
+  variants2.sort((a, b) => a.assetId.localeCompare(b.assetId));
+  if (variants2.length) templates.set(kind, variants2);
 }
 async function loadBuildings(loader) {
   await Promise.all(
@@ -12045,15 +21914,15 @@ async function loadBuildings(loader) {
     })
   );
 }
-async function loadLibraryTemplates(kinds, enabled2) {
+async function loadLibraryTemplates(kinds, enabled3) {
   clearLibraryTemplates();
-  loadFlag = enabled2;
-  if (!enabled2) return;
+  loadFlag = enabled3;
+  if (!enabled3) return;
   const loader = new GLTFLoader();
   const unique = [...new Set(kinds)];
   await Promise.all([
     ...unique.map(
-      (k) => loadOne(k, loader).catch((e) => {
+      (k) => loadKind(k, loader).catch((e) => {
         console.warn(`[library] ${k} template load failed, using procedural:`, e.message);
       })
     ),
@@ -12078,6 +21947,7 @@ function instanceTemplate(tmpl, placements, objectId) {
       im.setMatrixAt(i, m);
     });
     im.instanceMatrix.needsUpdate = true;
+    im.computeBoundingSphere();
     im.castShadow = true;
     im.receiveShadow = true;
     im.userData.objectId = objectId;
@@ -12094,6 +21964,27 @@ function cloneTemplate(tmpl) {
     g.add(mesh2);
   }
   return g;
+}
+function cloneTemplateFor(kind, featureId) {
+  const tmpl = pickTemplateFor(kind, featureId);
+  return tmpl ? cloneTemplate(tmpl) : null;
+}
+function instanceKindVaried(kind, placements, objectId) {
+  const variants2 = getTemplates(kind);
+  if (!variants2.length || !placements.length) return null;
+  const groups = /* @__PURE__ */ new Map();
+  for (const pl of placements) {
+    const tmpl = pickTemplateFor(kind, pl.seed);
+    let g = groups.get(tmpl.assetId);
+    if (!g) {
+      g = { tmpl, pls: [] };
+      groups.set(tmpl.assetId, g);
+    }
+    g.pls.push(pl);
+  }
+  const out = [];
+  for (const { tmpl, pls } of groups.values()) out.push(...instanceTemplate(tmpl, pls, objectId));
+  return out;
 }
 
 // src/procgen/roadNetwork.ts
@@ -12405,68 +22296,170 @@ function mrTexture(name, roughBase, roughVar, metal2, seed) {
   ctx.putImageData(img, 0, 0);
   return register(name, "metallicRoughness", c, false);
 }
-function asphaltAlbedo(name, base, wear) {
+function makeDetailNormal() {
   const size = 256;
   const [c, ctx] = makeCanvas(size);
+  const r = rng("asphalt-detail-normal");
+  ctx.fillStyle = "#808080";
+  ctx.fillRect(0, 0, size, size);
+  speckle(ctx, size, r, 14e3, 0.22, true);
+  speckle(ctx, size, r, 14e3, 0.22, false);
+  const n = heightToNormal(c, 1.1);
+  const tex = register("asphalt_detail_normal", "normal", n, false);
+  tex.wrapS = THREE3.RepeatWrapping;
+  tex.wrapT = THREE3.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+function asphaltMaps(name, base, wear) {
+  const size = 512;
+  const [c, ctx] = makeCanvas(size);
+  const [hc, hctx] = makeCanvas(size);
   const r = rng(name);
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, size, size);
-  speckle(ctx, size, r, 2200, 0.08, true);
-  speckle(ctx, size, r, 1600, 0.1, false);
+  hctx.fillStyle = "#828282";
+  hctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 9e3; i++) {
+    const x = r() * size;
+    const y = r() * size;
+    const s = 1 + r() * 3.2;
+    const g = 58 + r() * 118;
+    ctx.fillStyle = `rgba(${g | 0},${g | 0},${g * 0.98 | 0},${0.45 + r() * 0.45})`;
+    ctx.beginPath();
+    ctx.arc(x, y, s / 2, 0, Math.PI * 2);
+    ctx.fill();
+    const hv = 118 + r() * 115;
+    hctx.fillStyle = `rgb(${hv | 0},${hv | 0},${hv | 0})`;
+    hctx.beginPath();
+    hctx.arc(x, y, s / 2, 0, Math.PI * 2);
+    hctx.fill();
+  }
+  speckle(ctx, size, r, 3400, 0.06, false);
+  speckle(ctx, size, r, 1400, 0.05, true);
+  for (let i = 0; i < 16; i++) {
+    const cx = r() * size;
+    const cy = r() * size;
+    const rad = size * (0.05 + r() * 0.15);
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
+    g.addColorStop(0, `rgba(0,0,0,${0.05 + r() * 0.09})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (wear >= 1) {
-    ctx.fillStyle = "rgba(255,255,255,0.045)";
-    ctx.fillRect(0, size * 0.18, size, size * 0.16);
-    ctx.fillRect(0, size * 0.66, size, size * 0.16);
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 4 + wear * 3; i++) {
-      ctx.beginPath();
+    ctx.strokeStyle = "rgba(12,12,14,0.5)";
+    hctx.strokeStyle = "#4a4a4a";
+    for (let i = 0; i < 5 + wear * 4; i++) {
       let x = r() * size;
       let y = r() * size;
+      ctx.lineWidth = 0.8 + r() * 1.2;
+      hctx.lineWidth = ctx.lineWidth + 1;
+      ctx.beginPath();
       ctx.moveTo(x, y);
+      hctx.beginPath();
+      hctx.moveTo(x, y);
       for (let s = 0; s < 6; s++) {
-        x += (r() - 0.5) * 40;
-        y += r() * 26;
+        x += (r() - 0.5) * 46;
+        y += (r() - 0.5) * 46;
         ctx.lineTo(x, y);
+        hctx.lineTo(x, y);
       }
       ctx.stroke();
+      hctx.stroke();
     }
   }
   if (wear >= 2) {
     for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = `rgba(0,0,0,${0.12 + r() * 0.1})`;
-      const w = 30 + r() * 70;
-      const h = 20 + r() * 50;
-      ctx.fillRect(r() * size, r() * size, w, h);
+      const px = r() * size;
+      const py = r() * size;
+      const w = 40 + r() * 90;
+      const h = 28 + r() * 60;
+      ctx.fillStyle = `rgba(18,18,22,${0.16 + r() * 0.12})`;
+      ctx.fillRect(px, py, w, h);
+      hctx.fillStyle = "rgba(130,130,130,0.7)";
+      hctx.fillRect(px, py, w, h);
     }
   }
-  return register(name, "albedo", c, true);
+  return {
+    albedo: register(name, "albedo", c, true),
+    normal: register(name + "_n", "normal", heightToNormal(hc, 1.7), false)
+  };
+}
+function arcadeAsphaltMaps() {
+  const size = 256;
+  const [c, ctx] = makeCanvas(size);
+  const [hc, hctx] = makeCanvas(size);
+  const r = rng("asphalt_arcade");
+  ctx.fillStyle = "#42464e";
+  ctx.fillRect(0, 0, size, size);
+  hctx.fillStyle = "#8a8a8a";
+  hctx.fillRect(0, 0, size, size);
+  speckle(ctx, size, r, 1300, 0.03, true);
+  speckle(ctx, size, r, 1e3, 0.03, false);
+  for (let i = 0; i < 8; i++) {
+    const g = ctx.createRadialGradient(r() * size, r() * size, 2, r() * size, r() * size, size * (0.1 + r() * 0.18));
+    g.addColorStop(0, `rgba(0,0,0,${0.02 + r() * 0.04})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }
+  return {
+    albedo: register("asphalt_arcade", "albedo", c, true),
+    normal: register("asphalt_arcade_n", "normal", heightToNormal(hc, 0.4), false)
+  };
+}
+function drawDomedSett(hctx, x, y, w, h, base, crown, r) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rad = Math.max(w, h) / 2;
+  const g = hctx.createRadialGradient(cx, cy, rad * 0.15, cx, cy, rad);
+  g.addColorStop(0, `rgb(${crown},${crown},${crown})`);
+  g.addColorStop(0.62, `rgb(${crown},${crown},${crown})`);
+  g.addColorStop(1, `rgb(${base},${base},${base})`);
+  hctx.fillStyle = g;
+  roundRect(hctx, x, y, w, h, Math.min(w, h) * (0.28 + r * 0.12));
 }
 function cobbleMaps() {
   const size = 512;
   const [c, ctx] = makeCanvas(size);
   const [hc, hctx] = makeCanvas(size);
   const r = rng("cobble");
-  ctx.fillStyle = "#6f6a62";
+  ctx.fillStyle = "#645f57";
   ctx.fillRect(0, 0, size, size);
-  hctx.fillStyle = "#404040";
+  hctx.fillStyle = "#1c1c1c";
   hctx.fillRect(0, 0, size, size);
   const cell = 16;
   for (let y = 0; y < size / cell; y++) {
     for (let x = 0; x < size / cell; x++) {
-      const jx = (r() - 0.5) * 2;
-      const jy = (r() - 0.5) * 2;
-      const shade = 150 + r() * 60;
-      ctx.fillStyle = `rgb(${shade},${shade * 0.97},${shade * 0.9})`;
-      hctx.fillStyle = `rgb(${170 + r() * 60},0,0)`;
-      const pad = 1.2;
-      roundRect(ctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 3.5);
-      roundRect(hctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 3.5);
+      const jx = (r() - 0.5) * 2.4;
+      const jy = (r() - 0.5) * 2.4;
+      const shade = 138 + r() * 66;
+      const warm = (r() - 0.5) * 12;
+      ctx.fillStyle = `rgb(${clampByte(shade + warm)},${clampByte(shade * 0.97)},${clampByte(shade * 0.9 - warm)})`;
+      const pad = 1.1;
+      const sx = x * cell + pad + jx;
+      const sy = y * cell + pad + jy;
+      const sw = cell - pad * 2;
+      const sh = cell - pad * 2;
+      roundRect(ctx, sx, sy, sw, sh, sw * (0.28 + r() * 0.12));
+      const hg = ctx.createRadialGradient(sx + sw / 2, sy + sh / 2, 1, sx + sw / 2, sy + sh / 2, sw / 2);
+      hg.addColorStop(0, "rgba(255,255,255,0.10)");
+      hg.addColorStop(1, "rgba(0,0,0,0.10)");
+      ctx.fillStyle = hg;
+      roundRect(ctx, sx, sy, sw, sh, sw * 0.3);
+      const base = 150 + r() * 40;
+      const crown = Math.min(255, base + 40 + r() * 24);
+      drawDomedSett(hctx, sx, sy, sw, sh, base, crown, r());
     }
   }
+  speckle(ctx, size, r, 2600, 0.05, false);
   return {
     albedo: register("cobble_albedo", "albedo", c, true),
-    normal: register("cobble_normal", "normal", heightToNormal(hc, 1.4), false)
+    normal: register("cobble_normal", "normal", heightToNormal(hc, 2.4), false),
+    height: register("cobble_height", "height", hc, false)
   };
 }
 function paversMaps() {
@@ -12474,25 +22467,39 @@ function paversMaps() {
   const [c, ctx] = makeCanvas(size);
   const [hc, hctx] = makeCanvas(size);
   const r = rng("pavers");
-  ctx.fillStyle = "#7d7a72";
+  ctx.fillStyle = "#6d6a62";
   ctx.fillRect(0, 0, size, size);
-  hctx.fillStyle = "#383838";
+  hctx.fillStyle = "#202020";
   hctx.fillRect(0, 0, size, size);
   const rowH = 16;
   const brickW = 32;
   for (let y = 0; y < size / rowH; y++) {
     const offset = y % 2 * (brickW / 2);
     for (let x = -1; x < size / brickW + 1; x++) {
-      const shade = 165 + r() * 45;
-      ctx.fillStyle = `rgb(${shade},${shade * 0.98},${shade * 0.93})`;
-      hctx.fillStyle = `rgb(${180 + r() * 50},0,0)`;
-      ctx.fillRect(x * brickW + offset + 1, y * rowH + 1, brickW - 2, rowH - 2);
-      hctx.fillRect(x * brickW + offset + 1, y * rowH + 1, brickW - 2, rowH - 2);
+      const shade = 158 + r() * 50;
+      const warm = (r() - 0.5) * 10;
+      ctx.fillStyle = `rgb(${clampByte(shade + warm)},${clampByte(shade * 0.98)},${clampByte(shade * 0.92 - warm)})`;
+      const bx = x * brickW + offset + 1.4;
+      const by = y * rowH + 1.4;
+      const bw = brickW - 2.8;
+      const bh = rowH - 2.8;
+      ctx.fillRect(bx, by, bw, bh);
+      const base = 150 + r() * 38;
+      const crown = Math.min(255, base + 34 + r() * 20);
+      const g = hctx.createLinearGradient(bx, by, bx, by + bh);
+      g.addColorStop(0, `rgb(${base},${base},${base})`);
+      g.addColorStop(0.22, `rgb(${crown},${crown},${crown})`);
+      g.addColorStop(0.78, `rgb(${crown},${crown},${crown})`);
+      g.addColorStop(1, `rgb(${base},${base},${base})`);
+      hctx.fillStyle = g;
+      hctx.fillRect(bx, by, bw, bh);
     }
   }
+  speckle(ctx, size, r, 2200, 0.045, false);
   return {
     albedo: register("pavers_albedo", "albedo", c, true),
-    normal: register("pavers_normal", "normal", heightToNormal(hc, 1.2), false)
+    normal: register("pavers_normal", "normal", heightToNormal(hc, 2), false),
+    height: register("pavers_height", "height", hc, false)
   };
 }
 function gravelAlbedo() {
@@ -12511,27 +22518,137 @@ function gravelAlbedo() {
   }
   return register("gravel_albedo", "albedo", c, true);
 }
-function sidewalkAlbedo() {
-  const size = 256;
+var clampByte = (v) => Math.max(0, Math.min(255, Math.round(v)));
+function sidewalkMaps() {
+  const size = 512;
   const [c, ctx] = makeCanvas(size);
+  const [hc, hctx] = makeCanvas(size);
   const r = rng("sidewalk");
-  ctx.fillStyle = "#a7a59d";
+  ctx.fillStyle = "#adaba2";
   ctx.fillRect(0, 0, size, size);
-  speckle(ctx, size, r, 1500, 0.06, false);
-  speckle(ctx, size, r, 900, 0.06, true);
-  ctx.strokeStyle = "rgba(0,0,0,0.28)";
-  ctx.lineWidth = 2;
-  for (let i = 0; i <= 2; i++) {
-    ctx.beginPath();
-    ctx.moveTo(0, i * 128);
-    ctx.lineTo(size, i * 128);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(i * 128, 0);
-    ctx.lineTo(i * 128, size);
-    ctx.stroke();
+  hctx.fillStyle = "#b0b0b0";
+  hctx.fillRect(0, 0, size, size);
+  const cells = 2;
+  const cell = size / cells;
+  for (let gy = 0; gy < cells; gy++) {
+    for (let gx = 0; gx < cells; gx++) {
+      const v = (r() - 0.5) * 18;
+      ctx.fillStyle = `rgba(${v > 0 ? 255 : 0},${v > 0 ? 255 : 0},${v > 0 ? 255 : 0},${Math.abs(v) / 255})`;
+      ctx.fillRect(gx * cell, gy * cell, cell, cell);
+    }
   }
-  return register("sidewalk_albedo", "albedo", c, true);
+  speckle(ctx, size, r, 3200, 0.05, false);
+  speckle(ctx, size, r, 2e3, 0.05, true);
+  for (let i = 0; i < 10; i++) {
+    const g = ctx.createRadialGradient(r() * size, r() * size, 2, r() * size, r() * size, size * (0.05 + r() * 0.12));
+    g.addColorStop(0, `rgba(40,38,34,${0.06 + r() * 0.08})`);
+    g.addColorStop(1, "rgba(40,38,34,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }
+  for (let i = 0; i <= cells; i++) {
+    const p = i * cell;
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 3;
+    hctx.strokeStyle = "#3a3a3a";
+    hctx.lineWidth = 4;
+    for (const [a, b, c2, d] of [[0, p, size, p], [p, 0, p, size]]) {
+      ctx.beginPath();
+      ctx.moveTo(a, b);
+      ctx.lineTo(c2, d);
+      ctx.stroke();
+      hctx.beginPath();
+      hctx.moveTo(a, b);
+      hctx.lineTo(c2, d);
+      hctx.stroke();
+    }
+  }
+  return {
+    albedo: register("sidewalk_albedo", "albedo", c, true),
+    normal: register("sidewalk_normal", "normal", heightToNormal(hc, 1.1), false)
+  };
+}
+function grassMaps(name, o) {
+  const size = 512;
+  const [c, ctx] = makeCanvas(size);
+  const [hc, hctx] = makeCanvas(size);
+  const r = rng(name);
+  ctx.fillStyle = o.base;
+  ctx.fillRect(0, 0, size, size);
+  hctx.fillStyle = "#787878";
+  hctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 46; i++) {
+    const cx = r() * size;
+    const cy = r() * size;
+    const rad = size * (0.07 + r() * 0.16);
+    const light = (r() - 0.5) * 40;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    const w = light > 0 ? 255 : 0;
+    g.addColorStop(0, `rgba(${w},${w},${w},${Math.abs(light) / 255})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const [br, bg, bb] = o.blade;
+  for (let i = 0; i < o.density; i++) {
+    const x = r() * size;
+    const y = r() * size;
+    const len = 2.5 + r() * 6.5;
+    const ang = -Math.PI / 2 + (r() - 0.5) * 1.05;
+    const v = (r() - 0.5) * o.spread;
+    const ex = x + Math.cos(ang) * len;
+    const ey = y + Math.sin(ang) * len;
+    ctx.strokeStyle = `rgb(${clampByte(br + v * 0.5)},${clampByte(bg + v)},${clampByte(bb + v * 0.4)})`;
+    ctx.lineWidth = 0.7 + r() * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    const hv = r() > 0.5 ? 150 + r() * 70 : 60 + r() * 55;
+    hctx.strokeStyle = `rgb(${hv},${hv},${hv})`;
+    hctx.lineWidth = ctx.lineWidth;
+    hctx.beginPath();
+    hctx.moveTo(x, y);
+    hctx.lineTo(ex, ey);
+    hctx.stroke();
+  }
+  for (let i = 0; i < o.dryness * 1100; i++) {
+    const shade = 120 + r() * 70;
+    ctx.fillStyle = `rgba(${clampByte(shade)},${clampByte(shade * 0.85)},${clampByte(shade * 0.58)},0.5)`;
+    const s = 1 + r() * 2;
+    ctx.fillRect(r() * size, r() * size, s, s);
+  }
+  return {
+    albedo: register(name, "albedo", c, true),
+    normal: register(name + "_n", "normal", heightToNormal(hc, 1), false)
+  };
+}
+function sandMaps() {
+  const size = 512;
+  const [c, ctx] = makeCanvas(size);
+  const [hc, hctx] = makeCanvas(size);
+  const r = rng("sand");
+  ctx.fillStyle = "#cbb98f";
+  ctx.fillRect(0, 0, size, size);
+  hctx.fillStyle = "#808080";
+  hctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 9e3; i++) {
+    const shade = 150 + r() * 80;
+    ctx.fillStyle = `rgba(${clampByte(shade)},${clampByte(shade * 0.9)},${clampByte(shade * 0.68)},0.5)`;
+    const s = 1 + r() * 2;
+    const x = r() * size;
+    const y = r() * size;
+    ctx.fillRect(x, y, s, s);
+    const hv = 90 + r() * 90;
+    hctx.fillStyle = `rgb(${hv},${hv},${hv})`;
+    hctx.fillRect(x, y, s, s);
+  }
+  return {
+    albedo: register("sand_albedo", "albedo", c, true),
+    normal: register("sand_normal", "normal", heightToNormal(hc, 0.8), false)
+  };
 }
 function facadeAlbedo(name, o) {
   const size = 256;
@@ -12656,19 +22773,36 @@ function roofAlbedo(name, kind) {
   }
   return register(name, "albedo", c, true);
 }
-function decalTexture(name, draw) {
+function decalTexture(name, relief, draw) {
   const size = 128;
   const [c, ctx] = makeCanvas(size);
   ctx.clearRect(0, 0, size, size);
   draw(ctx, size, rng(name));
-  const tex = register(name, "decal-albedo", c, true);
-  tex.wrapS = THREE3.ClampToEdgeWrapping;
-  tex.wrapT = THREE3.ClampToEdgeWrapping;
-  return tex;
+  const albedo = register(name, "decal-albedo", c, true);
+  albedo.wrapS = THREE3.ClampToEdgeWrapping;
+  albedo.wrapT = THREE3.ClampToEdgeWrapping;
+  const [hc, hctx] = makeCanvas(size);
+  hctx.fillStyle = "#808080";
+  hctx.fillRect(0, 0, size, size);
+  if (relief !== 0) {
+    const src = ctx.getImageData(0, 0, size, size).data;
+    const h = hctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < size * size; i++) {
+      const a = src[i * 4 + 3] / 255;
+      const v = Math.max(0, Math.min(255, 128 + relief * a * 110));
+      h.data[i * 4] = h.data[i * 4 + 1] = h.data[i * 4 + 2] = v;
+      h.data[i * 4 + 3] = 255;
+    }
+    hctx.putImageData(h, 0, 0);
+  }
+  const normal = register(`${name}_n`, "normal", heightToNormal(hc, 1.1), false);
+  normal.wrapS = THREE3.ClampToEdgeWrapping;
+  normal.wrapT = THREE3.ClampToEdgeWrapping;
+  return { albedo, normal };
 }
 function makeDecals() {
   return {
-    crack: decalTexture("decal_crack", (ctx, size, r) => {
+    crack: decalTexture("decal_crack", -1, (ctx, size, r) => {
       ctx.strokeStyle = "rgba(15,15,15,0.75)";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -12687,7 +22821,7 @@ function makeDecals() {
       }
       ctx.stroke();
     }),
-    stain: decalTexture("decal_stain", (ctx, size, r) => {
+    stain: decalTexture("decal_stain", 0, (ctx, size, r) => {
       for (let i = 0; i < 7; i++) {
         const g = ctx.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size * (0.2 + r() * 0.28));
         g.addColorStop(0, `rgba(20,18,14,${0.28 + r() * 0.2})`);
@@ -12698,11 +22832,11 @@ function makeDecals() {
         ctx.fill();
       }
     }),
-    patch: decalTexture("decal_patch", (ctx, size, r) => {
+    patch: decalTexture("decal_patch", 0.35, (ctx, size, r) => {
       ctx.fillStyle = "rgba(28,28,30,0.85)";
       roundRect(ctx, size * 0.12, size * (0.2 + r() * 0.15), size * 0.76, size * 0.5, 8);
     }),
-    manhole: decalTexture("decal_manhole", (ctx, size) => {
+    manhole: decalTexture("decal_manhole", 0.6, (ctx, size) => {
       ctx.fillStyle = "rgba(45,45,48,0.95)";
       ctx.beginPath();
       ctx.arc(size / 2, size / 2, size * 0.42, 0, Math.PI * 2);
@@ -12729,13 +22863,23 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 function generateSurfaceTextures() {
   return {
-    asphaltNew: { albedo: asphaltAlbedo("asphalt_new", "#4a4e55", 0), mr: mrTexture("asphalt_new_mr", 0.92, 0.1, 0, "an") },
-    asphaltWorn: { albedo: asphaltAlbedo("asphalt_worn", "#53565c", 1), mr: mrTexture("asphalt_worn_mr", 0.95, 0.08, 0, "aw") },
-    asphaltPatched: { albedo: asphaltAlbedo("asphalt_patched", "#505359", 2), mr: mrTexture("asphalt_patched_mr", 0.95, 0.1, 0, "ap") },
+    asphaltNew: { ...asphaltMaps("asphalt_new", "#43474e", 0), mr: mrTexture("asphalt_new_mr", 0.92, 0.14, 0, "an") },
+    asphaltWorn: { ...asphaltMaps("asphalt_worn", "#4c4f55", 1), mr: mrTexture("asphalt_worn_mr", 0.95, 0.12, 0, "aw") },
+    asphaltPatched: { ...asphaltMaps("asphalt_patched", "#494c52", 2), mr: mrTexture("asphalt_patched_mr", 0.95, 0.14, 0, "ap") },
     cobble: { ...cobbleMaps(), mr: mrTexture("cobble_mr", 0.85, 0.12, 0, "cb") },
     pavers: { ...paversMaps(), mr: mrTexture("pavers_mr", 0.88, 0.1, 0, "pv") },
     gravel: { albedo: gravelAlbedo(), mr: mrTexture("gravel_mr", 0.98, 0.04, 0, "gv") },
-    sidewalk: { albedo: sidewalkAlbedo(), mr: mrTexture("sidewalk_mr", 0.93, 0.08, 0, "sw") }
+    sidewalk: { ...sidewalkMaps(), mr: mrTexture("sidewalk_mr", 0.93, 0.08, 0, "sw") },
+    asphaltArcade: { ...arcadeAsphaltMaps(), mr: mrTexture("asphalt_arcade_mr", 0.82, 0.05, 0, "aa") }
+  };
+}
+function generateLandTextures() {
+  return {
+    grass: grassMaps("grass", { base: "#4f6240", blade: [104, 132, 74], spread: 70, density: 9e3, dryness: 0.35 }),
+    park: grassMaps("park", { base: "#465a3a", blade: [90, 122, 66], spread: 62, density: 10500, dryness: 0.18 }),
+    forest: grassMaps("forest", { base: "#3a4a34", blade: [74, 100, 58], spread: 54, density: 8e3, dryness: 0.5 }),
+    ground: grassMaps("ground", { base: "#525a44", blade: [96, 116, 74], spread: 66, density: 6e3, dryness: 0.6 }),
+    sand: sandMaps()
   };
 }
 function generateFacadeTextures() {
@@ -12806,36 +22950,232 @@ var surf = generateSurfaceTextures();
 var facades = generateFacadeTextures();
 var roofs = generateRoofTextures();
 var decals = makeDecals();
+var DETAIL_NORMAL = makeDetailNormal();
+var CB_WET = { value: 0 };
+function setWetness(v) {
+  CB_WET.value = Math.max(0, Math.min(1, v));
+}
 function std(o) {
   return new THREE4.MeshStandardMaterial(o);
 }
+var HEX_TILING_GLSL = `
+vec2 cbHexHash(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p) * 43758.5453123);
+}
+vec4 cbHexSample(sampler2D samp, vec2 uv) {
+  const mat2 toSkew = mat2(1.0, 0.0, -0.57735027, 1.15470054);
+  vec2 skew = toSkew * (uv * 3.4641016); // ~3.46 hex cells per texture tile
+  vec2 base = floor(skew);
+  vec2 f = fract(skew);
+  float wz = 1.0 - f.x - f.y;
+  vec2 dx = dFdx(uv), dy = dFdy(uv);
+  vec2 v1, v2, v3; vec3 w;
+  if (wz > 0.0) { w = vec3(wz, f.y, f.x); v1 = base; v2 = base + vec2(0.0, 1.0); v3 = base + vec2(1.0, 0.0); }
+  else { w = vec3(-wz, 1.0 - f.y, 1.0 - f.x); v1 = base + vec2(1.0, 1.0); v2 = base + vec2(1.0, 0.0); v3 = base + vec2(0.0, 1.0); }
+  vec4 c1 = textureGrad(samp, uv + cbHexHash(v1), dx, dy);
+  vec4 c2 = textureGrad(samp, uv + cbHexHash(v2), dx, dy);
+  vec4 c3 = textureGrad(samp, uv + cbHexHash(v3), dx, dy);
+  w = pow(w, vec3(3.0));               // sharpen the blend \u2192 tighter, less-ghosted seams
+  w /= (w.x + w.y + w.z);
+  return c1 * w.x + c2 * w.y + c3 * w.z;
+}
+// Height-blend (Phase 2 #10): crisp, height-aware transition between two layer
+// weights (Unreal-style) instead of a soft lerp \u2014 used to lay oily/sealed patches
+// that follow the aggregate contours rather than a flat sine ramp. d = blend
+// contrast. Foundation for the Phase 3 splat/wear-mask asphalt.
+float cbHeightBlend(float ha, float hb, float t) {
+  float d = 0.25;
+  float ma = ha + (1.0 - t);
+  float mb = hb + t;
+  return clamp((mb - max(ma, mb) + d) / d, 0.0, 1.0);
+}
+uniform sampler2D cbDetailNormalMap;
+uniform float cbDetailRepeat;
+uniform float cbDetailStrength;
+varying float vCbLane; // -1 (left kerb) .. +1 (right kerb); 0 where no lane frame
+varying float vCbWear; // 1 on driven carriageways, 0 elsewhere (gates lane wear)
+uniform float uWet;    // 0 dry .. 1 wet (Phase 5 #14)
+`;
+function withMacroVariation(m, key) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.cbDetailNormalMap = { value: DETAIL_NORMAL };
+    shader.uniforms.cbDetailRepeat = { value: ROAD_TILE_M / 0.5 };
+    shader.uniforms.cbDetailStrength = { value: 0.6 };
+    shader.uniforms.uWet = CB_WET;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vCbMacroW;\nattribute float aLane;\nattribute float aWear;\nvarying float vCbLane;\nvarying float vCbWear;").replace("#include <begin_vertex>", "#include <begin_vertex>\n	vCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n	vCbLane = aLane;\n	vCbWear = aWear;");
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
+varying vec3 vCbMacroW;
+${HEX_TILING_GLSL}`).replace(
+      "#include <map_fragment>",
+      `#ifdef USE_MAP
+          diffuseColor *= cbHexSample( map, vMapUv );
+        #endif
+        float cbM1 = sin(vCbMacroW.x * 0.071 + vCbMacroW.z * 0.031);
+        float cbM2 = sin(vCbMacroW.x * 0.017 - vCbMacroW.z * 0.089);
+        float cbMacro = 0.5 + 0.5 * (cbM1 * 0.6 + cbM2 * 0.4);
+        diffuseColor.rgb *= mix(0.87, 1.11, cbMacro);
+        // #10 height-blend: crisp oily/sealed patches that follow the aggregate
+        float cbHeight = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+        float cbPatch = 0.5 + 0.5 * sin(vCbMacroW.x * 0.043 - vCbMacroW.z * 0.057);
+        float cbOily = cbHeightBlend(cbHeight, 0.55, cbPatch);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.74, 0.78), cbOily * 0.45);
+        // #7 lane-space wear: polished wheel tracks, oily centreline, dusty kerb
+        // edge. Gated by vCbWear so it only paints driven carriageways (0 on
+        // junction patches / paths / cobble that carry no lane frame).
+        float cbLat = abs(vCbLane);
+        float cbAlong = 0.5 + 0.5 * sin(vCbMacroW.x * 0.11 + vCbMacroW.z * 0.09);
+        float cbWheel = exp(-pow((cbLat - 0.55) / 0.13, 2.0)) * (0.55 + 0.45 * cbAlong);
+        float cbCenterOil = smoothstep(0.13, 0.0, cbLat);
+        float cbEdgeDust = smoothstep(0.82, 1.0, cbLat);
+        float cbW = vCbWear;
+        diffuseColor.rgb *= 1.0 - cbWheel * 0.13 * cbW;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.62, 0.64, 0.68), cbCenterOil * 0.45 * cbW);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.16, 1.14, 1.09), cbEdgeDust * 0.30 * cbW);
+        // #14 wetness: darken (uniform wet + extra in puddles); roughness handled below
+        float cbPuddleF = 0.5 + 0.5 * sin(vCbMacroW.x * 0.08 + 1.3) * sin(vCbMacroW.z * 0.09 - 0.7);
+        float cbPuddle = smoothstep(0.6, 0.85, cbPuddleF) * uWet;
+        diffuseColor.rgb *= mix(1.0, 0.58, uWet * 0.55 + cbPuddle * 0.35);`
+    ).replace(
+      "#include <roughnessmap_fragment>",
+      `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor * (1.0 - (cbWheel * 0.22 + cbCenterOil * 0.18) * cbW + cbEdgeDust * 0.05 * cbW), 0.0, 1.0);
+        // #14 wet asphalt drops in roughness (sun glint); puddles go near-mirror
+        roughnessFactor = mix(roughnessFactor, mix(0.34, 0.05, cbPuddle), uWet);`
+    ).replace(
+      "#include <normal_fragment_maps>",
+      `#ifdef USE_NORMALMAP_TANGENTSPACE
+          vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+          vec3 cbDetN = texture2D( cbDetailNormalMap, vNormalMapUv * cbDetailRepeat ).xyz * 2.0 - 1.0;
+          float cbDetFade = 1.0 - smoothstep(18.0, 45.0, length(vViewPosition));
+          mapN.xy += cbDetN.xy * cbDetailStrength * cbDetFade;
+          mapN.xy *= normalScale;
+          normal = normalize( tbn * mapN );
+        #endif`
+    );
+  };
+  m.customProgramCacheKey = () => key;
+  return m;
+}
+var STONE_RELIEF_GLSL = `
+uniform sampler2D cbStoneHeight;
+uniform float cbStoneScale;
+uniform sampler2D cbStoneDetail;
+uniform float cbStoneDetailRepeat;
+uniform float uWet;
+`;
+function withStoneRelief(m, key, height) {
+  height.wrapS = height.wrapT = THREE4.RepeatWrapping;
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.cbStoneHeight = { value: height };
+    shader.uniforms.cbStoneScale = { value: 0.045 };
+    shader.uniforms.cbStoneDetail = { value: DETAIL_NORMAL };
+    shader.uniforms.cbStoneDetailRepeat = { value: ROAD_TILE_M / 0.5 };
+    shader.uniforms.uWet = CB_WET;
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
+${STONE_RELIEF_GLSL}`).replace(
+      "#include <map_fragment>",
+      `// cotangent frame from screen derivatives (no tangent attribute on ribbons)
+        vec3 cbN = normalize(vNormal);
+        vec3 cbV = normalize(vViewPosition);
+        vec3 cbDp1 = dFdx(-vViewPosition), cbDp2 = dFdy(-vViewPosition);
+        vec2 cbDuv1 = dFdx(vMapUv), cbDuv2 = dFdy(vMapUv);
+        vec3 cbDp2p = cross(cbDp2, cbN), cbDp1p = cross(cbN, cbDp1);
+        vec3 cbT = cbDp2p * cbDuv1.x + cbDp1p * cbDuv2.x;
+        vec3 cbB = cbDp2p * cbDuv1.y + cbDp1p * cbDuv2.y;
+        float cbInv = inversesqrt(max(dot(cbT, cbT), dot(cbB, cbB)));
+        mat3 cbTBN = mat3(cbT * cbInv, cbB * cbInv, cbN);
+        vec3 cbVts = normalize(cbV * cbTBN); // surface\u2192eye in tangent space
+        float cbFade = 1.0 - smoothstep(14.0, 42.0, length(vViewPosition));
+        float cbScale = cbStoneScale * cbFade;
+        vec2 cbStoneUv = vMapUv;
+        if (cbScale > 0.0005) {
+          const int CB_STEPS = 8;
+          float cbLayerD = 1.0 / float(CB_STEPS);
+          float cbCurD = 0.0;
+          vec2 cbDelta = (cbVts.xy / max(cbVts.z, 0.35)) * cbScale / float(CB_STEPS);
+          float cbDval = 1.0 - texture2D(cbStoneHeight, cbStoneUv).r;
+          for (int i = 0; i < CB_STEPS; i++) {
+            if (cbCurD >= cbDval) break;
+            cbStoneUv -= cbDelta;
+            cbDval = 1.0 - texture2D(cbStoneHeight, cbStoneUv).r;
+            cbCurD += cbLayerD;
+          }
+        }
+        #ifdef USE_MAP
+          diffuseColor *= texture2D( map, cbStoneUv );
+        #endif
+        float cbHeight = texture2D(cbStoneHeight, cbStoneUv).r;
+        diffuseColor.rgb *= mix(0.5, 1.06, smoothstep(0.12, 0.6, cbHeight)); // crevice AO
+        diffuseColor.rgb *= mix(1.0, 0.66, uWet * 0.5);                      // wet darkening`
+    ).replace(
+      "#include <roughnessmap_fragment>",
+      `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.12, uWet * 0.6); // wet stone glistens`
+    ).replace(
+      "#include <normal_fragment_maps>",
+      `#ifdef USE_NORMALMAP_TANGENTSPACE
+          vec3 mapN = texture2D( normalMap, cbStoneUv ).xyz * 2.0 - 1.0;
+          vec3 cbDetN = texture2D( cbStoneDetail, cbStoneUv * cbStoneDetailRepeat ).xyz * 2.0 - 1.0;
+          float cbDetFade = 1.0 - smoothstep(10.0, 30.0, length(vViewPosition));
+          mapN.xy += cbDetN.xy * 0.5 * cbDetFade;
+          mapN.xy *= normalScale;
+          normal = normalize( tbn * mapN );
+        #endif`
+    );
+  };
+  m.customProgramCacheKey = () => key;
+  return m;
+}
 var ROAD_MATERIALS = {
-  "asphalt-new": std({ map: surf.asphaltNew.albedo, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }),
-  "asphalt-worn": std({ map: surf.asphaltWorn.albedo, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }),
-  "asphalt-patched": std({ map: surf.asphaltPatched.albedo, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }),
-  cobble: std({ map: surf.cobble.albedo, normalMap: surf.cobble.normal, roughnessMap: surf.cobble.mr, metalnessMap: surf.cobble.mr, roughness: 1, metalness: 1 }),
-  pavers: std({ map: surf.pavers.albedo, normalMap: surf.pavers.normal, roughnessMap: surf.pavers.mr, metalnessMap: surf.pavers.mr, roughness: 1, metalness: 1 }),
+  "asphalt-new": withMacroVariation(std({ map: surf.asphaltNew.albedo, normalMap: surf.asphaltNew.normal, roughnessMap: surf.asphaltNew.mr, metalnessMap: surf.asphaltNew.mr, roughness: 1, metalness: 1 }), "cb-asphalt-new"),
+  "asphalt-worn": withMacroVariation(std({ map: surf.asphaltWorn.albedo, normalMap: surf.asphaltWorn.normal, roughnessMap: surf.asphaltWorn.mr, metalnessMap: surf.asphaltWorn.mr, roughness: 1, metalness: 1 }), "cb-asphalt-worn"),
+  "asphalt-patched": withMacroVariation(std({ map: surf.asphaltPatched.albedo, normalMap: surf.asphaltPatched.normal, roughnessMap: surf.asphaltPatched.mr, metalnessMap: surf.asphaltPatched.mr, roughness: 1, metalness: 1 }), "cb-asphalt-patched"),
+  cobble: withStoneRelief(std({ map: surf.cobble.albedo, normalMap: surf.cobble.normal, normalScale: new THREE4.Vector2(1.45, 1.45), roughnessMap: surf.cobble.mr, metalnessMap: surf.cobble.mr, roughness: 1, metalness: 1 }), "cb-cobble", surf.cobble.height),
+  pavers: withStoneRelief(std({ map: surf.pavers.albedo, normalMap: surf.pavers.normal, normalScale: new THREE4.Vector2(1.35, 1.35), roughnessMap: surf.pavers.mr, metalnessMap: surf.pavers.mr, roughness: 1, metalness: 1 }), "cb-pavers", surf.pavers.height),
   gravel: std({ map: surf.gravel.albedo, roughnessMap: surf.gravel.mr, metalnessMap: surf.gravel.mr, roughness: 1, metalness: 1 })
 };
-for (const m of Object.values(ROAD_MATERIALS)) {
-  m.map.repeat.set(1 / ROAD_TILE_M, 1 / ROAD_TILE_M);
+var ARCADE_ASPHALT = std({ map: surf.asphaltArcade.albedo, normalMap: surf.asphaltArcade.normal, roughnessMap: surf.asphaltArcade.mr, metalnessMap: surf.asphaltArcade.mr, roughness: 1, metalness: 1 });
+var ROAD_MATERIALS_ARCADE = {
+  "asphalt-new": ARCADE_ASPHALT,
+  "asphalt-worn": ARCADE_ASPHALT,
+  "asphalt-patched": ARCADE_ASPHALT,
+  cobble: ROAD_MATERIALS.cobble,
+  pavers: ROAD_MATERIALS.pavers,
+  gravel: ROAD_MATERIALS.gravel
+};
+for (const m of [...Object.values(ROAD_MATERIALS), ARCADE_ASPHALT]) {
+  for (const t of [m.map, m.normalMap]) t?.repeat.set(1 / ROAD_TILE_M, 1 / ROAD_TILE_M);
+}
+var activeRoadStyle = "realistic";
+function setRoadStyle(style) {
+  activeRoadStyle = style;
 }
 function roadMaterial(set, uvSeed = 0) {
-  const base = ROAD_MATERIALS[set];
+  const base = (activeRoadStyle === "arcade" ? ROAD_MATERIALS_ARCADE : ROAD_MATERIALS)[set];
   if (uvSeed === 0) return base;
   const m = base.clone();
+  m.onBeforeCompile = base.onBeforeCompile;
+  m.customProgramCacheKey = base.customProgramCacheKey;
+  const ox = uvSeed % 1;
+  const oy = uvSeed * 7.13 % 1;
   m.map = base.map.clone();
-  m.map.offset.set(uvSeed % 1, uvSeed * 7.13 % 1);
+  m.map.offset.set(ox, oy);
+  if (base.normalMap) {
+    m.normalMap = base.normalMap.clone();
+    m.normalMap.offset.set(ox, oy);
+  }
   return m;
 }
 var sidewalkMaterial = std({
   map: surf.sidewalk.albedo,
+  normalMap: surf.sidewalk.normal,
   roughnessMap: surf.sidewalk.mr,
   metalnessMap: surf.sidewalk.mr,
   roughness: 1,
   metalness: 1
 });
-sidewalkMaterial.map.repeat.set(1 / 2.4, 1 / 2.4);
+for (const t of [sidewalkMaterial.map, sidewalkMaterial.normalMap]) t.repeat.set(1 / 2.4, 1 / 2.4);
 var FACADE_GLASSINESS = {
   "brick-red": { rough: 0.92, metal: 0 },
   "brick-brown": { rough: 0.92, metal: 0 },
@@ -12864,8 +23204,8 @@ for (const m of Object.values(ROOF_MATERIALS)) m.map.repeat.set(1 / 4, 1 / 4);
 function roofMaterial(set) {
   return ROOF_MATERIALS[set];
 }
-function decalMat(tex) {
-  return std({ map: tex, transparent: true, roughness: 1, depthWrite: false });
+function decalMat(d) {
+  return std({ map: d.albedo, normalMap: d.normal, transparent: true, roughness: 1, depthWrite: false });
 }
 var decalMaterials = {
   crack: decalMat(decals.crack),
@@ -12905,6 +23245,28 @@ function makeFacadeTexture(lit) {
 }
 var facadeTexture = makeFacadeTexture(false);
 var facadeTextureEnhanced = makeFacadeTexture(true);
+var PAINT_WEAR = { value: 1 };
+function setPaintWear(v) {
+  PAINT_WEAR.value = v;
+}
+function withPaintWear(m, key) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uPaintWear = PAINT_WEAR;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vCbPaintW;").replace("#include <begin_vertex>", "#include <begin_vertex>\n	vCbPaintW = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nuniform float uPaintWear;\nvarying vec3 vCbPaintW;").replace(
+      "#include <color_fragment>",
+      `#include <color_fragment>
+        float cbW1 = sin(vCbPaintW.x * 0.42 + vCbPaintW.z * 0.31);
+        float cbW2 = sin(vCbPaintW.x * 0.19 - vCbPaintW.z * 0.53);
+        float cbWear = 0.5 + 0.5 * (cbW1 * 0.55 + cbW2 * 0.45);
+        float cbScuff = sin(vCbPaintW.x * 2.3) * sin(vCbPaintW.z * 2.1);
+        float cbWornFactor = mix(0.6, 1.0, smoothstep(0.12, 0.55, cbWear)) * (0.93 + 0.07 * cbScuff);
+        diffuseColor.rgb *= mix(1.0, cbWornFactor, uPaintWear);`
+    );
+  };
+  m.customProgramCacheKey = () => key;
+  return m;
+}
 var mats = {
   // (terrain/ground material lives in procgen/areas.ts, which stays canvas-free for headless tests)
   roadAsphalt: new THREE5.MeshStandardMaterial({ color: "#4a4e55", roughness: 0.95 }),
@@ -12914,8 +23276,10 @@ var mats = {
   curb: new THREE5.MeshStandardMaterial({ color: "#7d7d78", roughness: 0.9 }),
   // Markings are paint on asphalt, not light sources — lit PBR so they react to
   // the game's day/night sun instead of exporting as KHR_materials_unlit.
-  markingWhite: new THREE5.MeshStandardMaterial({ color: "#e8e8e0", roughness: 0.8 }),
-  markingYellow: new THREE5.MeshStandardMaterial({ color: "#d8b93a", roughness: 0.8 }),
+  // brighter paint, worn/scuffed in patches by a world-position shader so it
+  // reads as aged paint against the textured asphalt (not a crisp sticker)
+  markingWhite: withPaintWear(new THREE5.MeshStandardMaterial({ color: "#f2f1ea", roughness: 0.75 }), "cb-paint-white"),
+  markingYellow: withPaintWear(new THREE5.MeshStandardMaterial({ color: "#e6c23e", roughness: 0.75 }), "cb-paint-yellow"),
   roofDark: new THREE5.MeshStandardMaterial({ color: "#4a4640", roughness: 0.95 }),
   roofEnhanced: new THREE5.MeshStandardMaterial({ color: "#5a564e", roughness: 0.85 }),
   treeTrunk: new THREE5.MeshStandardMaterial({ color: "#5d4a32", roughness: 1 }),
@@ -12933,13 +23297,257 @@ var mats = {
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import polygonClipping2 from "polygon-clipping";
 
-// src/procgen/corridor/config.ts
-var enabled = true;
-function isCorridorElevationEnabled() {
+// src/procgen/terrain/config.ts
+var enabled = false;
+function isTerrainEnabled() {
   return enabled;
 }
-function setCorridorElevationEnabled(value) {
+function setTerrainEnabled(value) {
   enabled = value;
+}
+var TERRAIN = {
+  /** Height-field memo grid resolution. Roads/ground sample the grid + bilinear. */
+  cell: 12,
+  /** Peak macro-relief amplitude away from water (rolling hills, ± this). */
+  reliefAmp: 2.6,
+  /** Base wavelength of the macro relief (m). Long → gentle, drivable grades. */
+  reliefWavelength: 230,
+  /** Octaves of value noise summed into the relief (each ½ amplitude, 2× freq). */
+  reliefOctaves: 3,
+  /** Opaque river/lake surface height. Below city grade so a bank lip reads. */
+  waterSurfaceY: -1.2,
+  /** Submerged ground under water. Kept well below the surface so it is hidden
+   *  by the opaque water (no carve, no z-fight — pure vertical separation). */
+  riverbedY: -3,
+  /** Ground height at the very water's edge — just above the surface (the lip). */
+  shoreY: -0.85,
+  /** Distance over which the bank rises from the shore up to base grade (0). */
+  valleyWidth: 150,
+  /** Within this distance of water the macro relief is flattened out (flat plain). */
+  waterFlatten: 45
+};
+
+// src/procgen/terrain/field.ts
+var smoothstep = (t) => {
+  const c = t < 0 ? 0 : t > 1 ? 1 : t;
+  return c * c * (3 - 2 * c);
+};
+function latticeValue(ix, iz, octave) {
+  return hash01(`${ix}:${iz}:${octave}`);
+}
+function valueNoise(x, z, wavelength, octave) {
+  const gx = x / wavelength;
+  const gz = z / wavelength;
+  const ix = Math.floor(gx);
+  const iz = Math.floor(gz);
+  const fx = smoothstep(gx - ix);
+  const fz = smoothstep(gz - iz);
+  const v00 = latticeValue(ix, iz, octave);
+  const v10 = latticeValue(ix + 1, iz, octave);
+  const v01 = latticeValue(ix, iz + 1, octave);
+  const v11 = latticeValue(ix + 1, iz + 1, octave);
+  const vx0 = v00 + (v10 - v00) * fx;
+  const vx1 = v01 + (v11 - v01) * fx;
+  return (vx0 + (vx1 - vx0) * fz) * 2 - 1;
+}
+function fbm(x, z) {
+  let sum = 0;
+  let amp = 1;
+  let norm2 = 0;
+  let wavelength = TERRAIN.reliefWavelength;
+  for (let o = 0; o < TERRAIN.reliefOctaves; o++) {
+    sum += amp * valueNoise(x, z, wavelength, o);
+    norm2 += amp;
+    amp *= 0.5;
+    wavelength *= 0.5;
+  }
+  return sum / norm2;
+}
+function pointToSegDist(px, pz, a, b) {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const len2 = dx * dx + dz * dz;
+  let t = len2 > 0 ? ((px - a.x) * dx + (pz - a.z) * dz) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const cx = a.x + t * dx;
+  const cz = a.z + t * dz;
+  return Math.hypot(px - cx, pz - cz);
+}
+function buildTerrainField(bounds, water) {
+  if (!isTerrainEnabled()) return ZERO_FIELD;
+  const { cell, riverbedY, shoreY, valleyWidth, waterFlatten, reliefAmp } = TERRAIN;
+  const segs = [];
+  let wminX = Infinity, wmaxX = -Infinity, wminZ = Infinity, wmaxZ = -Infinity;
+  const addRing = (r) => {
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i];
+      const b = r[(i + 1) % r.length];
+      segs.push([a, b]);
+      wminX = Math.min(wminX, a.x);
+      wmaxX = Math.max(wmaxX, a.x);
+      wminZ = Math.min(wminZ, a.z);
+      wmaxZ = Math.max(wmaxZ, a.z);
+    }
+  };
+  for (const w of water) {
+    addRing(w.ring);
+    for (const h of w.holes) addRing(h);
+  }
+  const hasWater = segs.length > 0;
+  const reach = valleyWidth + 4;
+  const insideWater = (x, z) => {
+    const p = { x, z };
+    for (const w of water) {
+      if (!pointInRing(p, w.ring)) continue;
+      if (w.holes.some((h) => pointInRing(p, h))) continue;
+      return true;
+    }
+    return false;
+  };
+  const distToWater = (x, z) => {
+    let d = Infinity;
+    for (const [a, b] of segs) {
+      const dd = pointToSegDist(x, z, a, b);
+      if (dd < d) d = dd;
+    }
+    return d;
+  };
+  const heightAt = (x, z) => {
+    if (hasWater && insideWater(x, z)) return riverbedY;
+    let valley = 0;
+    let farFromWater = true;
+    if (hasWater) {
+      const nearBBox = x >= wminX - reach && x <= wmaxX + reach && z >= wminZ - reach && z <= wmaxZ + reach;
+      if (nearBBox) {
+        const d = distToWater(x, z);
+        farFromWater = d >= valleyWidth;
+        valley = shoreY + (0 - shoreY) * smoothstep(d / valleyWidth);
+        const mask = smoothstep((d - waterFlatten) / valleyWidth);
+        return valley + fbm(x, z) * reliefAmp * mask;
+      }
+    }
+    return (farFromWater ? 0 : valley) + fbm(x, z) * reliefAmp;
+  };
+  const originX = bounds.minX;
+  const originZ = bounds.minZ;
+  const cols = Math.max(2, Math.ceil((bounds.maxX - bounds.minX) / cell) + 1);
+  const rows = Math.max(2, Math.ceil((bounds.maxZ - bounds.minZ) / cell) + 1);
+  const grid = new Float64Array(cols * rows);
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      grid[j * cols + i] = heightAt(originX + i * cell, originZ + j * cell);
+    }
+  }
+  const sample = (x, z) => {
+    const gx = (x - originX) / cell;
+    const gz = (z - originZ) / cell;
+    let i = Math.floor(gx);
+    let j = Math.floor(gz);
+    i = i < 0 ? 0 : i > cols - 2 ? cols - 2 : i;
+    j = j < 0 ? 0 : j > rows - 2 ? rows - 2 : j;
+    const fx = gx - i < 0 ? 0 : gx - i > 1 ? 1 : gx - i;
+    const fz = gz - j < 0 ? 0 : gz - j > 1 ? 1 : gz - j;
+    const h00 = grid[j * cols + i];
+    const h10 = grid[j * cols + i + 1];
+    const h01 = grid[(j + 1) * cols + i];
+    const h11 = grid[(j + 1) * cols + i + 1];
+    const hx0 = h00 + (h10 - h00) * fx;
+    const hx1 = h01 + (h11 - h01) * fx;
+    return hx0 + (hx1 - hx0) * fz;
+  };
+  return { sample, enabled: true };
+}
+var ZERO_FIELD = { sample: () => 0, enabled: false };
+var SHOULDER = 14;
+function segClosest(px, pz, a, b) {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const len2 = dx * dx + dz * dz;
+  let t = len2 > 0 ? ((px - a.x) * dx + (pz - a.z) * dz) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const cx = a.x + t * dx;
+  const cz = a.z + t * dz;
+  return { d2: (px - cx) * (px - cx) + (pz - cz) * (pz - cz), t };
+}
+function conformTerrainToRoads(base, corridors, bounds) {
+  if (!base.enabled || corridors.length === 0) return base;
+  const cell = 24;
+  const originX = bounds.minX;
+  const originZ = bounds.minZ;
+  const grid = /* @__PURE__ */ new Map();
+  const cx = (x) => Math.floor((x - originX) / cell);
+  const cz = (z) => Math.floor((z - originZ) / cell);
+  const push = (i, j, v) => {
+    const k = `${i},${j}`;
+    let a = grid.get(k);
+    if (!a) grid.set(k, a = []);
+    a.push(v);
+  };
+  corridors.forEach((c, ci) => {
+    const reach = c.half + c.pave + SHOULDER;
+    for (let s = 1; s < c.pts.length; s++) {
+      const a = c.pts[s - 1];
+      const b = c.pts[s];
+      const i0 = cx(Math.min(a.x, b.x) - reach);
+      const i1 = cx(Math.max(a.x, b.x) + reach);
+      const j0 = cz(Math.min(a.z, b.z) - reach);
+      const j1 = cz(Math.max(a.z, b.z) + reach);
+      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) push(i, j, [ci, s]);
+    }
+  });
+  const sample = (x, z) => {
+    const hb = base.sample(x, z);
+    const i = cx(x);
+    const j = cz(z);
+    let bestW = 0;
+    let bestE = 0;
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        const list2 = grid.get(`${i + di},${j + dj}`);
+        if (!list2) continue;
+        for (const [ci, s] of list2) {
+          const c = corridors[ci];
+          const { d2: d22, t } = segClosest(x, z, c.pts[s - 1], c.pts[s]);
+          const d = Math.sqrt(d22);
+          const flat = c.half + c.pave;
+          let w;
+          if (d <= flat) w = 1;
+          else if (d < flat + SHOULDER) w = smoothstep((flat + SHOULDER - d) / SHOULDER);
+          else continue;
+          if (w > bestW) {
+            bestW = w;
+            const e0 = c.elev[s - 1];
+            const e1 = c.elev[Math.min(s, c.elev.length - 1)];
+            bestE = e0 + (e1 - e0) * t;
+          }
+        }
+      }
+    }
+    return bestW <= 0 ? hb : bestE * bestW + hb * (1 - bestW);
+  };
+  return { sample, enabled: true, base };
+}
+var active = ZERO_FIELD;
+function setActiveTerrain(field) {
+  active = field ?? ZERO_FIELD;
+}
+function sampleTerrain(x, z) {
+  return active.sample(x, z);
+}
+function terrainSolveBase() {
+  return active.base ?? active;
+}
+function sampleTerrainBase(x, z) {
+  return terrainSolveBase().sample(x, z);
+}
+
+// src/procgen/corridor/config.ts
+var enabled2 = true;
+function isCorridorElevationEnabled() {
+  return enabled2;
+}
+function setCorridorElevationEnabled(value) {
+  enabled2 = value;
 }
 var GRADE_CAPS = {
   motorway: 0.04,
@@ -13148,7 +23756,7 @@ function buildRoadGraph(roads, alias) {
 }
 
 // src/procgen/corridor/elevation.ts
-var smoothstep = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, t)));
+var smoothstep2 = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, t)));
 var clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 function hermite(t, z0, z1, m0, m1) {
   const t2 = t * t;
@@ -13177,13 +23785,13 @@ function solveNetworkElevation(roads) {
     stats
   };
 }
-var baseHeight = (_key) => 0;
+var baseHeight = (p) => sampleTerrainBase(p.x, p.z);
 function solveNodeElevations(graph) {
   const z = /* @__PURE__ */ new Map();
   const keys = [...graph.nodes.keys()].sort();
   for (const key of keys) {
     const n = graph.nodes.get(key);
-    z.set(key, n.pin ?? baseHeight(key));
+    z.set(key, n.pin ?? baseHeight(n.p));
   }
   const { maxIterations, tolerance, baseWeight } = SOLVER;
   let iterations = 0;
@@ -13194,7 +23802,7 @@ function solveNodeElevations(graph) {
     for (const key of keys) {
       const n = graph.nodes.get(key);
       if (n.pin !== null) continue;
-      let num = baseWeight * baseHeight(key);
+      let num = baseWeight * baseHeight(n.p);
       let den = baseWeight;
       let lo = -Infinity;
       let hi = Infinity;
@@ -13280,8 +23888,8 @@ function profileFor(r, cum, graph, z, grades, legacyNodes, grounded, zAt) {
     const fullElev = Math.max(edge.layer, 1) * BRIDGE_LAYER_H;
     const rampLen = Math.min(Math.max(fullElev / edge.maxGrade, 40), Math.max(L * 0.45, 20));
     return cum.map((d) => {
-      const up = z0 + (fullElev - z0) * smoothstep(d / rampLen);
-      const down = z1 + (fullElev - z1) * smoothstep((L - d) / rampLen);
+      const up = z0 + (fullElev - z0) * smoothstep2(d / rampLen);
+      const down = z1 + (fullElev - z1) * smoothstep2((L - d) / rampLen);
       return Math.min(up, down);
     });
   }
@@ -13310,11 +23918,12 @@ function computeStats(graph, z, iterations, residual) {
 // src/procgen/corridor/index.ts
 var cache = /* @__PURE__ */ new WeakMap();
 function buildRoadElevation(roads) {
-  const enabled2 = isCorridorElevationEnabled();
+  const enabled3 = isCorridorElevationEnabled();
+  const terrain = terrainSolveBase();
   const hit = cache.get(roads);
-  if (hit && hit.enabled === enabled2) return hit.value;
-  const value = enabled2 ? solveNetworkElevation(roads) : legacyElevation(roads);
-  cache.set(roads, { enabled: enabled2, value });
+  if (hit && hit.enabled === enabled3 && hit.terrain === terrain) return hit.value;
+  const value = enabled3 ? solveNetworkElevation(roads) : legacyElevation(roads);
+  cache.set(roads, { enabled: enabled3, terrain, value });
   return value;
 }
 function legacyElevation(roads) {
@@ -13770,12 +24379,16 @@ function buildArchBridge(centerline, widthM, spec) {
 // src/procgen/roads.ts
 var Y_PATH = 0.046;
 var Y_ROAD = 0.05;
-var Y_DECAL = 0.08;
-var Y_DISC = 0.11;
-var Y_MARK = 0.16;
-var Y_CROSSWALK = 0.175;
+var Y_MARK = 0.055;
+var Y_DECAL = 0.06;
+var Y_DISC = 0.065;
+var Y_CROSSWALK = 0.07;
+var PLAZA_CURB_H = 0.14;
+var SIDEWALK_FOUNDATION = 0.35;
 var STOP_LINE_CLASSES = /* @__PURE__ */ new Set(["trunk", "primary", "secondary", "tertiary"]);
 var STOP_LINE_DIST = 3.15;
+var JUNCTION_FLARE = 1.3;
+var junctionFilletR = (maxWidth) => Math.min(7, Math.max(2, maxWidth * 0.45));
 function pushQuad(positions, indices, c, along, halfLen, across, halfWid, y, uvs) {
   const base = positions.length / 3;
   const corners = [
@@ -13963,10 +24576,51 @@ function buildRoads(graph, ctx, resolutions) {
       const stations = surfacePts === pts ? cum : cumulative(surfacePts).map((c) => c + startTrimApplied);
       profile = elevation.profileFor(r, stations).map((e) => e + yBase);
     }
-    const surfElev = surfaceElevSampler(pts, trueProfile, elevated);
-    const layerProfile = (line, layerY) => elevated ? line.map((p) => surfElev(p) + layerY) : layerY;
-    const surface = ribbonGeometry(left, right, profile);
-    if (isPath) planarUvXZ(surface);
+    const crownOn = CROSS_SECTION.enabled && !isPath;
+    const rideLayers = elevated || crownOn;
+    const lenPts = polylineLength(pts);
+    const bankArr = crownOn ? bankProfile(pts) : [];
+    const bankAt = (station) => {
+      if (!crownOn || bankArr.length === 0) return 0;
+      let i = 1;
+      while (i < cum.length && cum[i] < station) i++;
+      const i0 = Math.max(0, i - 1);
+      const i1 = Math.min(i, cum.length - 1);
+      const span = cum[i1] - cum[i0] || 1;
+      const t = Math.max(0, Math.min(1, (station - cum[i0]) / span));
+      return bankArr[i0] + (bankArr[i1] - bankArr[i0]) * t;
+    };
+    const fadeAt = (station) => crownOn ? crossFade(station, lenPts) : 0;
+    const surfElev = surfaceElevSampler(pts, trueProfile, elevated, crownOn ? { half, bankAt, fadeAt } : null);
+    const layerProfile = (line, layerY) => rideLayers ? line.map((p) => surfElev(p) + layerY) : layerY;
+    const isPlaza = r.roadClass === "pedestrian" && !elevated;
+    const pathFloor = TERRAIN.waterSurfaceY + 0.06;
+    const groundAt = isPath ? left.map((_, i) => Math.max(sampleTerrain(surfacePts[i].x, surfacePts[i].z), pathFloor)) : null;
+    let surface;
+    if (isPlaza) {
+      surface = raisedRibbonGeometry(left, right, PLAZA_CURB_H, groundAt ?? 0);
+    } else if (isPath) {
+      surface = ribbonGeometry(left, right, groundAt.map((g) => g + Y_PATH));
+      planarUvXZ(surface);
+    } else if (crownOn) {
+      const surfCum = cumulative(surfacePts);
+      const fades = surfCum.map((c) => fadeAt(startTrimApplied + c));
+      const banks = surfCum.map((c) => bankAt(startTrimApplied + c));
+      surface = crownedRibbonGeometry(left, right, profile, half, fades, banks);
+      const vc = surface.getAttribute("position").count;
+      surface.setAttribute("aWear", new THREE7.BufferAttribute(new Float32Array(vc).fill(1), 1));
+    } else {
+      surface = ribbonGeometry(left, right, profile);
+      const vc = surface.getAttribute("position").count;
+      const lane = new Float32Array(vc);
+      const wear = new Float32Array(vc);
+      for (let i = 0; i < vc; i++) {
+        lane[i] = i % 2 === 0 ? -1 : 1;
+        wear[i] = 1;
+      }
+      surface.setAttribute("aLane", new THREE7.BufferAttribute(lane, 1));
+      surface.setAttribute("aWear", new THREE7.BufferAttribute(wear, 1));
+    }
     const mesh2 = new THREE7.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ":uv")));
     mesh2.name = r.name ?? `${r.roadClass} road`;
     mesh2.userData.objectId = r.id;
@@ -14021,10 +24675,12 @@ function buildRoads(graph, ctx, resolutions) {
       const walkPts = trimPolyline(pts, startTrim, endTrim);
       if (walkPts && walkPts.length >= 2) {
         const base = layerProfile(walkPts, 0);
+        const foot = typeof base === "number" ? base - SIDEWALK_FOUNDATION : base.map((b) => b - SIDEWALK_FOUNDATION);
+        const slabH = res.crossSection.curbHeight + SIDEWALK_FOUNDATION;
         for (const side of [1, -1]) {
           const inner = offsetPolyline(walkPts, side * (half + 0.05));
           const outer = offsetPolyline(walkPts, side * (half + sw));
-          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, res.crossSection.curbHeight, base));
+          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, slabH, foot));
         }
       }
     }
@@ -14067,13 +24723,13 @@ function buildRoads(graph, ctx, resolutions) {
             for (let s = 0; s < stripes; s++) {
               const lateral = -((stripes - 1) / 2) * 1.6 + s * 1.6;
               const c = { x: endPt.x + inward.x * 1.6 + across.x * lateral, z: endPt.z + inward.z * 1.6 + across.z * lateral };
-              const cwY = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK;
+              const cwY = rideLayers ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK;
               pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 1.1, across, res.marking.crosswalk === "ladder" ? 0.3 : 0.4, cwY);
             }
             if (res.marking.crosswalk === "ladder") {
               for (const edge of [-1.3, 1.3]) {
                 const c = { x: endPt.x + inward.x * (1.6 + edge), z: endPt.z + inward.z * (1.6 + edge) };
-                const cwY = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK;
+                const cwY = rideLayers ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK;
                 pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.12, across, stripes * 1.6 / 2 + 0.4, cwY);
               }
             }
@@ -14084,7 +24740,7 @@ function buildRoads(graph, ctx, resolutions) {
                 x: endPt.x + inward.x * STOP_LINE_DIST + across.x * lat,
                 z: endPt.z + inward.z * STOP_LINE_DIST + across.z * lat
               };
-              const y = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK;
+              const y = rideLayers ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK;
               pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.3, across, halfWid, y);
             }
           }
@@ -14102,7 +24758,7 @@ function buildRoads(graph, ctx, resolutions) {
             const s = 0.9 + hash01(`${r.id}:ds${i}`) * 1.4;
             if (!decalPlanner.tryPlace(c, s)) continue;
             const q3 = decalQuads[kind];
-            const decalY = elevated ? surfElev(c) + Y_DECAL : Y_DECAL;
+            const decalY = rideLayers ? surfElev(c) + Y_DECAL : Y_DECAL;
             pushQuad(q3.pos, q3.idx, c, dir, s, across, s, decalY, q3.uv);
           }
         }
@@ -14118,7 +24774,7 @@ function buildRoads(graph, ctx, resolutions) {
         for (let i = 0; i < n; i++) {
           const off = half - (i + 0.5) * lw;
           const center = { x: p.x + w.x * off, z: p.z + w.z * off };
-          const y = elevated ? surfElev(center) + Y_MARK : Y_MARK;
+          const y = rideLayers ? surfElev(center) + Y_MARK : Y_MARK;
           pushTurnArrow(whiteQuads, center, dir, w, r.turnLanes[i], y);
         }
       }
@@ -14126,21 +24782,73 @@ function buildRoads(graph, ctx, resolutions) {
   }
   const discGeoms = [];
   const keptDiscs = [];
+  const clusterArms = /* @__PURE__ */ new Map();
+  if (consolidate) {
+    for (const r of graph.roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
+      if (elevation.isInternal(r.id)) continue;
+      const h = r.widthM / 2;
+      const ends = [
+        [r.points[0], r.points[1]],
+        [r.points[r.points.length - 1], r.points[r.points.length - 2]]
+      ];
+      for (const [p, q3] of ends) {
+        const c = elevation.clusterOf(nodeKey(p));
+        if (!c) continue;
+        const l = Math.hypot(q3.x - p.x, q3.z - p.z) || 1;
+        let a = clusterArms.get(c);
+        if (!a) clusterArms.set(c, a = []);
+        a.push({ p, d: { x: (q3.x - p.x) / l, z: (q3.z - p.z) / l }, h });
+      }
+    }
+  }
   for (const [canonical, discs] of [...clusterDiscs.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)) {
     if (discs.length < 2) continue;
     const zc = elevation.nodeElevation(canonical);
-    let mp;
-    try {
-      const polys = discs.map((d) => [circleRing(d)]);
-      mp = polygonClipping2.union(polys[0], ...polys.slice(1));
-    } catch {
-      mp = discs.map((d) => [circleRing(d)]);
+    let padded = false;
+    const arms = clusterArms.get(canonical);
+    if (arms && arms.length >= 2) {
+      const maxW = Math.max(...discs.map((d) => d.rad)) / 0.58;
+      let ring = armUnionRing(discs[0], arms, (a) => a.h * 1.16 + 1.5, JUNCTION_FLARE);
+      if (ring.length >= 3) {
+        ring = roundPolygon(ring, junctionFilletR(maxW));
+        const g = junctionPatchGeometry([ring.map((p) => [p.x, p.z])], zc + Y_DISC);
+        if (g) {
+          discGeoms.push(g);
+          padded = true;
+        }
+      }
     }
-    for (const poly of mp) {
-      const g = junctionPatchGeometry(poly, zc + Y_DISC);
-      if (g) discGeoms.push(g);
+    if (!padded) {
+      let mp;
+      try {
+        const polys = discs.map((d) => [circleRing(d)]);
+        mp = polygonClipping2.union(polys[0], ...polys.slice(1));
+      } catch {
+        mp = discs.map((d) => [circleRing(d)]);
+      }
+      for (const poly of mp) {
+        const g = junctionPatchGeometry(poly, zc + Y_DISC);
+        if (g) discGeoms.push(g);
+      }
     }
     for (const d of discs) keptDiscs.push({ x: d.x, z: d.z, rad: d.rad, elev: zc });
+  }
+  const armsAt = /* @__PURE__ */ new Map();
+  for (const r of graph.roads) {
+    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
+    const h = r.widthM / 2;
+    const ends = [
+      [r.points[0], r.points[1]],
+      [r.points[r.points.length - 1], r.points[r.points.length - 2]]
+    ];
+    for (const [p, q3] of ends) {
+      const l = Math.hypot(q3.x - p.x, q3.z - p.z) || 1;
+      const key = nodeKey(p);
+      let a = armsAt.get(key);
+      if (!a) armsAt.set(key, a = []);
+      a.push({ d: { x: (q3.x - p.x) / l, z: (q3.z - p.z) / l }, h });
+    }
   }
   const junctionNodes = [...nodeUse.entries()].filter(([k, info]) => info.count >= 2 && !elevation.clusterOf(k) && !passThrough.has(k)).map(([k, info]) => ({ k, info, rad: discRadius(info.maxWidth) })).sort((a, b) => b.rad - a.rad || (a.k < b.k ? -1 : 1));
   for (const { k, info, rad } of junctionNodes) {
@@ -14150,11 +24858,27 @@ function buildRoads(graph, ctx, resolutions) {
     );
     if (!contained) {
       keptDiscs.push({ x: info.p.x, z: info.p.z, rad, elev: nodeElev });
-      const seg = Math.max(10, Math.min(24, Math.round(rad * 3)));
-      const g = new THREE7.CircleGeometry(rad, seg);
-      g.rotateX(-Math.PI / 2);
-      g.translate(info.p.x, nodeElev + Y_DISC, info.p.z);
-      discGeoms.push(planarUvXZ(nonIndexedToIndexed(g)));
+      const arms = armsAt.get(k);
+      let g = null;
+      if (arms && arms.length >= 2) {
+        let ring;
+        if (consolidate) {
+          const reach = junctionRadius(info.p) * 0.72 + 0.8;
+          ring = armUnionRing(info.p, arms, () => reach, JUNCTION_FLARE);
+          if (ring.length >= 3) ring = roundPolygon(ring, junctionFilletR(info.maxWidth));
+        } else {
+          ring = junctionArmHull(info.p, arms, junctionRadius(info.p) * 0.72 - 0.6, 1);
+        }
+        if (ring.length >= 3) g = junctionPatchGeometry([ring.map((p) => [p.x, p.z])], nodeElev + Y_DISC);
+      }
+      if (!g) {
+        const seg = Math.max(10, Math.min(24, Math.round(rad * 3)));
+        const cg = new THREE7.CircleGeometry(rad, seg);
+        cg.rotateX(-Math.PI / 2);
+        cg.translate(info.p.x, nodeElev + Y_DISC, info.p.z);
+        g = planarUvXZ(nonIndexedToIndexed(cg));
+      }
+      discGeoms.push(g);
     }
     if (info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ":mh") > 0.45) {
       const off = (hash01(k + ":mo") - 0.5) * rad;
@@ -14330,11 +25054,15 @@ function pushTurnArrow(buf, c, u, w, turn, y) {
   const br = { x: c.x + h.x * 0.45 - hp.x * 0.42, z: c.z + h.z * 0.45 - hp.z * 0.42 };
   pushTri(buf.pos, buf.idx, tip, bl, br, y);
 }
-function surfaceElevSampler(pts, profile, elevated) {
-  if (!elevated || pts.length < 2) return () => 0;
+function surfaceElevSampler(pts, profile, elevated, crown = null) {
+  if (!elevated && !crown || pts.length < 2) return () => 0;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
   return (q3) => {
     let best = Infinity;
     let bestElev = 0;
+    let bestStation = 0;
+    let bestPerp = 0;
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1].x;
       const az = pts[i - 1].z;
@@ -14350,15 +25078,133 @@ function surfaceElevSampler(pts, profile, elevated) {
         best = d22;
         const e0 = profile[i - 1];
         const e1 = profile[Math.min(i, profile.length - 1)];
-        bestElev = e0 + (e1 - e0) * t;
+        bestElev = elevated ? e0 + (e1 - e0) * t : 0;
+        if (crown) {
+          const segLen3 = Math.sqrt(segLen2);
+          bestStation = cum[i - 1] + t * segLen3;
+          bestPerp = ((q3.x - px) * -dz + (q3.z - pz) * dx) / segLen3;
+        }
       }
     }
-    return bestElev;
+    if (!crown) return bestElev;
+    const ln = Math.max(-1, Math.min(1, bestPerp / crown.half));
+    return bestElev + crown.fadeAt(bestStation) * crossOffset(ln, crown.half, crown.bankAt(bestStation));
   };
 }
 function nearestIndex(cum, d) {
   for (let i = 0; i < cum.length; i++) if (cum[i] >= d) return i;
   return cum.length - 1;
+}
+function armUnionRing(center, arms, reachFor, flare) {
+  const rects = [];
+  for (const a of arms) {
+    const o = a.p ?? center;
+    const perp = { x: a.d.z, z: -a.d.x };
+    const h = a.h * flare;
+    const back = a.h + 1.5;
+    const reach = reachFor(a);
+    const bx = o.x - a.d.x * back, bz = o.z - a.d.z * back;
+    const fx = o.x + a.d.x * reach, fz = o.z + a.d.z * reach;
+    rects.push([
+      [bx + perp.x * h, bz + perp.z * h],
+      [fx + perp.x * h, fz + perp.z * h],
+      [fx - perp.x * h, fz - perp.z * h],
+      [bx - perp.x * h, bz - perp.z * h],
+      [bx + perp.x * h, bz + perp.z * h]
+    ]);
+  }
+  for (const rect of armCornerFills(center, arms, reachFor, flare)) rects.push(rect);
+  if (rects.length < 1) return [];
+  let merged;
+  try {
+    const polys = rects.map((r) => [r]);
+    merged = polygonClipping2.union(polys[0], ...polys.slice(1));
+  } catch {
+    return [];
+  }
+  let best = [];
+  let bestA = 0;
+  for (const poly of merged) {
+    const ring = poly[0];
+    if (!ring || ring.length < 4) continue;
+    const v = ring.map(([x, z]) => ({ x, z }));
+    if (v.length > 1 && Math.hypot(v[0].x - v[v.length - 1].x, v[0].z - v[v.length - 1].z) < 1e-6) v.pop();
+    const a = ringAreaM2(v);
+    if (a > bestA) {
+      bestA = a;
+      best = v;
+    }
+  }
+  return best;
+}
+function armCornerFills(center, arms, reachFor, flare) {
+  if (arms.length < 2) return [];
+  const sorted = [...arms].sort((p, q3) => Math.atan2(p.d.z, p.d.x) - Math.atan2(q3.d.z, q3.d.x));
+  const fills = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const A = sorted[i];
+    const B = sorted[(i + 1) % sorted.length];
+    const dot = Math.max(-1, Math.min(1, A.d.x * B.d.x + A.d.z * B.d.z));
+    const theta = Math.acos(dot);
+    if (theta < 0.44 || theta > 2.7) continue;
+    const oA = A.p ?? center;
+    const oB = B.p ?? center;
+    const perpA = { x: A.d.z, z: -A.d.x };
+    const perpB = { x: B.d.z, z: -B.d.x };
+    const sideA = perpA.x * B.d.x + perpA.z * B.d.z >= 0 ? 1 : -1;
+    const sideB = perpB.x * A.d.x + perpB.z * A.d.z >= 0 ? 1 : -1;
+    const hA = A.h * flare;
+    const hB = B.h * flare;
+    const reachA = reachFor(A);
+    const reachB = reachFor(B);
+    const eAx = oA.x + perpA.x * sideA * hA, eAz = oA.z + perpA.z * sideA * hA;
+    const eBx = oB.x + perpB.x * sideB * hB, eBz = oB.z + perpB.z * sideB * hB;
+    const mA = [eAx + A.d.x * reachA, eAz + A.d.z * reachA];
+    const mB = [eBx + B.d.x * reachB, eBz + B.d.z * reachB];
+    const den = A.d.x * -B.d.z - A.d.z * -B.d.x;
+    let apex;
+    const maxOut = Math.max(reachA, reachB) * 1.9;
+    if (Math.abs(den) > 1e-4) {
+      const t = ((eBx - eAx) * -B.d.z - (eBz - eAz) * -B.d.x) / den;
+      apex = [eAx + A.d.x * t, eAz + A.d.z * t];
+      if (t < 0 || Math.hypot(apex[0] - oA.x, apex[1] - oA.z) > maxOut) apex = [(mA[0] + mB[0]) / 2, (mA[1] + mB[1]) / 2];
+    } else {
+      apex = [(mA[0] + mB[0]) / 2, (mA[1] + mB[1]) / 2];
+    }
+    const ring = [[oA.x, oA.z], mA, apex, mB, [oB.x, oB.z], [oA.x, oA.z]];
+    fills.push(ring);
+  }
+  return fills;
+}
+function junctionArmHull(center, arms, setback, flare = 1) {
+  const pts = [center];
+  for (const a of arms) {
+    const perp = { x: a.d.z, z: -a.d.x };
+    const bx = center.x + a.d.x * setback;
+    const bz = center.z + a.d.z * setback;
+    pts.push({ x: bx + perp.x * a.h * flare, z: bz + perp.z * a.h * flare });
+    pts.push({ x: bx - perp.x * a.h * flare, z: bz - perp.z * a.h * flare });
+  }
+  return convexHull(pts);
+}
+function convexHull(points) {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.z - b.z);
+  if (pts.length < 3) return pts;
+  const cross = (o, a, b) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
 }
 function circleRing(d) {
   const SEG = 24;
@@ -14538,31 +25384,47 @@ function buildRoofCap(fp, c, form, topY, res) {
 }
 function buildProceduralBuilding(b, res, roofForm = "flat") {
   const c = footprintCentroid(b.footprint);
+  const gy = sampleTerrain(c.x, c.z);
   const geo = extrudeFootprint(b.footprint, c, b.heightM + BASE_SINK, -BASE_SINK, 1, false);
   const mesh2 = new THREE8.Mesh(geo, [
     roofMaterial(res.roof),
     facadeMaterial(res.facade, res.tint, res.uvSeed)
   ]);
-  mesh2.position.set(c.x, 0, c.z);
+  mesh2.position.set(c.x, gy, c.z);
   mesh2.name = b.name ?? "Building";
   mesh2.userData.objectId = b.id;
   mesh2.castShadow = true;
   mesh2.receiveShadow = true;
   const cap = buildRoofCap(b.footprint, c, roofForm, b.heightM, res);
-  if (!cap) return mesh2;
+  const cornice = roofForm === "flat" ? buildCornice(b.footprint, c, b.heightM, res) : null;
+  const extras = [cap, cornice].filter((x) => x !== null);
+  if (extras.length === 0) return mesh2;
   const group = new THREE8.Group();
   group.name = mesh2.name;
   group.userData.objectId = b.id;
-  group.position.set(c.x, 0, c.z);
+  group.position.set(c.x, gy, c.z);
   mesh2.position.set(0, 0, 0);
-  group.add(mesh2, cap);
+  group.add(mesh2, ...extras);
   return group;
+}
+function buildCornice(fp, c, topY, res) {
+  const ext = footprintExtent(fp);
+  const r = Math.max(ext.maxX - ext.minX, ext.maxZ - ext.minZ) / 2;
+  if (r < 3) return null;
+  const overhang = 0.4;
+  const scale = Math.min(1.06, Math.max(1.01, 1 + overhang / r));
+  const band = 0.7;
+  const geo = extrudeFootprint(fp, c, band, topY - band / 2, scale, false);
+  const mesh2 = new THREE8.Mesh(geo, roofMaterial(res.roof));
+  mesh2.castShadow = true;
+  mesh2.receiveShadow = true;
+  return mesh2;
 }
 function buildEnhancedBuilding(b, res) {
   const c = footprintCentroid(b.footprint);
   const rand = (salt) => hash01(b.id + ":gen:" + salt);
   const group = new THREE8.Group();
-  group.position.set(c.x, 0, c.z);
+  group.position.set(c.x, sampleTerrain(c.x, c.z), c.z);
   group.name = `${b.name ?? "Building"} (generated)`;
   const wall = facadeMaterial(res.facade, res.tint, [rand("u"), rand("v")]);
   const wallUpper = facadeMaterial(res.facade, res.tint, [rand("u2"), rand("v2")]);
@@ -14621,18 +25483,21 @@ function fitToSlot(model, b) {
   const slotExtent = Math.max(maxX - minX, maxZ - minZ);
   const bbox = new THREE8.Box3().setFromObject(model);
   const size = bbox.getSize(new THREE8.Vector3());
+  if (![size.x, size.y, size.z].every((v) => Number.isFinite(v) && v > 1e-3)) return null;
   const modelExtent = Math.max(size.x, size.z) || 1;
-  const scale = slotExtent / modelExtent;
+  const scaleXZ = slotExtent / modelExtent;
+  const targetH = b.heightM > 1 ? b.heightM : size.y * scaleXZ;
+  const ratio = Math.min(Math.max(targetH / size.y / scaleXZ, 0.4), 3);
+  const scaleY = scaleXZ * ratio;
   const center = bbox.getCenter(new THREE8.Vector3());
   const wrapper = new THREE8.Group();
-  model.position.sub(center);
-  model.position.y += size.y / 2 - (center.y - bbox.min.y) + (bbox.min.y - center.y);
+  model.position.set(-center.x, -center.y, -center.z);
   const inner = new THREE8.Group();
   inner.add(model);
-  inner.scale.setScalar(scale);
+  inner.scale.set(scaleXZ, scaleY, scaleXZ);
   wrapper.add(inner);
   const after = new THREE8.Box3().setFromObject(wrapper);
-  wrapper.position.set(c.x, -after.min.y - BASE_SINK, c.z);
+  wrapper.position.set(c.x, sampleTerrain(c.x, c.z) - after.min.y - BASE_SINK, c.z);
   wrapper.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
@@ -14643,18 +25508,59 @@ function fitToSlot(model, b) {
 }
 
 // src/procgen/areas.ts
-import * as THREE9 from "three";
+import * as THREE10 from "three";
 import polygonClipping3 from "polygon-clipping";
+
+// src/procgen/terrain/mesh.ts
+import * as THREE9 from "three";
+function terrainGridGeometry(bounds, cell = TERRAIN.cell) {
+  const w = bounds.maxX - bounds.minX;
+  const d = bounds.maxZ - bounds.minZ;
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minZ + bounds.maxZ) / 2;
+  const c = Math.max(6, Math.ceil(Math.max(w, d) / 380));
+  const cols = Math.max(1, Math.round(w / c));
+  const rows = Math.max(1, Math.round(d / c));
+  const geo = new THREE9.PlaneGeometry(w, d, cols, rows).rotateX(-Math.PI / 2);
+  geo.translate(cx, 0, cz);
+  const pos = geo.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, sampleTerrain(pos.getX(i), pos.getZ(i)));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// src/procgen/areas.ts
 var AREA_STYLE = {
-  grass: { y: 0.022, mat: new THREE9.MeshStandardMaterial({ color: "#5d7050", roughness: 1 }) },
-  park: { y: 0.032, mat: new THREE9.MeshStandardMaterial({ color: "#55684a", roughness: 1 }) },
-  sand: { y: 0.037, mat: new THREE9.MeshStandardMaterial({ color: "#c2b280", roughness: 1 }) },
-  forest: { y: 0.042, mat: new THREE9.MeshStandardMaterial({ color: "#48583f", roughness: 1 }) }
+  grass: { y: 0.022, mat: new THREE10.MeshStandardMaterial({ color: "#5d7050", roughness: 1 }) },
+  park: { y: 0.032, mat: new THREE10.MeshStandardMaterial({ color: "#55684a", roughness: 1 }) },
+  sand: { y: 0.037, mat: new THREE10.MeshStandardMaterial({ color: "#c2b280", roughness: 1 }) },
+  forest: { y: 0.042, mat: new THREE10.MeshStandardMaterial({ color: "#48583f", roughness: 1 }) }
 };
-var GROUND_MAT = new THREE9.MeshStandardMaterial({ color: "#4d5545", roughness: 1 });
+var GROUND_MAT = new THREE10.MeshStandardMaterial({ color: "#4d5545", roughness: 1 });
+var landTexturesApplied = false;
+function applyLandTextures() {
+  if (landTexturesApplied) return;
+  landTexturesApplied = true;
+  const tex = generateLandTextures();
+  const attach = (mat, t, tileM) => {
+    mat.map = t.albedo;
+    mat.normalMap = t.normal;
+    mat.color.set("#ffffff");
+    for (const m of [t.albedo, t.normal]) m.repeat.set(1 / tileM, 1 / tileM);
+    mat.needsUpdate = true;
+  };
+  attach(AREA_STYLE.grass.mat, tex.grass, 8);
+  attach(AREA_STYLE.park.mat, tex.park, 8);
+  attach(AREA_STYLE.forest.mat, tex.forest, 8);
+  attach(AREA_STYLE.sand.mat, tex.sand, 7);
+  attach(GROUND_MAT, tex.ground, 9);
+}
 var OCEAN_UNIFORMS = { uTime: { value: 0 } };
 function makeOceanMaterial() {
-  const m = new THREE9.MeshStandardMaterial({ color: "#1e4d68", roughness: 0.18, metalness: 0 });
+  const m = new THREE10.MeshStandardMaterial({ color: "#1e4d68", roughness: 0.18, metalness: 0 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = OCEAN_UNIFORMS.uTime;
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vOceanWPos;").replace(
@@ -14679,7 +25585,7 @@ function makeOceanMaterial() {
   return m;
 }
 var WATER_MAT = makeOceanMaterial();
-var BANK_MAT = new THREE9.MeshStandardMaterial({ color: "#6b6353", roughness: 1, side: THREE9.DoubleSide });
+var BANK_MAT = new THREE10.MeshStandardMaterial({ color: "#6b6353", roughness: 1, side: THREE10.DoubleSide });
 var WATER_DEPTH = 0.35;
 var WATER_PAINT_Y = 0.012;
 var toClipPoly = (ring, holes = []) => [
@@ -14718,7 +25624,8 @@ function buildAreas(areas) {
   }
   const out = [];
   for (const [kind, geoms] of byKind) {
-    const mesh2 = new THREE9.Mesh(mergeGeometries(geoms), AREA_STYLE[kind].mat);
+    const geo = conformToTerrain(mergeGeometries(geoms));
+    const mesh2 = new THREE10.Mesh(geo, AREA_STYLE[kind].mat);
     mesh2.name = kind === "park" ? "Parks" : kind === "grass" ? "Grass" : kind === "sand" ? "Sand & beaches" : "Forest floor";
     mesh2.receiveShadow = true;
     out.push({ kind, mesh: mesh2 });
@@ -14755,21 +25662,39 @@ function waterRings(waterAreas, bounds) {
   return { carved: kept.map((h) => ({ ring: h.ring, holes: h.holes })), painted };
 }
 function buildTerrain(waterAreas, bounds) {
+  return isTerrainEnabled() ? buildTerrainRelief(waterAreas, bounds) : buildTerrainFlat(waterAreas, bounds);
+}
+function buildTerrainRelief(waterAreas, bounds) {
+  const { carved, painted } = waterRings(waterAreas, bounds);
+  const ground = buildGroundGrid(bounds);
+  ground.name = "Ground";
+  const surfaces = [...carved, ...painted].map((w) => holedFlatGeometry(w.ring, w.holes, TERRAIN.waterSurfaceY));
+  let water = null;
+  if (surfaces.length) {
+    water = new THREE10.Group();
+    water.name = "Water";
+    const m = new THREE10.Mesh(mergeGeometries(surfaces), WATER_MAT);
+    m.receiveShadow = true;
+    water.add(m);
+  }
+  return { ground, water, carvedCount: carved.length, paintedCount: painted.length };
+}
+function buildTerrainFlat(waterAreas, bounds) {
   const { carved, painted } = waterRings(waterAreas, bounds);
   const paintGeoms = painted.map((p) => holedFlatGeometry(p.ring, p.holes, WATER_PAINT_Y));
-  const groundShape = new THREE9.Shape([
-    new THREE9.Vector2(bounds.minX, -bounds.minZ),
-    new THREE9.Vector2(bounds.maxX, -bounds.minZ),
-    new THREE9.Vector2(bounds.maxX, -bounds.maxZ),
-    new THREE9.Vector2(bounds.minX, -bounds.maxZ)
+  const groundShape = new THREE10.Shape([
+    new THREE10.Vector2(bounds.minX, -bounds.minZ),
+    new THREE10.Vector2(bounds.maxX, -bounds.minZ),
+    new THREE10.Vector2(bounds.maxX, -bounds.maxZ),
+    new THREE10.Vector2(bounds.minX, -bounds.maxZ)
   ]);
   for (const c of carved) {
-    groundShape.holes.push(new THREE9.Path(c.ring.map((p) => new THREE9.Vector2(p.x, -p.z))));
+    groundShape.holes.push(new THREE10.Path(c.ring.map((p) => new THREE10.Vector2(p.x, -p.z))));
   }
-  const groundGeo = indexed(new THREE9.ShapeGeometry(groundShape).rotateX(-Math.PI / 2));
+  const groundGeo = indexed(new THREE10.ShapeGeometry(groundShape).rotateX(-Math.PI / 2));
   const islandGeoms = [];
   for (const c of carved) for (const h of c.holes) islandGeoms.push(flatRingGeometry(h, 0));
-  const ground = new THREE9.Mesh(
+  const ground = new THREE10.Mesh(
     islandGeoms.length ? mergeGeometries([groundGeo, ...islandGeoms]) : groundGeo,
     GROUND_MAT
   );
@@ -14784,21 +25709,48 @@ function buildTerrain(waterAreas, bounds) {
   }
   let water = null;
   if (waterGeoms.length || paintGeoms.length) {
-    water = new THREE9.Group();
+    water = new THREE10.Group();
     water.name = "Water";
     if (waterGeoms.length) {
-      const m = new THREE9.Mesh(mergeGeometries(waterGeoms), WATER_MAT);
+      const m = new THREE10.Mesh(mergeGeometries(waterGeoms), WATER_MAT);
       m.receiveShadow = true;
       water.add(m);
     }
-    if (bankGeoms.length) water.add(new THREE9.Mesh(mergeGeometries(bankGeoms), BANK_MAT));
+    if (bankGeoms.length) water.add(new THREE10.Mesh(mergeGeometries(bankGeoms), BANK_MAT));
     if (paintGeoms.length) {
-      const m = new THREE9.Mesh(mergeGeometries(paintGeoms), WATER_MAT);
+      const m = new THREE10.Mesh(mergeGeometries(paintGeoms), WATER_MAT);
       m.receiveShadow = true;
       water.add(m);
     }
   }
   return { ground, water, carvedCount: carved.length, paintedCount: painted.length };
+}
+function isWaterAt(p, waterAreas) {
+  return waterAreas.some(
+    (a) => a.kind === "water" && a.render && pointInRing(p, a.ring) && !(a.holes ?? []).some((h) => pointInRing(p, h))
+  );
+}
+function footprintWaterFraction(footprint, waterAreas) {
+  if (!footprint.length) return 0;
+  let over = 0;
+  for (const p of footprint) if (isWaterAt(p, waterAreas)) over++;
+  return over / footprint.length;
+}
+var PIER_MAT = new THREE10.MeshStandardMaterial({ color: "#6c6e72", roughness: 0.92, side: THREE10.DoubleSide });
+var PIER_DROP = 3;
+function pierGeometry(footprint, gradeY) {
+  const cap = flatRingGeometry(footprint, gradeY);
+  const skirt = wallGeometry([...footprint, footprint[0]], gradeY, gradeY - PIER_DROP);
+  return mergeGeometries([cap, skirt]);
+}
+function buildPiers(footprints, gradeY) {
+  const geoms = footprints.filter((f) => f.length >= 3).map((f) => pierGeometry(f, gradeY));
+  if (!geoms.length) return null;
+  const mesh2 = new THREE10.Mesh(mergeGeometries(geoms), PIER_MAT);
+  mesh2.name = "Piers";
+  mesh2.receiveShadow = true;
+  mesh2.castShadow = true;
+  return mesh2;
 }
 function ringBBox(ring) {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -14811,25 +25763,25 @@ function ringBBox(ring) {
   return { minX, maxX, minZ, maxZ };
 }
 function flatRingGeometry(ring, y) {
-  const pts = ring.map((p) => new THREE9.Vector2(p.x, -p.z));
-  if (THREE9.ShapeUtils.isClockWise(pts)) pts.reverse();
-  const geo = new THREE9.ShapeGeometry(new THREE9.Shape(pts));
+  const pts = ring.map((p) => new THREE10.Vector2(p.x, -p.z));
+  if (THREE10.ShapeUtils.isClockWise(pts)) pts.reverse();
+  const geo = new THREE10.ShapeGeometry(new THREE10.Shape(pts));
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, y, 0);
   return indexed(geo);
 }
 function holedFlatGeometry(ring, holes, y) {
   if (!holes.length) return flatRingGeometry(ring, y);
-  const outer = ring.map((p) => new THREE9.Vector2(p.x, -p.z));
-  if (THREE9.ShapeUtils.isClockWise(outer)) outer.reverse();
-  const shape = new THREE9.Shape(outer);
+  const outer = ring.map((p) => new THREE10.Vector2(p.x, -p.z));
+  if (THREE10.ShapeUtils.isClockWise(outer)) outer.reverse();
+  const shape = new THREE10.Shape(outer);
   for (const h of holes) {
     if (h.length < 3) continue;
-    const hp = h.map((p) => new THREE9.Vector2(p.x, -p.z));
-    if (!THREE9.ShapeUtils.isClockWise(hp)) hp.reverse();
-    shape.holes.push(new THREE9.Path(hp));
+    const hp = h.map((p) => new THREE10.Vector2(p.x, -p.z));
+    if (!THREE10.ShapeUtils.isClockWise(hp)) hp.reverse();
+    shape.holes.push(new THREE10.Path(hp));
   }
-  const geo = new THREE9.ShapeGeometry(shape);
+  const geo = new THREE10.ShapeGeometry(shape);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, y, 0);
   return indexed(geo);
@@ -14839,12 +25791,26 @@ function indexed(g) {
   const count = g.getAttribute("position").count;
   const idx = new Uint32Array(count);
   for (let i = 0; i < count; i++) idx[i] = i;
-  g.setIndex(new THREE9.BufferAttribute(idx, 1));
+  g.setIndex(new THREE10.BufferAttribute(idx, 1));
   return g;
+}
+function conformToTerrain(geo) {
+  const pos = geo.getAttribute("position");
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, pos.getY(i) + sampleTerrain(pos.getX(i), pos.getZ(i)));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+function buildGroundGrid(bounds) {
+  const mesh2 = new THREE10.Mesh(terrainGridGeometry(bounds), GROUND_MAT);
+  mesh2.receiveShadow = true;
+  return mesh2;
 }
 
 // src/procgen/props.ts
-import * as THREE10 from "three";
+import * as THREE11 from "three";
 
 // src/procgen/signMath.ts
 function nearestRoadInfo(pos, roads, includePaths = false) {
@@ -14935,25 +25901,25 @@ function effectiveSpeed(road, _region) {
 
 // src/procgen/props.ts
 function buildTrafficSignal(p) {
-  const g = new THREE10.Group();
+  const g = new THREE11.Group();
   g.name = "Traffic signal";
   g.userData.objectId = p.id;
-  g.position.set(p.position.x, 0, p.position.z);
-  const pole = new THREE10.Mesh(new THREE10.CylinderGeometry(0.09, 0.11, 4.6, 8), mats.signalPole);
+  g.position.set(p.position.x, sampleTerrain(p.position.x, p.position.z), p.position.z);
+  const pole = new THREE11.Mesh(new THREE11.CylinderGeometry(0.09, 0.11, 4.6, 8), mats.signalPole);
   pole.position.y = 2.3;
   pole.castShadow = true;
   g.add(pole);
-  const head = new THREE10.Mesh(new THREE10.BoxGeometry(0.34, 1, 0.26), mats.signalHead);
+  const head = new THREE11.Mesh(new THREE11.BoxGeometry(0.34, 1, 0.26), mats.signalHead);
   head.position.set(0, 4.4, 0.14);
   g.add(head);
-  const lampGeo = new THREE10.SphereGeometry(0.09, 10, 8);
+  const lampGeo = new THREE11.SphereGeometry(0.09, 10, 8);
   const lamps = [
     [mats.signalRed, 0.3],
     [mats.signalAmber, 0],
     [mats.signalGreen, -0.3]
   ];
   for (const [mat, dy] of lamps) {
-    const lamp = new THREE10.Mesh(lampGeo, mat);
+    const lamp = new THREE11.Mesh(lampGeo, mat);
     lamp.position.set(0, 4.4 + dy, 0.28);
     g.add(lamp);
   }
@@ -14961,28 +25927,29 @@ function buildTrafficSignal(p) {
 }
 function speciesGeometry() {
   return {
-    broadleaf: { trunk: new THREE10.CylinderGeometry(0.12, 0.18, 1, 6), canopy: new THREE10.IcosahedronGeometry(1, 1), canopyColor: "#4d7038", trunkH: 2.6 },
-    columnar: { trunk: new THREE10.CylinderGeometry(0.1, 0.14, 1, 6), canopy: new THREE10.ConeGeometry(0.75, 3.4, 8), canopyColor: "#3c5a33", trunkH: 1.1 },
-    conifer: { trunk: new THREE10.CylinderGeometry(0.1, 0.16, 1, 6), canopy: new THREE10.ConeGeometry(1.15, 2.9, 8), canopyColor: "#38543a", trunkH: 1.6 },
-    palm: { trunk: new THREE10.CylinderGeometry(0.09, 0.13, 1, 6), canopy: new THREE10.SphereGeometry(1, 8, 5).scale(1.5, 0.42, 1.5), canopyColor: "#4f7a34", trunkH: 4.6 },
-    acacia: { trunk: new THREE10.CylinderGeometry(0.1, 0.15, 1, 6), canopy: new THREE10.SphereGeometry(1, 8, 5).scale(1.7, 0.55, 1.7), canopyColor: "#5c7540", trunkH: 3 }
+    broadleaf: { trunk: new THREE11.CylinderGeometry(0.12, 0.18, 1, 6), canopy: new THREE11.IcosahedronGeometry(1, 1), canopyColor: "#4d7038", trunkH: 2.6 },
+    columnar: { trunk: new THREE11.CylinderGeometry(0.1, 0.14, 1, 6), canopy: new THREE11.ConeGeometry(0.75, 3.4, 8), canopyColor: "#3c5a33", trunkH: 1.1 },
+    conifer: { trunk: new THREE11.CylinderGeometry(0.1, 0.16, 1, 6), canopy: new THREE11.ConeGeometry(1.15, 2.9, 8), canopyColor: "#38543a", trunkH: 1.6 },
+    palm: { trunk: new THREE11.CylinderGeometry(0.09, 0.13, 1, 6), canopy: new THREE11.SphereGeometry(1, 8, 5).scale(1.5, 0.42, 1.5), canopyColor: "#4f7a34", trunkH: 4.6 },
+    acacia: { trunk: new THREE11.CylinderGeometry(0.1, 0.15, 1, 6), canopy: new THREE11.SphereGeometry(1, 8, 5).scale(1.7, 0.55, 1.7), canopyColor: "#5c7540", trunkH: 3 }
   };
 }
 function buildTrees(trees, ctx) {
-  const group = new THREE10.Group();
+  const group = new THREE11.Group();
   group.name = `Street trees (${trees.length})`;
   group.userData.objectId = "veg_trees";
   if (!trees.length) return group;
-  const tmpl = getTemplate("tree");
-  if (tmpl) {
-    const placements = trees.filter((t) => ctx.landCoverAt(t.position) !== "water").map((t) => ({
-      x: t.position.x,
-      z: t.position.z,
-      rotY: hash01(t.id) * Math.PI * 2,
-      scale: resolveTree(t.id, ctx).scale
-    }));
-    if (placements.length) group.add(...instanceTemplate(tmpl, placements, "veg_trees"));
-    group.userData.librarySource = tmpl.name;
+  const treePlacements = trees.filter((t) => ctx.landCoverAt(t.position) !== "water").map((t) => ({
+    seed: t.id,
+    x: t.position.x,
+    z: t.position.z,
+    rotY: hash01(t.id) * Math.PI * 2,
+    scale: resolveTree(t.id, ctx).scale
+  }));
+  const treeMeshes = instanceKindVaried("tree", treePlacements, "veg_trees");
+  if (treeMeshes) {
+    group.add(...treeMeshes);
+    group.userData.librarySource = "library trees";
     return group;
   }
   const geos = speciesGeometry();
@@ -14993,27 +25960,28 @@ function buildTrees(trees, ctx) {
     if (!bySpecies.has(res.species)) bySpecies.set(res.species, []);
     bySpecies.get(res.species).push({ t, scale: res.scale, tint: res.tint });
   }
-  const m = new THREE10.Matrix4();
-  const q3 = new THREE10.Quaternion();
-  const s = new THREE10.Vector3();
-  const v = new THREE10.Vector3();
-  const c = new THREE10.Color();
+  const m = new THREE11.Matrix4();
+  const q3 = new THREE11.Quaternion();
+  const s = new THREE11.Vector3();
+  const v = new THREE11.Vector3();
+  const c = new THREE11.Color();
   for (const [species, list2] of bySpecies) {
     const geo = geos[species];
-    const trunks = new THREE10.InstancedMesh(geo.trunk, mats.treeTrunk, list2.length);
-    const canopyMat = new THREE10.MeshStandardMaterial({ color: geo.canopyColor, roughness: 1 });
-    const canopies = new THREE10.InstancedMesh(geo.canopy, canopyMat, list2.length);
+    const trunks = new THREE11.InstancedMesh(geo.trunk, mats.treeTrunk, list2.length);
+    const canopyMat = new THREE11.MeshStandardMaterial({ color: geo.canopyColor, roughness: 1 });
+    const canopies = new THREE11.InstancedMesh(geo.canopy, canopyMat, list2.length);
     trunks.castShadow = true;
     canopies.castShadow = true;
     list2.forEach((e, i) => {
       const trunkH = geo.trunkH * e.scale;
       const cs = e.scale * (species === "broadleaf" ? 1.9 : 1.15);
+      const ty = sampleTerrain(e.t.position.x, e.t.position.z);
       s.set(e.scale, trunkH, e.scale);
-      v.set(e.t.position.x, trunkH / 2, e.t.position.z);
+      v.set(e.t.position.x, ty + trunkH / 2, e.t.position.z);
       m.compose(v, q3, s);
       trunks.setMatrixAt(i, m);
       s.set(cs, cs, cs);
-      v.set(e.t.position.x, trunkH + cs * (species === "columnar" || species === "conifer" ? 1.1 : 0.45), e.t.position.z);
+      v.set(e.t.position.x, ty + trunkH + cs * (species === "columnar" || species === "conifer" ? 1.1 : 0.45), e.t.position.z);
       m.compose(v, q3, s);
       canopies.setMatrixAt(i, m);
       c.set(geo.canopyColor).offsetHSL(e.tint * 0.03, e.tint * 0.06, e.tint * 0.045);
@@ -15022,6 +25990,8 @@ function buildTrees(trees, ctx) {
     trunks.instanceMatrix.needsUpdate = true;
     canopies.instanceMatrix.needsUpdate = true;
     if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
+    trunks.computeBoundingSphere();
+    canopies.computeBoundingSphere();
     trunks.userData.objectId = "veg_trees";
     canopies.userData.objectId = "veg_trees";
     group.add(trunks, canopies);
@@ -15031,19 +26001,19 @@ function buildTrees(trees, ctx) {
 var FURNITURE_ROADS = /* @__PURE__ */ new Set(["primary", "secondary", "tertiary", "residential", "unclassified", "living_street", "trunk"]);
 function lampGeometry(style) {
   const parts = [];
-  const pole = new THREE10.CylinderGeometry(0.07, 0.1, 7.4, 8);
+  const pole = new THREE11.CylinderGeometry(0.07, 0.1, 7.4, 8);
   pole.translate(0, 3.7, 0);
   parts.push(pole);
   if (style === "cobra") {
-    const arm = new THREE10.CylinderGeometry(0.05, 0.05, 2.2, 6);
+    const arm = new THREE11.CylinderGeometry(0.05, 0.05, 2.2, 6);
     arm.rotateZ(Math.PI / 2);
     arm.translate(1, 7.3, 0);
     parts.push(arm);
-    const head = new THREE10.BoxGeometry(0.85, 0.16, 0.3);
+    const head = new THREE11.BoxGeometry(0.85, 0.16, 0.3);
     head.translate(2, 7.28, 0);
     parts.push(head);
   } else {
-    const lantern = new THREE10.CylinderGeometry(0.16, 0.22, 0.55, 8);
+    const lantern = new THREE11.CylinderGeometry(0.16, 0.22, 0.55, 8);
     lantern.translate(0, 7.6, 0);
     parts.push(lantern);
   }
@@ -15051,30 +26021,30 @@ function lampGeometry(style) {
 }
 function benchGeometry() {
   const parts = [];
-  const seat = new THREE10.BoxGeometry(1.7, 0.07, 0.5);
+  const seat = new THREE11.BoxGeometry(1.7, 0.07, 0.5);
   seat.translate(0, 0.45, 0);
   parts.push(seat);
-  const back = new THREE10.BoxGeometry(1.7, 0.45, 0.06);
+  const back = new THREE11.BoxGeometry(1.7, 0.45, 0.06);
   back.translate(0, 0.75, -0.24);
   parts.push(back);
   for (const x of [-0.7, 0.7]) {
-    const leg = new THREE10.BoxGeometry(0.08, 0.45, 0.45);
+    const leg = new THREE11.BoxGeometry(0.08, 0.45, 0.45);
     leg.translate(x, 0.22, 0);
     parts.push(leg);
   }
   return mergeGeometries(parts);
 }
 function binGeometry() {
-  const g = new THREE10.CylinderGeometry(0.28, 0.24, 0.85, 10);
+  const g = new THREE11.CylinderGeometry(0.28, 0.24, 0.85, 10);
   g.translate(0, 0.42, 0);
   return g;
 }
 function signGeometry(shape) {
   const parts = [];
-  const pole = new THREE10.CylinderGeometry(0.045, 0.055, 2.6, 6);
+  const pole = new THREE11.CylinderGeometry(0.045, 0.055, 2.6, 6);
   pole.translate(0, 1.3, 0);
   parts.push(pole);
-  const plate = shape === "us-rect" ? new THREE10.BoxGeometry(0.6, 0.75, 0.04) : new THREE10.CylinderGeometry(0.38, 0.38, 0.04, 16).rotateX(Math.PI / 2);
+  const plate = shape === "us-rect" ? new THREE11.BoxGeometry(0.6, 0.75, 0.04) : new THREE11.CylinderGeometry(0.38, 0.38, 0.04, 16).rotateX(Math.PI / 2);
   plate.translate(0, 2.6, 0);
   parts.push(plate);
   return parts.length > 1 ? mergeGeometries(parts) : parts[0];
@@ -15129,7 +26099,7 @@ var CarriagewayIndex = class _CarriagewayIndex {
 };
 var furniturePlacements = { current: null };
 function buildFurniture(graph, ctx) {
-  const group = new THREE10.Group();
+  const group = new THREE11.Group();
   group.name = "Street furniture";
   const elevation = buildRoadElevation(graph.roads);
   const index = new CarriagewayIndex(graph.roads);
@@ -15137,13 +26107,18 @@ function buildFurniture(graph, ctx) {
     const e = elevation.profileFor(r, [station])[0] ?? 0;
     return Math.abs(e) > 1e-6 ? e : 0;
   };
+  const CURB_H = 0.22;
+  const sidewalkCurb = (r) => !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== "service" && r.roadClass !== "motorway" && !r.bridge ? CURB_H : 0;
+  const raiseAt = (r, station, at) => elevAt(r, station) - sampleTerrain(at.x, at.z);
   const placeOsm = (p, rotY) => {
     const near = nearestRoadInfo(p.position, graph.roads, true);
-    if (!near?.road || near.dist > near.road.widthM / 2 + 8) return { p: p.position, rotY, y: 0 };
+    if (!near?.road || near.dist > near.road.widthM / 2 + 8)
+      return { p: p.position, rotY, y: sampleTerrain(p.position.x, p.position.z) };
     const e = elevAt(near.road, near.station ?? 0);
-    if (!near.road.bridge && e < 0.5) return { p: p.position, rotY, y: e };
+    if (!near.road.bridge && raiseAt(near.road, near.station ?? 0, p.position) < 0.5)
+      return { p: p.position, rotY, y: e };
     const deck = nearestRoadInfo(p.position, graph.roads, false);
-    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || elevAt(deck.road, deck.station ?? 0) > 0.5)) {
+    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || raiseAt(deck.road, deck.station ?? 0, deck.point) > 0.5)) {
       const halfD = deck.road.widthM / 2;
       const yDeck = elevAt(deck.road, deck.station ?? 0);
       if (deck.dist > halfD - 0.55) {
@@ -15186,7 +26161,7 @@ function buildFurniture(graph, ctx) {
         const lp = { x: p.x + across.x * lampOff, z: p.z + across.z * lampOff };
         const clearOfRoads = onBridge ? !index.insideCarriageway(lp, 0.35, r.id) : !index.insideCarriageway(lp, 0.35);
         if ((onBridge || ctx.landCoverAt(lp) !== "water") && clearOfRoads && !nearExistingLamp(lp)) {
-          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) });
+          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) + sidewalkCurb(r) });
         }
         side = -side;
       }
@@ -15201,7 +26176,7 @@ function buildFurniture(graph, ctx) {
         const across = { x: -dir.z * side, z: dir.x * side };
         const bp = { x: p.x + across.x * (r.widthM / 2 + 1.6), z: p.z + across.z * (r.widthM / 2 + 1.6) };
         if (ctx.landCoverAt(bp) !== "water" && !index.insideCarriageway(bp, 0.3)) {
-          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) });
+          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) + sidewalkCurb(r) });
         }
       }
     }
@@ -15214,7 +26189,7 @@ function buildFurniture(graph, ctx) {
         const across = { x: -dir.z * side, z: dir.x * side };
         const bp = { x: p.x + across.x * (r.widthM / 2 + 0.9), z: p.z + across.z * (r.widthM / 2 + 0.9) };
         if (ctx.landCoverAt(bp) !== "water" && !index.insideCarriageway(bp, 0.3)) {
-          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) });
+          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) + sidewalkCurb(r) });
         }
       }
     }
@@ -15231,17 +26206,17 @@ function buildFurniture(graph, ctx) {
     }
   }
   const poleMat = mats.signalPole;
-  const woodMat = new THREE10.MeshStandardMaterial({ color: "#6b5138", roughness: 0.9 });
-  const binMat = new THREE10.MeshStandardMaterial({ color: "#3a4a3d", roughness: 0.8, metalness: 0.3 });
-  const signMat = new THREE10.MeshStandardMaterial({ color: "#c8cccf", roughness: 0.5, metalness: 0.4 });
+  const woodMat = new THREE11.MeshStandardMaterial({ color: "#6b5138", roughness: 0.9 });
+  const binMat = new THREE11.MeshStandardMaterial({ color: "#3a4a3d", roughness: 0.8, metalness: 0.3 });
+  const signMat = new THREE11.MeshStandardMaterial({ color: "#c8cccf", roughness: 0.5, metalness: 0.4 });
   const addInstanced = (geo, mat, list2, name) => {
     if (!list2.length) return;
-    const im = new THREE10.InstancedMesh(geo, mat, list2.length);
-    const m = new THREE10.Matrix4();
-    const q3 = new THREE10.Quaternion();
-    const up = new THREE10.Vector3(0, 1, 0);
-    const s = new THREE10.Vector3(1, 1, 1);
-    const v = new THREE10.Vector3();
+    const im = new THREE11.InstancedMesh(geo, mat, list2.length);
+    const m = new THREE11.Matrix4();
+    const q3 = new THREE11.Quaternion();
+    const up = new THREE11.Vector3(0, 1, 0);
+    const s = new THREE11.Vector3(1, 1, 1);
+    const v = new THREE11.Vector3();
     list2.forEach((e, i) => {
       q3.setFromAxisAngle(up, e.rotY);
       v.set(e.p.x, e.y ?? 0, e.p.z);
@@ -15249,6 +26224,7 @@ function buildFurniture(graph, ctx) {
       im.setMatrixAt(i, m);
     });
     im.instanceMatrix.needsUpdate = true;
+    im.computeBoundingSphere();
     im.castShadow = true;
     im.name = name;
     im.userData.objectId = "furn_all";
@@ -15256,13 +26232,19 @@ function buildFurniture(graph, ctx) {
   };
   const addKind = (kind, geo, mat, list2, name) => {
     if (!list2.length) return;
-    const tmpl = getTemplate(kind);
-    if (tmpl) {
-      const im = instanceTemplate(tmpl, list2.map((e) => ({ x: e.p.x, y: e.y, z: e.p.z, rotY: e.rotY })), "furn_all");
-      im.forEach((mesh2, i) => {
+    const placements = list2.map((e) => ({
+      seed: `${kind}:${e.p.x.toFixed(1)},${e.p.z.toFixed(1)}`,
+      x: e.p.x,
+      y: e.y,
+      z: e.p.z,
+      rotY: e.rotY
+    }));
+    const meshes = instanceKindVaried(kind, placements, "furn_all");
+    if (meshes) {
+      meshes.forEach((mesh2, i) => {
         mesh2.name = i === 0 ? name : `${name} #${i}`;
       });
-      group.add(...im);
+      group.add(...meshes);
     } else {
       addInstanced(geo, mat, list2, name);
     }
@@ -15301,49 +26283,331 @@ function alongWithDir(pts, dist) {
   return { p: pts[n - 1], dir: { x: dx / l, z: dz / l } };
 }
 
+// src/procgen/vegetation.ts
+import * as THREE12 from "three";
+var _greeneryEnabled = true;
+function setGreeneryEnabled(v) {
+  _greeneryEnabled = v;
+}
+function greeneryEnabled() {
+  return _greeneryEnabled;
+}
+var DEFAULT_BUDGET = { grass: 26e3, shrub: 6e3 };
+var VERGE_RULES = {
+  park: { grassSpacing: 1.1, shrubEvery: 5, band: 5 },
+  residential: { grassSpacing: 1.6, shrubEvery: 7, band: 3.6 },
+  none: { grassSpacing: 1.4, shrubEvery: 6, band: 4.5 },
+  retail: { grassSpacing: 2.8, shrubEvery: 0, band: 2.4 },
+  commercial: { grassSpacing: 2.9, shrubEvery: 0, band: 2.4 },
+  industrial: { grassSpacing: 2.2, shrubEvery: 9, band: 3 }
+};
+var VERGE_INSET = 1.4;
+var DrivableIndex = class _DrivableIndex {
+  cells = /* @__PURE__ */ new Map();
+  static CELL = 24;
+  constructor(roads) {
+    const C = _DrivableIndex.CELL;
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
+      const half = r.widthM / 2;
+      for (let i = 1; i < r.points.length; i++) {
+        const a = r.points[i - 1];
+        const b = r.points[i];
+        const pad = half + 1;
+        for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / C); cx <= Math.floor((Math.max(a.x, b.x) + pad) / C); cx++) {
+          for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / C); cz <= Math.floor((Math.max(a.z, b.z) + pad) / C); cz++) {
+            const key = `${cx},${cz}`;
+            let list2 = this.cells.get(key);
+            if (!list2) this.cells.set(key, list2 = []);
+            list2.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half });
+          }
+        }
+      }
+    }
+  }
+  inside(p, margin) {
+    const C = _DrivableIndex.CELL;
+    const list2 = this.cells.get(`${Math.floor(p.x / C)},${Math.floor(p.z / C)}`);
+    if (!list2) return false;
+    for (const s of list2) {
+      const dx = s.bx - s.ax;
+      const dz = s.bz - s.az;
+      const len2 = dx * dx + dz * dz;
+      let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(p.x - (s.ax + dx * t), p.z - (s.az + dz * t));
+      if (d < s.half + margin) return true;
+    }
+    return false;
+  }
+};
+function polyLen2(pts) {
+  let l = 0;
+  for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+  return l;
+}
+function alongWithDir2(pts, dist) {
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx2 = pts[i].x - pts[i - 1].x;
+    const dz2 = pts[i].z - pts[i - 1].z;
+    const seg = Math.hypot(dx2, dz2);
+    if (acc + seg >= dist && seg > 0) {
+      const t = (dist - acc) / seg;
+      return { p: { x: pts[i - 1].x + dx2 * t, z: pts[i - 1].z + dz2 * t }, dir: { x: dx2 / seg, z: dz2 / seg } };
+    }
+    acc += seg;
+  }
+  const n = pts.length;
+  const dx = pts[n - 1].x - pts[n - 2].x;
+  const dz = pts[n - 1].z - pts[n - 2].z;
+  const l = Math.hypot(dx, dz) || 1;
+  return { p: pts[n - 1], dir: { x: dx / l, z: dz / l } };
+}
+function planRoadsideVegetation(roads, ctx, sampleY, budget = DEFAULT_BUDGET) {
+  const index = new DrivableIndex(roads);
+  const out = [];
+  let nGrass = 0;
+  let nShrub = 0;
+  for (const r of roads) {
+    if (r.bridge || r.tunnel || r.points.length < 2 || NON_DRIVABLE.has(r.roadClass)) continue;
+    const L = polyLen2(r.points);
+    if (L < 12) continue;
+    const zone = ctx.zoneAt(r.points[Math.floor(r.points.length / 2)]);
+    const rule = VERGE_RULES[zone] ?? VERGE_RULES.none;
+    const half = r.widthM / 2;
+    for (const side of [-1, 1]) {
+      let step = 0;
+      for (let d = rule.grassSpacing * 0.5; d < L; d += rule.grassSpacing, step++) {
+        if (nGrass >= budget.grass) break;
+        const { p, dir } = alongWithDir2(r.points, d);
+        const across = { x: -dir.z * side, z: dir.x * side };
+        const off = half + VERGE_INSET + hash01(`${r.id}:vo${side}${step}`) * rule.band;
+        const gx = p.x + across.x * off;
+        const gz = p.z + across.z * off;
+        const cover = ctx.landCoverAt({ x: gx, z: gz });
+        if (cover !== "grass" && cover !== "bare") continue;
+        if (index.inside({ x: gx, z: gz }, 0.3)) continue;
+        const dry = cover === "bare";
+        if (dry && hash01(`${r.id}:vd${side}${step}`) > 0.55) continue;
+        out.push({
+          x: gx,
+          z: gz,
+          y: sampleY(gx, gz),
+          scale: 0.72 + hash01(`${r.id}:vs${side}${step}`) * 0.6,
+          rotY: hash01(`${r.id}:vr${side}${step}`) * Math.PI,
+          tint: hash01(`${r.id}:vt${side}${step}`) * 2 - 1,
+          dry,
+          kind: "grass"
+        });
+        nGrass++;
+        if (!dry && rule.shrubEvery > 0 && step % rule.shrubEvery === 0 && nShrub < budget.shrub) {
+          const soff = off + 0.8 + hash01(`${r.id}:sh${side}${step}`) * 1.2;
+          const sx = p.x + across.x * soff;
+          const sz = p.z + across.z * soff;
+          if (ctx.landCoverAt({ x: sx, z: sz }) === "grass" && !index.inside({ x: sx, z: sz }, 0.4)) {
+            out.push({
+              x: sx,
+              z: sz,
+              y: sampleY(sx, sz),
+              scale: 0.55 + hash01(`${r.id}:ss${side}${step}`) * 0.6,
+              rotY: hash01(`${r.id}:sr${side}${step}`) * Math.PI * 2,
+              tint: hash01(`${r.id}:st${side}${step}`) * 2 - 1,
+              dry: false,
+              kind: "shrub"
+            });
+            nShrub++;
+          }
+        }
+      }
+    }
+    if (nGrass >= budget.grass && nShrub >= budget.shrub) break;
+  }
+  return out;
+}
+var _grassTex = null;
+function grassBillboardTexture() {
+  if (_grassTex) return _grassTex;
+  const S = 128;
+  const c = document.createElement("canvas");
+  c.width = S;
+  c.height = S;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, S, S);
+  let h = 987654321 >>> 0;
+  const rnd = () => (h = Math.imul(h, 1664525) + 1013904223 >>> 0) / 4294967296;
+  const blades = 15;
+  for (let i = 0; i < blades; i++) {
+    const rootX = S * (0.1 + 0.8 * (i / (blades - 1)) + (rnd() - 0.5) * 0.06);
+    const tipX = rootX + (rnd() - 0.5) * S * 0.28;
+    const tipY = S * (0.08 + rnd() * 0.42);
+    const w = S * (0.035 + rnd() * 0.03);
+    const g = ctx.createLinearGradient(0, S, 0, tipY);
+    const lo = 60 + Math.floor(rnd() * 24);
+    g.addColorStop(0, `rgb(${lo - 14},${lo + 26},${Math.floor(lo * 0.5)})`);
+    g.addColorStop(1, `rgb(${lo + 40},${lo + 78},${Math.floor(lo * 0.6)})`);
+    ctx.fillStyle = g;
+    const midX = (rootX + tipX) / 2 + (rnd() - 0.5) * S * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(rootX - w, S);
+    ctx.quadraticCurveTo(midX - w * 0.4, (S + tipY) / 2, tipX, tipY);
+    ctx.quadraticCurveTo(midX + w * 0.4, (S + tipY) / 2, rootX + w, S);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const tex = new THREE12.CanvasTexture(c);
+  tex.colorSpace = THREE12.SRGBColorSpace;
+  tex.anisotropy = 4;
+  _grassTex = tex;
+  return tex;
+}
+function grassBladeGeometry() {
+  const g = new THREE12.BufferGeometry();
+  const pos = [];
+  const uv = [];
+  const idx = [];
+  const quad = (nx, nz) => {
+    const base = pos.length / 3;
+    pos.push(-0.5 * nx, 0, -0.5 * nz, 0.5 * nx, 0, 0.5 * nz, 0.5 * nx, 1, 0.5 * nz, -0.5 * nx, 1, -0.5 * nz);
+    uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  quad(1, 0);
+  quad(0, 1);
+  g.setAttribute("position", new THREE12.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE12.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+function withDistanceFade(m, near, far) {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying float vCbDist;").replace("#include <project_vertex>", "#include <project_vertex>\n	vCbDist = -mvPosition.z;");
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vCbDist;").replace(
+      "#include <clipping_planes_fragment>",
+      `#include <clipping_planes_fragment>
+        float cbFade = 1.0 - smoothstep(${near.toFixed(1)}, ${far.toFixed(1)}, vCbDist);
+        float cbHash = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        if (cbFade < cbHash) discard;`
+    );
+  };
+  return m;
+}
+function buildRoadsideVegetation(roads, ctx) {
+  const group = new THREE12.Group();
+  group.name = "Roadside greenery";
+  group.userData.objectId = "veg_roadside";
+  if (!greeneryEnabled()) return group;
+  const instances = planRoadsideVegetation(roads, ctx, sampleTerrain);
+  if (!instances.length) return group;
+  const grass = instances.filter((i) => i.kind === "grass");
+  const shrubs = instances.filter((i) => i.kind === "shrub");
+  const m = new THREE12.Matrix4();
+  const q3 = new THREE12.Quaternion();
+  const up = new THREE12.Vector3(0, 1, 0);
+  const s = new THREE12.Vector3();
+  const v = new THREE12.Vector3();
+  const col = new THREE12.Color();
+  if (grass.length) {
+    const geo = grassBladeGeometry();
+    const mat = withDistanceFade(
+      new THREE12.MeshStandardMaterial({
+        map: grassBillboardTexture(),
+        alphaTest: 0.4,
+        side: THREE12.DoubleSide,
+        roughness: 1,
+        metalness: 0
+      }),
+      70,
+      135
+    );
+    const im = new THREE12.InstancedMesh(geo, mat, grass.length);
+    grass.forEach((e, i) => {
+      const w = e.scale * 0.8;
+      const hgt = e.scale * (0.42 + (e.tint + 1) * 0.09);
+      q3.setFromAxisAngle(up, e.rotY);
+      s.set(w, hgt, w);
+      v.set(e.x, e.y, e.z);
+      im.setMatrixAt(i, m.compose(v, q3, s));
+      col.set(e.dry ? "#9aa055" : "#5f8a3e").offsetHSL(e.tint * 0.02, e.tint * 0.05, e.tint * 0.06);
+      im.setColorAt(i, col);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.computeBoundingSphere();
+    im.name = `Grass (${grass.length})`;
+    im.userData.objectId = "veg_roadside";
+    im.receiveShadow = true;
+    group.add(im);
+  }
+  if (shrubs.length) {
+    const geo = new THREE12.IcosahedronGeometry(1, 1);
+    const mat = new THREE12.MeshStandardMaterial({ color: "#4a6b34", roughness: 1, metalness: 0, flatShading: true });
+    const im = new THREE12.InstancedMesh(geo, mat, shrubs.length);
+    shrubs.forEach((e, i) => {
+      const r = e.scale;
+      q3.setFromAxisAngle(up, e.rotY);
+      s.set(r, r * 0.82, r);
+      v.set(e.x, e.y + r * 0.7, e.z);
+      im.setMatrixAt(i, m.compose(v, q3, s));
+      col.set("#4a6b34").offsetHSL(e.tint * 0.03, e.tint * 0.05, e.tint * 0.05);
+      im.setColorAt(i, col);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.computeBoundingSphere();
+    im.castShadow = true;
+    im.name = `Shrubs (${shrubs.length})`;
+    im.userData.objectId = "veg_roadside";
+    group.add(im);
+  }
+  group.userData.counts = { grass: grass.length, shrubs: shrubs.length };
+  return group;
+}
+
 // src/procgen/propLibrary.ts
-import * as THREE11 from "three";
+import * as THREE13 from "three";
 import { mergeVertices as mergeVertices2 } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-var stone = new THREE11.MeshStandardMaterial({ color: "#9b968c", roughness: 0.9 });
-var bronze = new THREE11.MeshStandardMaterial({ color: "#6d5f42", roughness: 0.45, metalness: 0.7 });
-var waterMat = new THREE11.MeshStandardMaterial({ color: "#4a6d82", roughness: 0.15, metalness: 0.1 });
-var metal = new THREE11.MeshStandardMaterial({ color: "#3a4046", roughness: 0.55, metalness: 0.6 });
-var glass = new THREE11.MeshStandardMaterial({ color: "#8fa5b2", roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.55 });
-var fenceMat = new THREE11.MeshStandardMaterial({ color: "#4c5254", roughness: 0.7, metalness: 0.4, side: THREE11.DoubleSide });
+var stone = new THREE13.MeshStandardMaterial({ color: "#9b968c", roughness: 0.9 });
+var bronze = new THREE13.MeshStandardMaterial({ color: "#6d5f42", roughness: 0.45, metalness: 0.7 });
+var waterMat = new THREE13.MeshStandardMaterial({ color: "#4a6d82", roughness: 0.15, metalness: 0.1 });
+var metal = new THREE13.MeshStandardMaterial({ color: "#3a4046", roughness: 0.55, metalness: 0.6 });
+var glass = new THREE13.MeshStandardMaterial({ color: "#8fa5b2", roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.55 });
+var fenceMat = new THREE13.MeshStandardMaterial({ color: "#4c5254", roughness: 0.7, metalness: 0.4, side: THREE13.DoubleSide });
 function mesh(geo, mat, x = 0, y = 0, z = 0) {
-  const m = new THREE11.Mesh(geo, mat);
+  const m = new THREE13.Mesh(geo, mat);
   m.position.set(x, y, z);
   m.castShadow = true;
   return m;
 }
 function buildFountain(p) {
-  const g = new THREE11.Group();
+  const g = new THREE13.Group();
   const seed = hash01(p.id);
   const r = 1.6 + seed * 1.6;
-  g.add(mesh(new THREE11.CylinderGeometry(r, r * 1.06, 0.55, 20), stone, 0, 0.275, 0));
-  const water = mesh(new THREE11.CylinderGeometry(r * 0.9, r * 0.9, 0.06, 20), waterMat, 0, 0.5, 0);
+  g.add(mesh(new THREE13.CylinderGeometry(r, r * 1.06, 0.55, 20), stone, 0, 0.275, 0));
+  const water = mesh(new THREE13.CylinderGeometry(r * 0.9, r * 0.9, 0.06, 20), waterMat, 0, 0.5, 0);
   water.castShadow = false;
   g.add(water);
-  g.add(mesh(new THREE11.CylinderGeometry(0.16, 0.22, 1.3, 10), stone, 0, 1.15, 0));
-  g.add(mesh(new THREE11.CylinderGeometry(r * 0.35, 0.08, 0.22, 14), stone, 0, 1.85, 0));
-  if (seed > 0.5) g.add(mesh(new THREE11.CylinderGeometry(r * 0.18, 0.05, 0.16, 12), stone, 0, 2.35, 0));
+  g.add(mesh(new THREE13.CylinderGeometry(0.16, 0.22, 1.3, 10), stone, 0, 1.15, 0));
+  g.add(mesh(new THREE13.CylinderGeometry(r * 0.35, 0.08, 0.22, 14), stone, 0, 1.85, 0));
+  if (seed > 0.5) g.add(mesh(new THREE13.CylinderGeometry(r * 0.18, 0.05, 0.16, 12), stone, 0, 2.35, 0));
   g.name = p.name ?? "Fountain";
   return g;
 }
 function buildStatue(p) {
-  const g = new THREE11.Group();
+  const g = new THREE13.Group();
   const seed = hash01(p.id);
   const plinthH = 0.9 + seed * 0.9;
-  g.add(mesh(new THREE11.BoxGeometry(1.5, 0.3, 1.5), stone, 0, 0.15, 0));
-  g.add(mesh(new THREE11.BoxGeometry(1, plinthH, 1), stone, 0, 0.3 + plinthH / 2, 0));
+  g.add(mesh(new THREE13.BoxGeometry(1.5, 0.3, 1.5), stone, 0, 0.15, 0));
+  g.add(mesh(new THREE13.BoxGeometry(1, plinthH, 1), stone, 0, 0.3 + plinthH / 2, 0));
   if (seed > 0.62) {
     const h = 3 + seed * 3;
-    g.add(mesh(new THREE11.CylinderGeometry(0.12, 0.4, h, 4), stone, 0, 0.3 + plinthH + h / 2, 0));
+    g.add(mesh(new THREE13.CylinderGeometry(0.12, 0.4, h, 4), stone, 0, 0.3 + plinthH + h / 2, 0));
   } else {
     const base = 0.3 + plinthH;
-    g.add(mesh(new THREE11.CylinderGeometry(0.22, 0.3, 1.5, 8), bronze, 0, base + 0.75, 0));
-    g.add(mesh(new THREE11.SphereGeometry(0.2, 10, 8), bronze, 0, base + 1.68, 0));
-    const arm = mesh(new THREE11.CylinderGeometry(0.07, 0.07, 0.8, 6), bronze, 0.3, base + 1.25, 0);
+    g.add(mesh(new THREE13.CylinderGeometry(0.22, 0.3, 1.5, 8), bronze, 0, base + 0.75, 0));
+    g.add(mesh(new THREE13.SphereGeometry(0.2, 10, 8), bronze, 0, base + 1.68, 0));
+    const arm = mesh(new THREE13.CylinderGeometry(0.07, 0.07, 0.8, 6), bronze, 0.3, base + 1.25, 0);
     arm.rotation.z = -0.9 - seed * 0.5;
     g.add(arm);
   }
@@ -15351,18 +26615,18 @@ function buildStatue(p) {
   return g;
 }
 function buildBusStop(p) {
-  const g = new THREE11.Group();
+  const g = new THREE13.Group();
   const seed = hash01(p.id);
   const w = 3.2;
   for (const x of [-w / 2 + 0.1, w / 2 - 0.1]) {
-    g.add(mesh(new THREE11.CylinderGeometry(0.05, 0.05, 2.5, 8), metal, x, 1.25, 0));
+    g.add(mesh(new THREE13.CylinderGeometry(0.05, 0.05, 2.5, 8), metal, x, 1.25, 0));
   }
-  g.add(mesh(new THREE11.BoxGeometry(w + 0.3, 0.08, 1.6), metal, 0, 2.55, -0.1));
-  const back = mesh(new THREE11.BoxGeometry(w, 1.7, 0.05), glass, 0, 1.45, -0.75);
+  g.add(mesh(new THREE13.BoxGeometry(w + 0.3, 0.08, 1.6), metal, 0, 2.55, -0.1));
+  const back = mesh(new THREE13.BoxGeometry(w, 1.7, 0.05), glass, 0, 1.45, -0.75);
   back.castShadow = false;
   g.add(back);
-  g.add(mesh(new THREE11.BoxGeometry(w * 0.8, 0.06, 0.4), metal, 0, 0.55, -0.4));
-  if (seed > 0.4) g.add(mesh(new THREE11.BoxGeometry(0.5, 0.7, 0.08), metal, w / 2 - 0.15, 2.1, 0.3));
+  g.add(mesh(new THREE13.BoxGeometry(w * 0.8, 0.06, 0.4), metal, 0, 0.55, -0.4));
+  if (seed > 0.4) g.add(mesh(new THREE13.BoxGeometry(0.5, 0.7, 0.08), metal, w / 2 - 0.15, 2.1, 0.3));
   g.name = p.name ?? "Bus stop";
   g.rotation.y = hash01(p.id + ":rot") * Math.PI * 2;
   return g;
@@ -15375,7 +26639,7 @@ function buildBarriers(barriers) {
     geoms.push(wallGeometry(b.points, 0, h));
   }
   if (!geoms.length) return null;
-  const m = new THREE11.Mesh(mergeVertices2(mergeGeometries(geoms), 1e-3), fenceMat);
+  const m = new THREE13.Mesh(mergeVertices2(mergeGeometries(geoms), 1e-3), fenceMat);
   m.name = `Fences & walls (${barriers.length})`;
   m.castShadow = true;
   return m;
@@ -15386,7 +26650,7 @@ function buildEnhancedProp(p) {
   g.traverse((o) => {
     const m = o;
     if (m.isMesh && m.material === stone) {
-      m.material = new THREE11.MeshStandardMaterial({ color: "#b0a893", roughness: 0.6 });
+      m.material = new THREE13.MeshStandardMaterial({ color: "#b0a893", roughness: 0.6 });
     }
   });
   g.name += " (generated)";
@@ -15394,7 +26658,7 @@ function buildEnhancedProp(p) {
 }
 
 // src/procgen/signs.ts
-import * as THREE12 from "three";
+import * as THREE14 from "three";
 function canvas(size) {
   const c = document.createElement("canvas");
   c.width = size;
@@ -15402,8 +26666,8 @@ function canvas(size) {
   return [c, c.getContext("2d")];
 }
 function texFrom(c) {
-  const t = new THREE12.CanvasTexture(c);
-  t.colorSpace = THREE12.SRGBColorSpace;
+  const t = new THREE14.CanvasTexture(c);
+  t.colorSpace = THREE14.SRGBColorSpace;
   t.anisotropy = 4;
   return t;
 }
@@ -15517,15 +26781,15 @@ function roundRect2(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 function signPost(face, w, h) {
-  const g = new THREE12.Group();
+  const g = new THREE14.Group();
   const poleH = 2.1;
-  const pole = new THREE12.Mesh(new THREE12.CylinderGeometry(0.05, 0.06, poleH + h, 8), mats.signalPole);
+  const pole = new THREE14.Mesh(new THREE14.CylinderGeometry(0.05, 0.06, poleH + h, 8), mats.signalPole);
   pole.position.y = (poleH + h) / 2;
   pole.castShadow = true;
   g.add(pole);
-  const plate = new THREE12.Mesh(
-    new THREE12.PlaneGeometry(w, h),
-    new THREE12.MeshStandardMaterial({ map: face, transparent: true, alphaTest: 0.5, side: THREE12.DoubleSide, roughness: 0.5, metalness: 0.1 })
+  const plate = new THREE14.Mesh(
+    new THREE14.PlaneGeometry(w, h),
+    new THREE14.MeshStandardMaterial({ map: face, transparent: true, alphaTest: 0.5, side: THREE14.DoubleSide, roughness: 0.5, metalness: 0.1 })
   );
   plate.position.set(0, poleH + h / 2, 0.045);
   plate.castShadow = true;
@@ -15592,10 +26856,10 @@ function planSpeedLimitSigns(roads, ctx) {
 }
 
 // src/editor/bus.ts
-import * as THREE13 from "three";
+import * as THREE15 from "three";
 var drivableRoads = [];
-var lastOrbitTarget = new THREE13.Vector3();
-var focusTarget = new THREE13.Vector3();
+var lastOrbitTarget = new THREE15.Vector3();
+var focusTarget = new THREE15.Vector3();
 var focusState = { has: false };
 
 // src/scene/registry.ts
@@ -15607,6 +26871,7 @@ var buildingPlans = /* @__PURE__ */ new Map();
 var roadResolutions = /* @__PURE__ */ new Map();
 var sceneContext = null;
 var cityGraph = null;
+var generationCache = /* @__PURE__ */ new Map();
 var replaceables = /* @__PURE__ */ new Map();
 function variantKey(asset) {
   return `${asset.state}:${asset.provider ?? "none"}:${asset.cacheKey ?? ""}`;
@@ -15617,6 +26882,30 @@ function registerVariant(id, key, obj) {
 }
 function getVariant(id, asset) {
   return variants.get(id)?.get(variantKey(asset));
+}
+function currentBuildingMaterial(id) {
+  const r = buildingResolutions.get(id);
+  return r ? { facade: r.facade, roof: r.roof, tint: r.tint } : null;
+}
+function applyBuildingMaterial(id, mat, asset) {
+  const b = buildingFeatures.get(id);
+  const res = buildingResolutions.get(id);
+  const plan = buildingPlans.get(id);
+  if (!b || !res || !plan) return false;
+  const newRes = { ...res, facade: mat.facade, roof: mat.roof, tint: mat.tint };
+  buildingResolutions.set(id, newRes);
+  const key = variantKey(asset);
+  const old = variants.get(id)?.get(key);
+  const mesh2 = buildProceduralBuilding(b, newRes, plan.roofForm);
+  mesh2.name = b.name ?? "Building";
+  mesh2.userData.objectId = id;
+  registerVariant(id, key, mesh2);
+  if (old && old !== mesh2)
+    old.traverse((n) => {
+      const m = n;
+      if (m.geometry) m.geometry.dispose();
+    });
+  return true;
 }
 function mapUrls(lat, lng) {
   return {
@@ -15635,7 +26924,42 @@ var IDENTITY = {
   scale: [1, 1, 1]
 };
 var NON_DRIVE = /* @__PURE__ */ new Set(["pedestrian", "service", "footway", "cycleway"]);
+function collectResources(source, geoms, mats2) {
+  for (const m of source.values())
+    for (const obj of m.values())
+      obj.traverse((n) => {
+        const mesh2 = n;
+        if (mesh2.geometry) geoms.add(mesh2.geometry);
+        const mat = mesh2.material;
+        if (Array.isArray(mat)) mat.forEach((x) => mats2.add(x));
+        else if (mat) mats2.add(mat);
+      });
+}
+function disposeOrphaned(oldGeoms, oldMats) {
+  const keepGeoms = /* @__PURE__ */ new Set();
+  const keepMats = /* @__PURE__ */ new Set();
+  collectResources(variants, keepGeoms, keepMats);
+  for (const o of generationCache.values())
+    o.traverse((n) => {
+      const mesh2 = n;
+      if (mesh2.geometry) keepGeoms.add(mesh2.geometry);
+      const mat = mesh2.material;
+      if (Array.isArray(mat)) mat.forEach((x) => keepMats.add(x));
+      else if (mat) keepMats.add(mat);
+    });
+  collectProtectedResources(keepGeoms, keepMats);
+  let freed = 0;
+  for (const g of oldGeoms) if (!keepGeoms.has(g)) {
+    g.dispose();
+    freed++;
+  }
+  for (const m of oldMats) if (!keepMats.has(m)) m.dispose();
+  return freed;
+}
 function buildScene(graph, ctx) {
+  const oldGeoms = /* @__PURE__ */ new Set();
+  const oldMats = /* @__PURE__ */ new Set();
+  collectResources(variants, oldGeoms, oldMats);
   variants.clear();
   buildingFeatures.clear();
   roadSegments.clear();
@@ -15673,7 +26997,21 @@ function buildScene(graph, ctx) {
   }
   const pad = 120;
   const bounds = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
-  const terrain = buildTerrain(graph.areas.filter((a) => a.kind === "water"), bounds);
+  const waterAreas = graph.areas.filter((a) => a.kind === "water");
+  const { carved, painted } = waterRings(waterAreas, bounds);
+  const naturalField = buildTerrainField(bounds, [...carved, ...painted]);
+  setActiveTerrain(naturalField);
+  const elevation = buildRoadElevation(graph.roads);
+  const corridors = [];
+  for (const r of graph.roads) {
+    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge || r.points.length < 2) continue;
+    if (elevation.isInternal(r.id)) continue;
+    const pts = segCenterline(r);
+    corridors.push({ pts, elev: elevation.profileFor(r, cumulative(pts)), half: r.widthM / 2, pave: 4 });
+  }
+  setActiveTerrain(conformTerrainToRoads(naturalField, corridors, bounds));
+  applyLandTextures();
+  const terrain = buildTerrain(waterAreas, bounds);
   add(
     {
       id: "terrain_ground",
@@ -15792,6 +27130,8 @@ function buildScene(graph, ctx) {
     );
   }
   const libraryEnabled = isLibraryEnabled();
+  const overWaterFootprints = [];
+  const PIER_GRADE = 0;
   for (const b of graph.buildings) {
     buildingFeatures.set(b.id, b);
     const plan = recognizeBuilding(b, ctx, { libraryEnabled });
@@ -15807,12 +27147,17 @@ function buildScene(graph, ctx) {
       build: () => buildEnhancedBuilding(b, plan.resolution)
     });
     const libScene = plan.buildPath === "library-match" ? buildingSceneFor(b) : null;
-    const mesh2 = libScene ? fitToSlot(libScene, b) : buildProceduralBuilding(b, plan.resolution, plan.roofForm);
-    if (libScene) {
-      mesh2.name = b.name ?? "Building";
-      mesh2.userData.objectId = b.id;
+    const fitted = libScene ? fitToSlot(libScene, b) : null;
+    const mesh2 = fitted ?? buildProceduralBuilding(b, plan.resolution, plan.roofForm);
+    if (fitted) {
+      fitted.name = b.name ?? "Building";
+      fitted.userData.objectId = b.id;
     }
     const c = footprintCentroid(b.footprint);
+    if (footprintWaterFraction(b.footprint, waterAreas) >= 0.5) {
+      mesh2.position.y += PIER_GRADE - sampleTerrain(c.x, c.z);
+      overWaterFootprints.push(b.footprint);
+    }
     add(
       {
         id: b.id,
@@ -15843,6 +27188,22 @@ function buildScene(graph, ctx) {
         }
       },
       mesh2
+    );
+  }
+  const piers = buildPiers(overWaterFootprints, PIER_GRADE);
+  if (piers) {
+    piers.userData.objectId = "infra_piers";
+    add(
+      {
+        id: "infra_piers",
+        type: "area",
+        name: "Piers",
+        locked: true,
+        transform: { position: [0, 0, 0], ...IDENTITY },
+        asset: { ...PROC_ASSET },
+        meta: { "pier decks": overWaterFootprints.length }
+      },
+      piers
     );
   }
   const PROP_BUILDERS = {
@@ -15876,9 +27237,8 @@ function buildScene(graph, ctx) {
   for (const p of graph.points) {
     const builder = PROP_BUILDERS[p.kind];
     if (!builder) continue;
-    const tmpl = getTemplate(p.kind);
-    const g = tmpl ? cloneTemplate(tmpl) : builder(p);
-    g.name = tmpl ? tmpl.name : g.name;
+    const libG = cloneTemplateFor(p.kind, p.id);
+    const g = libG ?? builder(p);
     let pos = p.position;
     let posY = 0;
     let rotY = 0;
@@ -15964,6 +27324,22 @@ function buildScene(graph, ctx) {
       g
     );
   }
+  const greenery = buildRoadsideVegetation(graph.roads, ctx);
+  if (greenery.children.length) {
+    const counts = greenery.userData.counts ?? {};
+    add(
+      {
+        id: "veg_roadside",
+        type: "vegetation",
+        name: "Roadside greenery",
+        locked: true,
+        transform: { position: [0, 0, 0], ...IDENTITY },
+        asset: { ...PROC_ASSET },
+        meta: { grass: counts.grass, shrubs: counts.shrubs }
+      },
+      greenery
+    );
+  }
   const furniture = buildFurniture(graph, ctx);
   if (furniture.children.length) {
     const counts = furniture.userData.counts ?? {};
@@ -15980,7 +27356,56 @@ function buildScene(graph, ctx) {
       furniture
     );
   }
+  disposeOrphaned(oldGeoms, oldMats);
   return objects;
+}
+
+// assets/curation-selection.json
+var curation_selection_default = {
+  schema: "citybuilder.curation/v1",
+  note: "Human-curated asset allowlist. When present, the scanner pools ONLY these placeable assets (per tools/build-asset-manifest.mjs). Delete this file to un-curate (pool everything again). Regenerate from the Curate studio's Apply export.",
+  generatedAt: "2026-07-18T08:32:47.887Z",
+  totalSelected: 33,
+  byKind: {
+    tree: ["toxsam-polygonal-mind/tree_26", "toxsam-polygonal-mind/tree_08", "toxsam-polygonal-mind/tree_36", "toxsam-polygonal-mind/tree_29"],
+    street_lamp: ["kenney-city-kit-roads/light-square", "kenney-city-kit-roads/light-square-double", "kenney-city-kit-roads/light-curved", "kenney-city-kit-roads/light-square-cross", "kenney-city-kit-roads/light-curved-double", "toxsam-polygonal-mind/street_lamp_02", "kenney-city-kit-roads/light-curved-cross"],
+    planter: ["toxsam-polygonal-mind/planter_08", "toxsam-polygonal-mind/planter_01", "toxsam-polygonal-mind/planter_03"],
+    fence: ["toxsam-polygonal-mind/fence_10", "kenney-city-kit-roads/construction-barrier", "toxsam-polygonal-mind/fence_09", "toxsam-polygonal-mind/fence_06", "toxsam-polygonal-mind/fence_08", "toxsam-polygonal-mind/fence_11"],
+    statue: ["toxsam-polygonal-mind/statue_07", "toxsam-polygonal-mind/statue_08"],
+    bench: ["toxsam-polygonal-mind/bench_04", "sketchfab-curated/bench_picnic_table_low_poly_fe35ac"],
+    building: ["quaternius-downtown-city-megakit/Building_Small_1", "quaternius-downtown-city-megakit/Building_Large_2"],
+    cone: ["kenney-city-kit-roads/construction-cone"],
+    manhole: ["quaternius-downtown-city-megakit/Prop_Drain", "quaternius-downtown-city-megakit/Prop_ManholeCover"],
+    hvac: ["quaternius-downtown-city-megakit/Prop_ACUnit"],
+    bollard: ["quaternius-downtown-city-megakit/Prop_Bollard"],
+    fire_hydrant: ["sketchfab-curated/hydrant_psx_low_poly_fire_hydrant_1d2b13"],
+    traffic_signal: ["sketchfab-curated/traffic_light_traffic_light_793e07"]
+  }
+};
+
+// src/state/curation.ts
+var LS_KEY = "cb_curation";
+function seedCuration() {
+  const out = {};
+  const byKind = curation_selection_default.byKind ?? {};
+  for (const [kind, ids] of Object.entries(byKind)) {
+    out[kind] = { enabled: kind !== "building" && kind !== "complete", ids: [...ids] };
+  }
+  return out;
+}
+function loadCuration() {
+  try {
+    const s = typeof localStorage !== "undefined" && localStorage.getItem(LS_KEY);
+    if (s) return JSON.parse(s);
+  } catch {
+  }
+  return seedCuration();
+}
+function saveCuration(c) {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(LS_KEY, JSON.stringify(c));
+  } catch {
+  }
 }
 
 // src/state/store.ts
@@ -16003,9 +27428,19 @@ function applyCommand(state, cmd, reverse) {
       for (const id of cmd.ids) objects[id] = { ...objects[id], deleted: del };
       break;
     }
+    case "material": {
+      const mat = reverse ? cmd.before : cmd.after;
+      applyBuildingMaterial(cmd.id, mat, objects[cmd.id].asset);
+      objects[cmd.id] = {
+        ...objects[cmd.id],
+        meta: { ...objects[cmd.id].meta, facade: mat.facade, roof: mat.roof }
+      };
+      break;
+    }
   }
   return { objects };
 }
+var INITIAL_CURATION = loadCuration();
 var useEditor = create((set, get) => ({
   appPhase: "picker",
   buildMessage: "",
@@ -16024,19 +27459,42 @@ var useEditor = create((set, get) => ({
   gizmoDragging: false,
   sunTime: 14,
   fxPreview: false,
-  // Local asset library is OFF by default — the Building Recognizer drives
-  // appearance. The toggle (and every library function) stays intact so it can
-  // be re-enabled and improved later (PRD §7F). See also isLibraryEnabled().
+  // Viewport render quality. 'balanced' matches the original fixed DPR/shadow
+  // settings, so the default look is unchanged; Performance/High trade fidelity
+  // for framerate (see QUALITY_PRESETS + Viewport).
+  quality3d: "balanced",
+  // Master library switch stays OFF by default (procedural-first, PRD §7F). The
+  // Curate studio pre-checks the seeded/curated kinds and one "Apply" flips this
+  // on and applies the per-kind curation live. Per-kind on/off + model ids live in
+  // `curation` (seeded from assets/curation-selection.json → localStorage).
   useLibraryAssets: false,
+  curation: INITIAL_CURATION,
   // Network elevation solve (Road Corridor Redesign §6a) — ON by default (E3).
   // Kept in sync with the config module flag (procgen/corridor/config.ts), which
   // also defaults on; the toolbar toggle flips both for instant A/B.
   useCorridorElevation: true,
+  // Terrain relief (procgen/terrain) — ON by default (the main map ships with
+  // realistic ground). Kept in sync with the config module flag; the toolbar
+  // toggle flips both for instant A/B against the flat world.
+  useTerrain: true,
+  // Road cross-section (#8 crown / #22 superelevation) — crowned + banked
+  // carriageways. Module flag defaults off (test isolation); app default on here,
+  // synced in generateScene + rebuildWithRoadCrown.
+  roadCrown: true,
+  // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
+  // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
+  roadsideGreenery: true,
+  // Weather (Phase 5 #14) — wet darkens the asphalt + drops roughness so the sun
+  // glints off it and pools in puddles. Live uniform, no rebuild. Default dry.
+  weather: "dry",
+  // Road surface style — realistic (textured aggregate) vs arcade (clean kit look).
+  roadStyle: "realistic",
   // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.
   roadScale: 1,
   contextInfo: null,
   lintReport: [],
   helpOpen: false,
+  curationOpen: false,
   filterAsset: "all",
   search: "",
   toast: null,
@@ -16082,10 +27540,36 @@ var useEditor = create((set, get) => ({
   setBuilding: (message) => set({ appPhase: "building", buildMessage: message, loadError: null }),
   setLoadError: (e) => set({ loadError: e, appPhase: "picker" }),
   setFxPreview: (v) => set({ fxPreview: v }),
+  setQuality3d: (v) => set({ quality3d: v }),
   setUseLibraryAssets: (v) => set({ useLibraryAssets: v }),
+  setCuration: (c) => {
+    saveCuration(c);
+    set({ curation: c });
+  },
   setUseCorridorElevation: (v) => {
     setCorridorElevationEnabled(v);
     set({ useCorridorElevation: v });
+  },
+  setUseTerrain: (v) => {
+    setTerrainEnabled(v);
+    set({ useTerrain: v });
+  },
+  setRoadCrown: (v) => {
+    setCrossSectionEnabled(v);
+    set({ roadCrown: v });
+  },
+  setRoadsideGreenery: (v) => {
+    setGreeneryEnabled(v);
+    set({ roadsideGreenery: v });
+  },
+  setWeather: (v) => {
+    setWetness(v === "wet" ? 1 : 0);
+    set({ weather: v });
+  },
+  setRoadStyle: (v) => {
+    setRoadStyle(v);
+    setPaintWear(v === "arcade" ? 0 : 1);
+    set({ roadStyle: v });
   },
   setRoadScale: (v) => set({ roadScale: clampRoadScale(v) }),
   setLintReport: (w) => set({ lintReport: w }),
@@ -16110,6 +27594,7 @@ var useEditor = create((set, get) => ({
   setGizmoDragging: (v) => set({ gizmoDragging: v }),
   setSunTime: (t) => set({ sunTime: t }),
   setHelpOpen: (v) => set({ helpOpen: v }),
+  setCurationOpen: (v) => set({ curationOpen: v }),
   setFilterAsset: (f) => set({ filterAsset: f }),
   setSearch: (s) => set({ search: s }),
   showToast: (msg) => {
@@ -16134,6 +27619,17 @@ var useEditor = create((set, get) => ({
       ...applyCommand(s, cmd, false),
       undoStack: opts?.skipUndo ? s.undoStack : [...s.undoStack, cmd].slice(-100),
       redoStack: opts?.skipUndo ? s.redoStack : []
+    }));
+  },
+  setBuildingMaterial: (id, mat) => {
+    const before = currentBuildingMaterial(id);
+    if (!before) return;
+    if (before.facade === mat.facade && before.roof === mat.roof && before.tint === mat.tint) return;
+    const cmd = { kind: "material", id, before, after: mat };
+    set((s) => ({
+      ...applyCommand(s, cmd, false),
+      undoStack: [...s.undoStack, cmd].slice(-100),
+      redoStack: []
     }));
   },
   setApproved: (id, approved) => set((s) => ({
@@ -16335,14 +27831,14 @@ async function fetchOsmArea(bbox, opts, onStatus) {
 }
 
 // src/export/bundle.ts
-import * as THREE20 from "three";
+import * as THREE23 from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 
 // src/physics/registryColliders.ts
-import * as THREE15 from "three";
+import * as THREE17 from "three";
 
 // src/physics/colliders.ts
-import * as THREE14 from "three";
+import * as THREE16 from "three";
 
 // src/physics/materials.ts
 var SURFACE_PHYSICS = {
@@ -16369,6 +27865,15 @@ var CLASS_PHYSICS = {
 
 // src/physics/colliders.ts
 var Y_ROAD_COL = 0.05;
+var RELOCATABLE_PROP_KINDS = /* @__PURE__ */ new Set([
+  "traffic_signal",
+  "stop_sign",
+  "give_way",
+  "road_sign",
+  "bus_stop",
+  "fountain",
+  "statue"
+]);
 var IDENTITY_Q = [0, 0, 0, 1];
 function yawQuaternion(yaw) {
   return [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)];
@@ -16380,7 +27885,7 @@ function toTrimesh(g) {
     const count = g.getAttribute("position").count;
     const idx = count > 65535 ? new Uint32Array(count) : new Uint16Array(count);
     for (let i = 0; i < count; i++) idx[i] = i;
-    g.setIndex(new THREE14.BufferAttribute(idx, 1));
+    g.setIndex(new THREE16.BufferAttribute(idx, 1));
   }
   return g;
 }
@@ -16415,7 +27920,7 @@ function buildColliders(graph, roadResolutions2, opts = {}) {
   buildingColliders(graph, opts, excluded, colliders);
   terrainCollider(bounds, colliders);
   waterSensors(graph, bounds, colliders);
-  barrierColliders(graph, colliders);
+  barrierColliders(graph, excluded, colliders);
   propColliders(graph, opts, excluded, colliders);
   const stats = Object.fromEntries(
     ["road", "intersection", "sidewalk", "building", "terrain", "barrier", "prop", "water"].map(
@@ -16434,9 +27939,16 @@ function roadColliders(graph, resolutions, elevation, out) {
     const half = r.widthM / 2;
     const cum = cumulative(pts);
     const profile = elevation.profileFor(r, cum).map((e) => e + Y_ROAD_COL);
-    const geometry = toTrimesh(
-      ribbonGeometry(offsetPolyline(pts, half), offsetPolyline(pts, -half), profile)
-    );
+    const crownCol = CROSS_SECTION.enabled && !NON_DRIVABLE.has(r.roadClass);
+    const surfaceMesh = crownCol ? crownedRibbonGeometry(
+      offsetPolyline(pts, half),
+      offsetPolyline(pts, -half),
+      profile,
+      half,
+      cum.map((c) => crossFade(c, polylineLength(pts))),
+      bankProfile(pts)
+    ) : ribbonGeometry(offsetPolyline(pts, half), offsetPolyline(pts, -half), profile);
+    const geometry = toTrimesh(surfaceMesh);
     const res = resolutions.get(r.id);
     const material = res ? { ...SURFACE_PHYSICS[res.surface], surfaceTag: res.surface } : { ...CLASS_PHYSICS.road };
     out.push({
@@ -16461,7 +27973,7 @@ function intersectionColliders(nodes, elevation, out) {
     if (info.count < 2) continue;
     const rad = discRadius(info.maxWidth);
     const seg = Math.max(10, Math.min(24, Math.round(rad * 3)));
-    const g = new THREE14.CircleGeometry(rad, seg);
+    const g = new THREE16.CircleGeometry(rad, seg);
     g.rotateX(-Math.PI / 2);
     g.translate(info.p.x, elevation.nodeElevation(k) + Y_ROAD_COL, info.p.z);
     out.push({
@@ -16517,7 +28029,7 @@ function bridgeRailColliders(graph, elevation, out) {
     const half = r.widthM / 2;
     let n = 0;
     for (const side of [1, -1]) {
-      const rail = offsetPolyline(pts, side * half);
+      const rail = offsetPolyline(pts, side * (half + RAIL_T / 2));
       for (let i = 0; i + 1 < rail.length; i++) {
         const a = rail[i];
         const b = rail[i + 1];
@@ -16586,12 +28098,12 @@ function buildingColliders(graph, opts, excluded, out) {
     }
     cx /= fp.length;
     cz /= fp.length;
-    const pts2 = fp.map((p) => new THREE14.Vector2(p.x - cx, -(p.z - cz)));
-    if (THREE14.ShapeUtils.isClockWise(pts2)) pts2.reverse();
-    const geo = new THREE14.ExtrudeGeometry(new THREE14.Shape(pts2), { depth: b.heightM, bevelEnabled: false });
+    const pts2 = fp.map((p) => new THREE16.Vector2(p.x - cx, -(p.z - cz)));
+    if (THREE16.ShapeUtils.isClockWise(pts2)) pts2.reverse();
+    const geo = new THREE16.ExtrudeGeometry(new THREE16.Shape(pts2), { depth: b.heightM, bevelEnabled: false });
     geo.rotateX(-Math.PI / 2);
     const live = opts.placements?.get(b.id);
-    const position = live ? [...live.position] : [cx, 0, cz];
+    const position = live ? [...live.position] : [cx, sampleTerrain(cx, cz), cz];
     const quaternion = live && live.rotation[1] !== 0 ? yawQuaternion(live.rotation[1]) : IDENTITY_Q;
     out.push({
       id: `col_building_${sanitizeId(b.id)}`,
@@ -16604,6 +28116,17 @@ function buildingColliders(graph, opts, excluded, out) {
   }
 }
 function terrainCollider(bounds, out) {
+  if (isTerrainEnabled()) {
+    out.push({
+      id: "col_terrain_ground",
+      kind: "trimesh",
+      geometry: toTrimesh(terrainGridGeometry(bounds)),
+      transform: { position: [0, 0, 0], quaternion: IDENTITY_Q },
+      semantics: { class: "terrain", featureId: "terrain_ground", static: true },
+      material: { ...CLASS_PHYSICS.terrain }
+    });
+    return;
+  }
   const hx = (bounds.maxX - bounds.minX) / 2;
   const hz = (bounds.maxZ - bounds.minZ) / 2;
   out.push({
@@ -16632,7 +28155,8 @@ function waterSensors(graph, bounds, out) {
     });
   });
 }
-function barrierColliders(graph, out) {
+function barrierColliders(graph, excluded, out) {
+  if (excluded.has("net_barriers")) return;
   const THICK = 0.15;
   for (const b of graph.barriers) {
     if (b.points.length < 2) continue;
@@ -16656,6 +28180,40 @@ function barrierColliders(graph, out) {
       });
     }
   }
+}
+var FURNITURE_CHANNEL_KINDS = /* @__PURE__ */ new Set(["street_lamp", "bench", "waste_basket"]);
+function insideAnyLane(q3, graph) {
+  for (const r of graph.roads) {
+    if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge || r.points.length < 2 || !(r.widthM > 0)) continue;
+    const half = r.widthM / 2;
+    for (let i = 1; i < r.points.length; i++) {
+      const a = r.points[i - 1];
+      const b = r.points[i];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      let t = len2 > 1e-9 ? ((q3.x - a.x) * dx + (q3.z - a.z) * dz) / len2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      if (Math.hypot(q3.x - (a.x + dx * t), q3.z - (a.z + dz * t)) < half) return true;
+    }
+  }
+  return false;
+}
+function clearDevicePosition(p, graph, drivingSide) {
+  const near = nearestRoadInfo(p, graph.roads);
+  const base = curbsideDevicePosition(p, near, drivingSide);
+  if (!insideAnyLane(base, graph)) return base;
+  if (!near?.road || !near.point) return base;
+  const nrm = { x: -near.dir.z, z: near.dir.x };
+  const half = near.road.widthM / 2;
+  const preferred = drivingSide === "right" ? -1 : 1;
+  for (const off of [half + 0.7, half + 1.6, half + 2.8, half + 4.2]) {
+    for (const s of [preferred, -preferred]) {
+      const cand = { x: near.point.x + nrm.x * s * off, z: near.point.z + nrm.z * s * off };
+      if (!insideAnyLane(cand, graph)) return cand;
+    }
+  }
+  return base;
 }
 function propShapeFor(p) {
   switch (p.kind) {
@@ -16709,8 +28267,12 @@ function propColliders(graph, opts, excluded, out) {
       });
     }
   };
+  const treesHidden = excluded.has("veg_trees");
+  const furnitureHidden = excluded.has("furn_all");
   for (const p of graph.points) {
     if (excluded.has(p.id)) continue;
+    if (FURNITURE_CHANNEL_KINDS.has(p.kind)) continue;
+    if (p.kind === "tree" && treesHidden) continue;
     const shape = propShapeFor(p);
     if (!shape || shape.minor && !opts.includeMinorProps) continue;
     const ext = opts.propExtents?.get(p.id);
@@ -16723,11 +28285,15 @@ function propColliders(graph, opts, excluded, out) {
       }
     }
     const live = opts.placements?.get(p.id);
-    const pos = live ? [...live.position] : [p.position.x, 0, p.position.z];
+    let base = p.position;
+    if (!live && RELOCATABLE_PROP_KINDS.has(p.kind) && insideAnyLane(p.position, graph)) {
+      base = clearDevicePosition(p.position, graph, opts.drivingSide ?? "right");
+    }
+    const pos = live ? [...live.position] : [base.x, sampleTerrain(base.x, base.z), base.z];
     const rotY = (live?.rotation[1] ?? 0) + (shape.rotY ?? 0);
     push(p.id, shape, p.kind, pos, rotY);
   }
-  const fp = opts.furniturePlacements;
+  const fp = furnitureHidden ? null : opts.furniturePlacements;
   if (fp) {
     fp.lamps.forEach(
       (l, i) => push(`furn_lamp_${i}`, { kind: "cylinder", radius: 0.1, halfHeight: 3.7 }, "street_lamp", [l.p.x, l.y ?? 0, l.p.z], l.rotY)
@@ -16756,7 +28322,7 @@ function buildCollidersFromRegistry() {
   const placements = /* @__PURE__ */ new Map();
   const excluded = /* @__PURE__ */ new Set();
   const propExtents = /* @__PURE__ */ new Map();
-  const box = new THREE15.Box3();
+  const box = new THREE17.Box3();
   const center = focusState.has ? focusTarget : lastOrbitTarget;
   const radiusFilter = cityGraph.buildings.length > RADIUS_FILTER_MIN_BUILDINGS;
   const r2 = DRIVE_BUILDING_RADIUS * DRIVE_BUILDING_RADIUS;
@@ -16806,6 +28372,8 @@ function buildCollidersFromRegistry() {
 var MAX_TRIS_PER_MESH = 6e4;
 var MAX_TRIS_TOTAL = 15e5;
 var GRADE_TOLERANCE = 1.6;
+var LANE_INTRUSION_MARGIN = 0.6;
+var SEAM_STEP_TOL = 0.08;
 function colliderLint(graph, set) {
   const warnings = [];
   const warn = (message) => warnings.push({ severity: "warn", message });
@@ -16902,6 +28470,31 @@ function colliderLint(graph, set) {
   if (totalTris > MAX_TRIS_TOTAL) {
     warn(`Collider: total trimesh budget exceeded (${Math.round(totalTris).toLocaleString()} triangles)`);
   }
+  const ids = /* @__PURE__ */ new Set();
+  let dupIds = 0;
+  for (const c of set.colliders) {
+    if (ids.has(c.id)) dupIds++;
+    ids.add(c.id);
+  }
+  if (dupIds) warn(`Collider: ${dupIds} duplicate collider id(s)`);
+  const lanes = new DrivableLaneSet(graph.roads, analyzeRoadNodes(graph.roads));
+  const intruders = [];
+  for (const c of set.colliders) {
+    if (c.semantics.sensor || c.semantics.class !== "prop") continue;
+    const [x, , z] = c.transform.position;
+    if (lanes.intrudes({ x, z })) intruders.push(c.semantics.featureId ?? c.id);
+  }
+  if (intruders.length) {
+    warn(
+      `Collider: ${intruders.length} solid prop collider(s) intrude into a driving lane (e.g. ${intruders[0]}) \u2014 obstacle on the drivable surface`
+    );
+  }
+  const steps = seamSteps(graph.roads);
+  if (steps.count) {
+    warn(
+      `Collider: ${steps.count} junction seam(s) step more than ${(SEAM_STEP_TOL * 100).toFixed(0)} cm (worst ${(steps.worst * 100).toFixed(0)} cm at ${steps.worstNode}) \u2014 bump crossing the junction`
+    );
+  }
   if (!warnings.some((w) => w.severity === "warn")) {
     warnings.push({
       severity: "info",
@@ -16910,9 +28503,93 @@ function colliderLint(graph, set) {
   }
   return warnings;
 }
+var DrivableLaneSet = class _DrivableLaneSet {
+  cells = /* @__PURE__ */ new Map();
+  discs = [];
+  static CELL = 24;
+  constructor(roads, nodes) {
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge) continue;
+      if (r.points.length < 2 || !(r.widthM > 0)) continue;
+      const half = r.widthM / 2;
+      for (let i = 1; i < r.points.length; i++) this.insert(r.points[i - 1], r.points[i], half);
+    }
+    for (const info of nodes.values()) {
+      if (info.count < 2) continue;
+      const rad = discRadius(info.maxWidth) + 1;
+      this.discs.push({ x: info.p.x, z: info.p.z, r2: rad * rad });
+    }
+  }
+  nearJunction(p) {
+    for (const d of this.discs) {
+      if ((p.x - d.x) ** 2 + (p.z - d.z) ** 2 < d.r2) return true;
+    }
+    return false;
+  }
+  insert(a, b, half) {
+    const C = _DrivableLaneSet.CELL;
+    const pad = half + 1;
+    for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / C); cx <= Math.floor((Math.max(a.x, b.x) + pad) / C); cx++) {
+      for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / C); cz <= Math.floor((Math.max(a.z, b.z) + pad) / C); cz++) {
+        const key = `${cx},${cz}`;
+        let list2 = this.cells.get(key);
+        if (!list2) this.cells.set(key, list2 = []);
+        list2.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half });
+      }
+    }
+  }
+  /** True when p sits deeper than LANE_INTRUSION_MARGIN inside a carriageway,
+   *  away from any junction disc (open intersection area). */
+  intrudes(p) {
+    if (this.nearJunction(p)) return false;
+    const C = _DrivableLaneSet.CELL;
+    const list2 = this.cells.get(`${Math.floor(p.x / C)},${Math.floor(p.z / C)}`);
+    if (!list2) return false;
+    for (const s of list2) {
+      const limit = s.half - LANE_INTRUSION_MARGIN;
+      if (limit > 0 && pointSegDist(p, s.ax, s.az, s.bx, s.bz) < limit) return true;
+    }
+    return false;
+  }
+};
+function pointSegDist(q3, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  let t = len2 > 1e-9 ? ((q3.x - ax) * dx + (q3.z - az) * dz) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(q3.x - (ax + dx * t), q3.z - (az + dz * t));
+}
+function seamSteps(roads) {
+  const nodes = analyzeRoadNodes(roads);
+  const elevation = buildRoadElevation(roads);
+  let count = 0;
+  let worst = 0;
+  let worstNode = "";
+  for (const r of roads) {
+    if (r.tunnel || r.points.length < 2) continue;
+    const pts = segCenterline(r);
+    const profile = elevation.profileFor(r, cumulative(pts));
+    for (const atEnd of [false, true]) {
+      const endPt = atEnd ? pts[pts.length - 1] : pts[0];
+      const key = nodeKey(endPt);
+      const node = nodes.get(key);
+      if (!node || node.count < 2) continue;
+      const step = Math.abs((atEnd ? profile[profile.length - 1] : profile[0]) - elevation.nodeElevation(key));
+      if (step > SEAM_STEP_TOL) {
+        count++;
+        if (step > worst) {
+          worst = step;
+          worstNode = key;
+        }
+      }
+    }
+  }
+  return { count, worst, worstNode };
+}
 
 // src/resolver/lints.ts
-import * as THREE16 from "three";
+import * as THREE19 from "three";
 
 // src/editor/depthConfig.ts
 var DEPTH_CONFIG = {
@@ -16940,11 +28617,14 @@ var LAYER_CONVENTION = [
   ["path surface", 0.046],
   // footway/cycleway/pedestrian — no junction nodes, so they cross carriageways untrimmed; the layer gap is what prevents the fight
   ["road surface", 0.05],
-  ["wear decals", 0.08],
-  ["junction surface", 0.11],
-  ["lane markings", 0.16],
-  ["crosswalks", 0.175],
+  ["lane markings", 0.055],
+  // ~5 mm above the road → visually flush, tires don't clip
+  ["wear decals", 0.06],
+  ["junction surface", 0.065],
+  ["crosswalks", 0.07],
+  // painted on top of the junction disc
   ["sidewalk top", 0.22]
+  // real curb height, not a paint layer
 ];
 var MIN_SEPARATION = 4e-3;
 
@@ -16997,6 +28677,115 @@ function auditWater(graph) {
   return warnings;
 }
 
+// src/scene/geometryLint.ts
+import * as THREE18 from "three";
+var _v = new THREE18.Vector3();
+var _sphere = new THREE18.Sphere();
+function geometryLint(roots, opts = {}) {
+  const warnings = [];
+  const warn = (message) => warnings.push({ severity: "warn", message });
+  const sampleCap = opts.normalSamples ?? 256;
+  let meshes = 0;
+  let badBounds = 0;
+  let zeroNormalMeshes = 0;
+  let badInstanceBounds = 0;
+  let maxReach = 0;
+  let firstBadBounds = "";
+  let firstZeroNormal = "";
+  let firstBadInstance = "";
+  for (const root of roots) {
+    root.updateMatrixWorld(true);
+    root.traverse((o) => {
+      const mesh2 = o;
+      if (!mesh2.isMesh) return;
+      const geo = mesh2.geometry;
+      const pos = geo?.getAttribute("position");
+      if (!geo || !pos) return;
+      meshes++;
+      if (!geo.boundingSphere) geo.computeBoundingSphere();
+      const bs = geo.boundingSphere;
+      if (!bs || !Number.isFinite(bs.radius) || bs.radius <= 0 || !isFiniteVec3(bs.center)) {
+        badBounds++;
+        if (!firstBadBounds) firstBadBounds = mesh2.name || o.type;
+      }
+      const nrm = geo.getAttribute("normal");
+      if (nrm) {
+        const stride = Math.max(1, Math.floor(nrm.count / sampleCap));
+        let zero = 0;
+        for (let i = 0; i < nrm.count; i += stride) {
+          if (nrm.getX(i) === 0 && nrm.getY(i) === 0 && nrm.getZ(i) === 0) zero++;
+        }
+        if (zero > 0) {
+          zeroNormalMeshes++;
+          if (!firstZeroNormal) firstZeroNormal = mesh2.name || o.type;
+        }
+      }
+      const im = mesh2;
+      if (im.isInstancedMesh) {
+        if (!im.boundingSphere) im.computeBoundingSphere();
+        const isphere = im.boundingSphere;
+        if (!isphere || !Number.isFinite(isphere.radius) || !isFiniteVec3(isphere.center)) {
+          badInstanceBounds++;
+          if (!firstBadInstance) firstBadInstance = mesh2.name || "instanced";
+        } else if (!instancesEnclosed(im, geo, isphere)) {
+          badInstanceBounds++;
+          if (!firstBadInstance) firstBadInstance = mesh2.name || "instanced";
+        }
+      }
+      if (bs && Number.isFinite(bs.radius)) {
+        _sphere.copy(bs).applyMatrix4(mesh2.matrixWorld);
+        const reach2 = _sphere.center.length() + _sphere.radius;
+        if (reach2 > maxReach) maxReach = reach2;
+      }
+    });
+  }
+  if (badBounds) warn(`Geometry: ${badBounds} mesh(es) have missing/non-finite bounding volumes (e.g. ${firstBadBounds})`);
+  if (zeroNormalMeshes)
+    warn(`Geometry: ${zeroNormalMeshes} mesh(es) contain zero-length vertex normals (e.g. ${firstZeroNormal}) \u2014 will shade black`);
+  if (badInstanceBounds)
+    warn(`Geometry: ${badInstanceBounds} instanced mesh(es) have bounds that do not enclose all instances (e.g. ${firstBadInstance}) \u2014 batch will pop in/out`);
+  let reach = maxReach;
+  if (opts.bounds) {
+    const { minX, maxX, minZ, maxZ } = opts.bounds;
+    reach = Math.max(reach, Math.hypot(Math.max(Math.abs(minX), Math.abs(maxX)), Math.max(Math.abs(minZ), Math.abs(maxZ))));
+  }
+  if (reach > DEPTH_CONFIG.far) {
+    warn(
+      `Geometry: scene reaches ${Math.round(reach)} m but the camera far plane is ${DEPTH_CONFIG.far} m \u2014 distant geometry will be clipped`
+    );
+  }
+  if (!warnings.length) {
+    warnings.push({
+      severity: "info",
+      message: `Geometry check passed: ${meshes} meshes, bounds/normals valid, reach ${Math.round(reach)} m within far ${DEPTH_CONFIG.far} m`
+    });
+  }
+  return warnings;
+}
+function isFiniteVec3(v) {
+  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+}
+function instancesEnclosed(im, geo, sphere) {
+  const geoR = geo.boundingSphere?.radius ?? 0;
+  const n = im.count;
+  const stride = Math.max(1, Math.floor(n / 128));
+  const mat = new THREE18.Matrix4();
+  for (let i = 0; i < n; i += stride) {
+    im.getMatrixAt(i, mat);
+    _v.setFromMatrixPosition(mat);
+    const scale = maxAxisScale(mat);
+    if (_v.distanceTo(sphere.center) > sphere.radius + geoR * scale + 1e-3) return false;
+  }
+  return true;
+}
+function maxAxisScale(m) {
+  const e = m.elements;
+  const sx = Math.hypot(e[0], e[1], e[2]);
+  const sy = Math.hypot(e[4], e[5], e[6]);
+  const sz = Math.hypot(e[8], e[9], e[10]);
+  return Math.max(sx, sy, sz);
+}
+
 // src/resolver/lints.ts
 function waterLint() {
   if (!cityGraph) return [];
@@ -17023,7 +28812,7 @@ function flickerLint() {
   }
   const s = useEditor.getState();
   const flats = [];
-  const tmp = new THREE16.Box3();
+  const tmp = new THREE19.Box3();
   for (const id of s.objectOrder) {
     const obj = s.objects[id];
     if (!obj || obj.deleted || !obj.visible) continue;
@@ -17219,12 +29008,32 @@ function roadConsistencyLint() {
   }
   return warnings;
 }
+function geometryLintScene() {
+  if (!cityGraph) return [];
+  const s = useEditor.getState();
+  const roots = [];
+  for (const id of s.objectOrder) {
+    const obj = s.objects[id];
+    if (!obj || obj.deleted || !obj.visible) continue;
+    const three = getVariant(obj.id, obj.asset);
+    if (three) roots.push(three);
+  }
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const r of cityGraph.roads) for (const p of r.points) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minZ = Math.min(minZ, p.z);
+    maxZ = Math.max(maxZ, p.z);
+  }
+  const bounds = isFinite(minX) ? { minX: minX - 120, maxX: maxX + 120, minZ: minZ - 120, maxZ: maxZ + 120 } : void 0;
+  return geometryLint(roots, { bounds });
+}
 
 // src/export/colliderGlb.ts
-import * as THREE17 from "three";
+import * as THREE20 from "three";
 import { mergeGeometries as mergeGeometries2 } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-var solidMat = new THREE17.MeshBasicMaterial({ color: "#888888" });
-var sensorMat = new THREE17.MeshBasicMaterial({ color: "#3a7bd5", transparent: true, opacity: 0.35 });
+var solidMat = new THREE20.MeshBasicMaterial({ color: "#888888" });
+var sensorMat = new THREE20.MeshBasicMaterial({ color: "#3a7bd5", transparent: true, opacity: 0.35 });
 function q(v) {
   return Math.round(v * 1e3) / 1e3;
 }
@@ -17247,30 +29056,30 @@ function descriptorGeometry(d) {
     g = d.geometry.clone();
   } else if (d.kind === "box") {
     const [hx, hy, hz] = d.halfExtents;
-    g = new THREE17.BoxGeometry(hx * 2, hy * 2, hz * 2);
+    g = new THREE20.BoxGeometry(hx * 2, hy * 2, hz * 2);
   } else if (d.kind === "cylinder") {
-    g = new THREE17.CylinderGeometry(d.radius, d.radius, d.halfHeight * 2, 12);
+    g = new THREE20.CylinderGeometry(d.radius, d.radius, d.halfHeight * 2, 12);
   } else {
     return null;
   }
   g.deleteAttribute("uv");
   g.deleteAttribute("normal");
-  const matrix = new THREE17.Matrix4().compose(
-    new THREE17.Vector3().fromArray(d.transform.position),
-    new THREE17.Quaternion().fromArray(d.transform.quaternion),
-    new THREE17.Vector3(1, 1, 1)
+  const matrix = new THREE20.Matrix4().compose(
+    new THREE20.Vector3().fromArray(d.transform.position),
+    new THREE20.Quaternion().fromArray(d.transform.quaternion),
+    new THREE20.Vector3(1, 1, 1)
   );
   g.applyMatrix4(matrix);
   if (!g.getIndex()) {
     const count = g.getAttribute("position").count;
     const arr = count > 65535 ? new Uint32Array(count) : new Uint16Array(count);
     for (let i = 0; i < count; i++) arr[i] = i;
-    g.setIndex(new THREE17.BufferAttribute(arr, 1));
+    g.setIndex(new THREE20.BufferAttribute(arr, 1));
   }
   return g;
 }
 function colliderGroupMerged(set) {
-  const root = new THREE17.Group();
+  const root = new THREE20.Group();
   root.name = "citybuilder_colliders";
   const groups = /* @__PURE__ */ new Map();
   for (const d of set.colliders) {
@@ -17312,7 +29121,7 @@ function colliderGroupMerged(set) {
 }
 function makeMergedMesh(geometry, rep, featureCount, key, idx) {
   const s = rep.semantics;
-  const mesh2 = new THREE17.Mesh(geometry, s.sensor ? sensorMat : solidMat);
+  const mesh2 = new THREE20.Mesh(geometry, s.sensor ? sensorMat : solidMat);
   mesh2.name = `col_${s.sensor ? "sensor_" : ""}${s.class}_${idx}`;
   mesh2.userData = {
     collider: { kind: "trimesh" },
@@ -17417,7 +29226,7 @@ function buildTrafficAudit(roads, devices) {
 }
 
 // src/export/optimizeScene.ts
-import * as THREE18 from "three";
+import * as THREE21 from "three";
 import { mergeGeometries as mergeGeometries3 } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 var KEEP_ATTRS = /* @__PURE__ */ new Set(["position", "normal", "uv", "color"]);
 function q2(v) {
@@ -17473,7 +29282,7 @@ function prepGeometry(geo, matrix) {
     const count = g.getAttribute("position").count;
     const arr = count > 65535 ? new Uint32Array(count) : new Uint16Array(count);
     for (let i = 0; i < count; i++) arr[i] = i;
-    g.setIndex(new THREE18.BufferAttribute(arr, 1));
+    g.setIndex(new THREE21.BufferAttribute(arr, 1));
   }
   return g;
 }
@@ -17521,7 +29330,7 @@ function optimizeSceneForExport(root) {
     }
     bucket.geos.push(g);
   });
-  const group = new THREE18.Group();
+  const group = new THREE21.Group();
   group.name = root.name || "citybuilder_scene";
   let idx = 0;
   for (const b of buckets.values()) {
@@ -17532,11 +29341,11 @@ function optimizeSceneForExport(root) {
       merged = null;
     }
     if (merged) {
-      const mesh2 = new THREE18.Mesh(merged, b.mat);
+      const mesh2 = new THREE21.Mesh(merged, b.mat);
       mesh2.name = `batch_${idx++}`;
       group.add(mesh2);
     } else {
-      b.geos.forEach((g) => group.add(new THREE18.Mesh(g, b.mat)));
+      b.geos.forEach((g) => group.add(new THREE21.Mesh(g, b.mat)));
     }
   }
   for (const p of passthrough) group.add(p);
@@ -17552,7 +29361,7 @@ function optimizeSceneForExport(root) {
 }
 
 // src/export/spawn.ts
-import * as THREE19 from "three";
+import * as THREE22 from "three";
 import { mergeGeometries as mergeGeometries4 } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 var CLASS_RANK = {
   primary: 5,
@@ -17616,7 +29425,7 @@ var MINIMAP_COLORS = {
   service: "#9a958a"
 };
 function buildMinimapGroup(roads) {
-  const group = new THREE19.Group();
+  const group = new THREE22.Group();
   group.name = "citybuilder_minimap";
   const byColor = /* @__PURE__ */ new Map();
   for (const r of roads) {
@@ -17630,7 +29439,7 @@ function buildMinimapGroup(roads) {
       const count = geo.getAttribute("position").count;
       const arr = count > 65535 ? new Uint32Array(count) : new Uint16Array(count);
       for (let i = 0; i < count; i++) arr[i] = i;
-      geo.setIndex(new THREE19.BufferAttribute(arr, 1));
+      geo.setIndex(new THREE22.BufferAttribute(arr, 1));
     }
     const color = MINIMAP_COLORS[r.class] ?? "#b0aba0";
     if (!byColor.has(color)) byColor.set(color, []);
@@ -17643,26 +29452,26 @@ function buildMinimapGroup(roads) {
     } catch {
       merged = null;
     }
-    const mat = new THREE19.MeshBasicMaterial({ color });
+    const mat = new THREE22.MeshBasicMaterial({ color });
     if (merged) {
-      const mesh2 = new THREE19.Mesh(merged, mat);
+      const mesh2 = new THREE22.Mesh(merged, mat);
       mesh2.name = `mm_${color.replace("#", "")}`;
       group.add(mesh2);
     } else {
-      geos.forEach((g) => group.add(new THREE19.Mesh(g, mat)));
+      geos.forEach((g) => group.add(new THREE22.Mesh(g, mat)));
     }
   }
   return group;
 }
 
 // src/export/bundle.ts
-function glbBuffer(root) {
+function glbBuffer(root, opts = {}) {
   return new Promise((resolve, reject) => {
     new GLTFExporter().parse(
       root,
       (result) => resolve(result),
       (err) => reject(err),
-      { binary: true }
+      { binary: true, onlyVisible: opts.onlyVisible ?? true }
     );
   });
 }
@@ -17681,18 +29490,19 @@ function surfaceGroup(set) {
   g.name = "citybuilder_surface";
   return g;
 }
-async function buildExportBundle() {
-  const s = useEditor.getState();
-  const colliderSet = buildCollidersFromRegistry();
+function runExportGate(s, colliderSet) {
   const gate = [
     ...flickerLint(),
     ...roadConsistencyLint(),
     ...waterLint(),
+    ...geometryLintScene(),
     ...colliderSet && cityGraph ? colliderLint(cityGraph, colliderSet) : []
   ];
   s.setLintReport([...gate, ...s.lintReport.filter((w) => !gate.some((g) => g.message === w.message))]);
-  const warnings = gate.filter((w) => w.severity === "warn");
-  const rawVisual = new THREE20.Group();
+  return gate.filter((w) => w.severity === "warn");
+}
+function buildVisualGroup(s) {
+  const rawVisual = new THREE23.Group();
   rawVisual.name = "citybuilder_scene";
   for (const id of s.objectOrder) {
     const obj = s.objects[id];
@@ -17706,10 +29516,16 @@ async function buildExportBundle() {
     clone.name = `${obj.type}__${obj.id}`;
     rawVisual.add(clone);
   }
-  const { group: visual, stats: optStats } = optimizeSceneForExport(rawVisual);
-  const collision = colliderSet ? colliderGroupMerged(colliderSet) : new THREE20.Group();
+  return optimizeSceneForExport(rawVisual);
+}
+async function buildExportBundle() {
+  const s = useEditor.getState();
+  const colliderSet = buildCollidersFromRegistry();
+  const warnings = runExportGate(s, colliderSet);
+  const { group: visual, stats: optStats } = buildVisualGroup(s);
+  const collision = colliderSet ? colliderGroupMerged(colliderSet) : new THREE23.Group();
   if (!colliderSet) collision.name = "citybuilder_colliders";
-  const surface = colliderSet ? surfaceGroup(colliderSet) : new THREE20.Group();
+  const surface = colliderSet ? surfaceGroup(colliderSet) : new THREE23.Group();
   const roadSem = buildRoadSemantics([...roadSegments.values()], roadResolutions);
   const allObjects = s.objectOrder.map((id) => s.objects[id]).filter((o) => !!o && !o.deleted);
   const trafficDevices = buildTrafficDevices(allObjects);
@@ -17837,6 +29653,7 @@ async function generateCity(opts) {
   await loadLibraryTemplates([], false);
   s.setUseLibraryAssets(false);
   s.setUseCorridorElevation(opts.corridorElevation ?? true);
+  s.setUseTerrain(opts.terrain ?? true);
   const roadScale = clampRoadScale(opts.roadScale ?? 1);
   s.setRoadScale(roadScale);
   progress("Generating roads, buildings & props\u2026");
@@ -17848,7 +29665,7 @@ async function generateCity(opts) {
 // src/server/world.ts
 import { list, put } from "@vercel/blob";
 import { createHash } from "node:crypto";
-var CONTRACT = "w1.s3.c2";
+var CONTRACT = "w1.s3.c2.a1";
 var MANIFEST_VERSION = 1;
 var JOB_STALE_MS = 15 * 60 * 1e3;
 var DEFAULT_OPTIONS = {

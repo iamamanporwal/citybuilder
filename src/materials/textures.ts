@@ -6,7 +6,7 @@ import * as THREE from 'three'
 
 export interface GeneratedTexture {
   name: string
-  kind: 'albedo' | 'normal' | 'metallicRoughness' | 'decal-albedo'
+  kind: 'albedo' | 'normal' | 'metallicRoughness' | 'decal-albedo' | 'height'
   size: number
   texture: THREE.Texture
   canvas: HTMLCanvasElement
@@ -223,61 +223,116 @@ function arcadeAsphaltMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
   }
 }
 
-function cobbleMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
-  // one tile covers ROAD_TILE_M (6 m): 32 setts per side ≈ 19 cm stones. The
-  // previous 8-per-side (75 cm) read as giant pillows at street level.
+// A single domed cobble sett: the top face bulges (bright→high centre falling to
+// dark→low rim) so each stone catches the sun on its crown and beads shadow in the
+// mortar, plus a per-sett base offset (uneven, hand-laid Prague "kostky") and a
+// worn-flat top. Drawn into the HEIGHT canvas; the albedo gets a matching subtle
+// centre-highlight so stone and relief register.
+function drawDomedSett(hctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, base: number, crown: number, r: number) {
+  const cx = x + w / 2
+  const cy = y + h / 2
+  const rad = Math.max(w, h) / 2
+  const g = hctx.createRadialGradient(cx, cy, rad * 0.15, cx, cy, rad)
+  // crown (raised, worn flat) → rim (recessed toward the mortar)
+  g.addColorStop(0, `rgb(${crown},${crown},${crown})`)
+  g.addColorStop(0.62, `rgb(${crown},${crown},${crown})`)
+  g.addColorStop(1, `rgb(${base},${base},${base})`)
+  hctx.fillStyle = g
+  roundRect(hctx, x, y, w, h, Math.min(w, h) * (0.28 + r * 0.12))
+}
+
+function cobbleMaps(): { albedo: THREE.Texture; normal: THREE.Texture; height: THREE.Texture } {
+  // one tile covers ROAD_TILE_M (6 m): 32 setts per side ≈ 19 cm stones. Setts are
+  // DOMED (radial height gradient per stone) with a per-sett base offset and deep
+  // mortar, so the surface reads as chunky, uneven, hand-laid granite that catches
+  // the sun stone-by-stone — the parallax + crevice-AO shader (withStoneRelief)
+  // then gives it real depth at street level, distinguishing it from flat sidewalk.
   const size = 512
   const [c, ctx] = makeCanvas(size)
   const [hc, hctx] = makeCanvas(size)
   const r = rng('cobble')
-  ctx.fillStyle = '#6f6a62'
+  ctx.fillStyle = '#645f57' // dark mortar/grit showing between the setts
   ctx.fillRect(0, 0, size, size)
-  hctx.fillStyle = '#404040'
+  hctx.fillStyle = '#1c1c1c' // deep mortar valleys (near-black = lowest)
   hctx.fillRect(0, 0, size, size)
   const cell = 16
   for (let y = 0; y < size / cell; y++) {
     for (let x = 0; x < size / cell; x++) {
-      const jx = (r() - 0.5) * 2
-      const jy = (r() - 0.5) * 2
-      const shade = 150 + r() * 60
-      ctx.fillStyle = `rgb(${shade},${shade * 0.97},${shade * 0.9})`
-      hctx.fillStyle = `rgb(${170 + r() * 60},0,0)`
-      const pad = 1.2
-      roundRect(ctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 3.5)
-      roundRect(hctx, x * cell + pad + jx, y * cell + pad + jy, cell - pad * 2, cell - pad * 2, 3.5)
+      const jx = (r() - 0.5) * 2.4
+      const jy = (r() - 0.5) * 2.4
+      // warm-grey granite, per-sett tonal + faint hue variation (some setts pinker/cooler)
+      const shade = 138 + r() * 66
+      const warm = (r() - 0.5) * 12
+      ctx.fillStyle = `rgb(${clampByte(shade + warm)},${clampByte(shade * 0.97)},${clampByte(shade * 0.9 - warm)})`
+      const pad = 1.1
+      const sx = x * cell + pad + jx
+      const sy = y * cell + pad + jy
+      const sw = cell - pad * 2
+      const sh = cell - pad * 2
+      roundRect(ctx, sx, sy, sw, sh, sw * (0.28 + r() * 0.12))
+      // faint crown highlight in the albedo so the lit dome doesn't read purely
+      // from the normal (helps at grazing angles / low sun)
+      const hg = ctx.createRadialGradient(sx + sw / 2, sy + sh / 2, 1, sx + sw / 2, sy + sh / 2, sw / 2)
+      hg.addColorStop(0, 'rgba(255,255,255,0.10)')
+      hg.addColorStop(1, 'rgba(0,0,0,0.10)')
+      ctx.fillStyle = hg
+      roundRect(ctx, sx, sy, sw, sh, sw * 0.3)
+      // height: domed top, per-sett base offset (uneven cobbles), worn crown
+      const base = 150 + r() * 40 // this sett's overall lift out of the mortar
+      const crown = Math.min(255, base + 40 + r() * 24)
+      drawDomedSett(hctx, sx, sy, sw, sh, base, crown, r())
     }
   }
+  speckle(ctx, size, r, 2600, 0.05, false)
   return {
     albedo: register('cobble_albedo', 'albedo', c, true),
-    normal: register('cobble_normal', 'normal', heightToNormal(hc, 1.4), false),
+    normal: register('cobble_normal', 'normal', heightToNormal(hc, 2.4), false),
+    height: register('cobble_height', 'height', hc, false),
   }
 }
 
-function paversMaps(): { albedo: THREE.Texture; normal: THREE.Texture } {
-  // one tile covers ROAD_TILE_M (6 m): 32 rows ≈ 19 cm × 37 cm bricks
+function paversMaps(): { albedo: THREE.Texture; normal: THREE.Texture; height: THREE.Texture } {
+  // one tile covers ROAD_TILE_M (6 m): 32 rows ≈ 19 cm × 37 cm bricks. Bricks are
+  // gently domed with a per-brick base offset and deep joints so they read as laid
+  // stone (not printed lines) under the parallax/crevice-AO stone shader.
   const size = 512
   const [c, ctx] = makeCanvas(size)
   const [hc, hctx] = makeCanvas(size)
   const r = rng('pavers')
-  ctx.fillStyle = '#7d7a72'
+  ctx.fillStyle = '#6d6a62'
   ctx.fillRect(0, 0, size, size)
-  hctx.fillStyle = '#383838'
+  hctx.fillStyle = '#202020' // deep joints
   hctx.fillRect(0, 0, size, size)
   const rowH = 16
   const brickW = 32
   for (let y = 0; y < size / rowH; y++) {
     const offset = (y % 2) * (brickW / 2)
     for (let x = -1; x < size / brickW + 1; x++) {
-      const shade = 165 + r() * 45
-      ctx.fillStyle = `rgb(${shade},${shade * 0.98},${shade * 0.93})`
-      hctx.fillStyle = `rgb(${180 + r() * 50},0,0)`
-      ctx.fillRect(x * brickW + offset + 1, y * rowH + 1, brickW - 2, rowH - 2)
-      hctx.fillRect(x * brickW + offset + 1, y * rowH + 1, brickW - 2, rowH - 2)
+      const shade = 158 + r() * 50
+      const warm = (r() - 0.5) * 10
+      ctx.fillStyle = `rgb(${clampByte(shade + warm)},${clampByte(shade * 0.98)},${clampByte(shade * 0.92 - warm)})`
+      const bx = x * brickW + offset + 1.4
+      const by = y * rowH + 1.4
+      const bw = brickW - 2.8
+      const bh = rowH - 2.8
+      ctx.fillRect(bx, by, bw, bh)
+      const base = 150 + r() * 38
+      const crown = Math.min(255, base + 34 + r() * 20)
+      // bricks are broader & flatter than setts: a wide crown plateau, short rim falloff
+      const g = hctx.createLinearGradient(bx, by, bx, by + bh)
+      g.addColorStop(0, `rgb(${base},${base},${base})`)
+      g.addColorStop(0.22, `rgb(${crown},${crown},${crown})`)
+      g.addColorStop(0.78, `rgb(${crown},${crown},${crown})`)
+      g.addColorStop(1, `rgb(${base},${base},${base})`)
+      hctx.fillStyle = g
+      hctx.fillRect(bx, by, bw, bh)
     }
   }
+  speckle(ctx, size, r, 2200, 0.045, false)
   return {
     albedo: register('pavers_albedo', 'albedo', c, true),
-    normal: register('pavers_normal', 'normal', heightToNormal(hc, 1.2), false),
+    normal: register('pavers_normal', 'normal', heightToNormal(hc, 2.0), false),
+    height: register('pavers_height', 'height', hc, false),
   }
 }
 

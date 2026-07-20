@@ -4,7 +4,7 @@
 **Owner:** (you)
 **Last updated:** 14 July 2026
 
-> **How to read this doc.** Sections tagged *(implemented in MVP)* describe code that exists and is tested today (§7A–§7F, §14A). Everything else is the target architecture. §19 is the authoritative **PRD-vs-codebase gap map** — read it to know exactly what is real versus aspirational before planning work.
+> **How to read this doc.** Sections tagged *(implemented in MVP)* describe code that exists and is tested today (§7A–§7F, §14A). Everything else is the target architecture. §19 is the authoritative **PRD-vs-codebase gap map** — read it to know exactly what is real versus aspirational before planning work. §20 is the **repository & file structure map** — a one-line description of every source file, for locating a subsystem in the tree.
 
 ---
 
@@ -673,3 +673,214 @@ This section is the single source of truth for **what is real in the codebase to
 ### 19.3 The one thing to wire next
 
 Per the owner's standing note ("let me know if you need API keys"): the highest-leverage gap is **real 3D generation**. The entire async job pipeline, caching, provenance, and review UI already exist around the simulated worker — replacing `runGeneration()` with a live self-hosted **Trellis** GPU endpoint (or a **Meshy** API key) is the single change that turns the "upgrade a landmark cheaply" promise real. Everything else in §19.2 is scale/fidelity hardening that the current client-side MVP proves out but does not yet ship.
+
+---
+
+## 20. Repository & file structure *(codebase map)*
+
+This section maps the actual repository so a new contributor can locate any subsystem from §7–§14 in the tree. Every source file gets a one-line description of what it holds. It reflects the code as it exists today (the client-side MVP + headless/World-API path); binary asset packs are summarized at the folder level rather than listed file-by-file.
+
+**Status labels.** Every file listed below **exists in the repo** — this is a map of real code, not a wishlist. The labels distinguish *how complete the feature behind the file is*, cross-referenced to the §19 gap map:
+
+- **✅ real** — implemented and tested; the default. Unlabeled entries are ✅.
+- **⚠️ seam** — real, endpoint-ready code that currently runs a **simulated or stubbed** path; the plan is to wire a live backend into it (no rewrite needed). See §19.2.
+- **📋 plan** — described in the PRD (§6–§14) but **has no file yet**; listed here only where a reserved slot/field points at it, so you know it's deliberately absent.
+
+Purely aspirational architecture (Houdini/PDG engine, PostGIS/S3, 3D-Tiles tiling, KTX2 encode, Overture/premium adapters) has **no entry below** — it lives in §12–§14 and the §19.2 gap table, not the tree.
+
+### 20.1 Top level
+
+```
+citybuilder/
+├── index.html                  Vite entry HTML; mounts the React app at #root
+├── package.json                Deps + scripts (dev/build/test/bake/generate); Node ≥22.12 engine pin
+├── package-lock.json           Locked dependency tree
+├── tsconfig.json               TypeScript compiler config
+├── vite.config.ts              Vite config + the dev-only Sketchfab proxy (/api/sketchfab/*) and /assetlib/** static middleware
+├── vercel.json                 Vercel deploy config for the World API (api/v1/maps)
+├── .nvmrc                      Node version pin (22.12) — Vite 8 crashes serving large GLBs on Node 20
+├── .env / .env.example / .env.local   Secrets + seams: SKETCHFAB_API_TOKEN, VITE_VLM_ENDPOINT, provider keys (never bundled client-side)
+├── .gitignore
+├── README.md                   Project overview, setup, and run instructions
+├── citybuilder-prd.md          This document — the product requirements + gap map
+├── src/                        The app (see §20.2)
+├── tools/                      Node/CLI build & curation scripts (see §20.3)
+├── api/                        Generated Vercel serverless functions (see §20.4)
+├── assets/                     Consumed asset library + generated manifests (see §20.5)
+├── asset-library/              Raw downloaded asset packs, pre-curation (see §20.5)
+├── docs/                       Design docs & RCAs (see §20.6)
+├── public/                     Static assets served as-is (see §20.6)
+├── dist/                       Vite production build output (generated)
+└── .claude/skills/verify/      Headless end-to-end verify skill (build → launch → drive → screenshot)
+```
+
+### 20.2 `src/` — the application
+
+**App shell & entry**
+- `main.tsx` — React DOM bootstrap; renders `<App>` into `#root`.
+- `App.tsx` — top-level layout wiring viewport + toolbar + hierarchy + inspector panels together.
+- `types.ts` — the **City Graph** schema (Layer 1): roads, buildings, points, water, the `SceneObject` model — the source-of-truth data types.
+- `styles.css` — global editor styles.
+- `vite-env.d.ts` — Vite env typings + the recognizer/gateway env seams (all optional).
+
+**`app/` — build orchestration**
+- `buildCity.ts` — the build conductor: fetch/reuse OSM → City Graph → 3D scene; owns the pristine-graph + rebuild-toggle composition and the shared lint gate.
+
+**`ingest/` — data layer (§6)**
+- `overpassFetch.ts` — live Overpass fetch for a bbox with mirror fallback + localStorage cache.
+- `overpass.ts` — OSM→City Graph adapter (the contract other adapters like Overture/premium would implement).
+
+**`resolver/` — Context Resolver & content matrix (§7A)**
+- `types.ts` — resolver types: regions, climate zones, weighted variants, resolution records.
+- `matrix.ts` — the declarative, versioned **content matrix**: ordered region packs + rules; first match wins.
+- `resolve.ts` — deterministic seeding (`hash01`, `pickWeighted`) — same city in, same city out.
+- `adapters.ts` — external context adapters (region/Nominatim, climate/Köppen heuristic, species/GBIF, land-cover) each with graceful fallback.
+- `assetPools.ts` — bridges `assets/manifest.json` into the resolver as weighted, deterministically-picked pools.
+- `lints.ts` — aggregated post-build/export lint gate (flicker, water, road consistency).
+- `varietyLint.ts` — monotony linter (dominant variants, identical neighbors).
+- `waterAudit.ts` — water over-classification regression gate (buildings are land).
+
+**`recognizer/` — Building Recognizer (§7F)**
+- `types.ts` — descriptor/appearance-plan/arch-style types.
+- `priors.ts` — Stage 1: gather structured priors (OSM tags + region + massing) — pure, synchronous.
+- `prepass.ts` — async prepass fetching Wikidata style (P149) + reference photo (P18) for landmarks, cached.
+- `descriptor.ts` — Stage 2: priors(+photo)→descriptor. `describeFromPriors` (deterministic default) is **✅ real**; `describeWithVlm` is a **⚠️ seam** — off until `VITE_VLM_ENDPOINT` is set (§19.2).
+- `recognizer.ts` — the orchestrator: runs the fallback chain, emits one `AppearancePlan` per building, caches it.
+
+**`procgen/` — procedural engine (§7B, §7C, §8)**
+- `roads.ts` — the deterministic procedural road system (surfaces, markings, wear, bridges/tunnels); locked in the editor.
+- `roadNetwork.ts` — shared road-network + bridge-elevation math (true-meter profiles) used by renderer, colliders, semantics.
+- `roadScale.ts` — the "stretch roads" transform: widen carriageways + displace non-road features, deterministically.
+- `geometry.ts` — polyline/ribbon helpers (XZ-plane, Y-up).
+- `buildings.ts` — footprint→slot building extrusion (position/footprint/height stay stable across providers).
+- `bridges.ts` — procedural suspension/cable-stayed superstructures (towers, catenary cables, girder) for landmark bridges.
+- `areas.ts` — land-cover polygons + terrain/water surface; water carves real holes so it never z-fights ground.
+- `props.ts` — street furniture & vegetation, seeded by object id, zoning-aware density.
+- `propLibrary.ts` — common-prop library mapped from OSM tags; procedural CC0 stand-ins, prefers real packs in `/public/props/`.
+- `signs.ts` — faithful region-keyed traffic signs (procedural pole + canvas plate face).
+- `signMath.ts` — pure traffic-device math (orientation, speed units, effective limit) shared by renderer + semantics.
+- `materials.ts` — shared procedural facade textures (grayscale so per-building tint works).
+- `decalPlan.ts` — wear-decal placement with a global non-overlap guarantee (rejection-sampled, deterministic).
+- `sanity.ts` — pre-geometry City Graph sanity validation + auto-remediation (impossible placements removed/clamped).
+- `corridor/graph.ts` — Stage 0: builds the road topology graph from the City Graph.
+- `corridor/elevation.ts` — Stage 2: the network elevation solve (Gauss-Seidel node relaxation + grade-limited edges).
+- `corridor/index.ts` — the single consumer seam: renderer/colliders/semantics read the road y-channel through here.
+- `corridor/config.ts` — corridor-elevation feature flag + design constants (default-ON, reversible).
+- `corridor/cluster.ts` — junction consolidation (osm2streets-style cluster→contract) killing the "pancake pile" artifact.
+- `terrain/field.ts` — the deterministic, hydrology-aware terrain height field; one field every consumer samples.
+- `terrain/mesh.ts` — the single terrain geometry shared by visual ground + physics collider.
+- `terrain/config.ts` — terrain relief feature flag + constants.
+
+**`materials/` — material & texture system (§7B)**
+- `library.ts` — PBR metallic-roughness material library (unlit-authored) + world-position anti-tiling shader tricks.
+- `textures.ts` — procedural PBR texture generation (albedo/height→normal/metallic-roughness), clean + unlit, seeded.
+- `packaging.ts` — texel-density + per-LOD budget policy and the KTX2 packaging manifest spec. The manifest is ✅ real; the **KTX2/Basis encode it specifies is 📋 plan** (deferred to the bake service, §14A/§19.2).
+
+**`scene/` — scene assembly & registries**
+- `registry.ts` — maps object id → three.js mesh variants (objects live outside React state).
+- `libraryTemplates.ts` — pre-loads library GLBs into per-kind templates the synchronous prop builders instance/clone.
+- `landmarks.ts` — landmark catalog: named/wikidata OSM features → recognizable procedural or glTF treatments.
+- `geometryLint.ts` — render-visibility lint (stale bounds / zero-length normals that cause frustum-cull or black faces).
+
+**`editor/` — the 3D editor (§10)**
+- `Viewport.tsx` — the R3F canvas, look-dev FX-preview composer, and the drive-mode code-split boundary + QA camera bridge.
+- `SceneContent.tsx` — renders scene objects + transform gizmos; handles picking/selection.
+- `CameraRig.tsx` — orbit + fly camera; publishes the orbit target for drive spawn.
+- `actions.ts` — editor actions (e.g. frame camera on objects).
+- `bus.ts` — tiny event bus for one-shot camera-framing requests.
+- `input.ts` — global key state shared by fly mode + drive sim.
+- `depthConfig.ts` — single source of truth for depth-buffer config + the vertical **layer convention** (flickerLint reads the same constants).
+- `driving/Car.tsx` — the arcade physics car (Rapier raycast-wheel vehicle controller, pitch/roll locked).
+- `driving/DriveSim.tsx` — lazy-mounted drive-preview physics world (carries the ~2 MB Rapier wasm chunk).
+
+**`physics/` — colliders & drive physics (§8.2, §10.1)**
+- `types.ts` — the shared collider contract (produced from semantic data, never from visual mesh).
+- `colliders.ts` — collider generation from City Graph + resolutions (surfaces mirror visual layer heights).
+- `buildColliders.ts` — descriptors → imperative static Rapier colliders (water → sensors).
+- `registryColliders.ts` — live-scene collider assembly from registry+store, with a spawn-radius cook cap for big cities.
+- `colliderLint.ts` — export-gate collider lint (lane intrusions, junction steps), pure/testable.
+- `materials.ts` — per-surface/class friction & restitution hints (carried in GLB extras).
+
+**`gateway/` — generation & library providers (§9, §11)**
+- `providers.ts` — **⚠️ seam**: the pluggable generation gateway; `runGeneration()` is a **simulated** GPU worker (returns a deterministic procedural variant). The queue/progress/cache/review UI around it is ✅ real and endpoint-ready — swapping in Trellis/Meshy is config, not code (§19.3).
+- `sketchfab.ts` — **⚠️ seam**: in-app Sketchfab search + drop-into-slot. Fully working in dev via the Vite proxy; a static production build has no proxy, so it degrades gracefully until a serverless proxy exists (§7E).
+
+**`export/` — export & bake (§14, §14A)**
+- `bundle.ts` — environment-agnostic artifact builder (in-memory buffers); one code path for browser + headless.
+- `exporter.ts` — browser export sink: turns buffers into file downloads.
+- `optimizeScene.ts` — the draw-call optimizer (material dedup + geometry batch-merge) run on a throwaway clone.
+- `colliderGlb.ts` — collider set → GLB group with machine-readable `extras` per node.
+- `semantics.ts` — `city_semantics.json` (v3): 3-component road centerlines in true meters + per-object provenance.
+- `spawn.ts` — auto spawn point + roads-only minimap derived from road semantics (zero per-map code).
+
+**`headless/` — no-browser pipeline (CLI + API)**
+- `generate.ts` — headless bbox/OSM → export bundle; mirrors `buildCity.ts` without UI.
+- `bake.ts` — in-process Draco bake for headless exports (in-memory buffers). ✅ real for **Draco geometry only**; KTX2 texture encode is the 📋 plan bake-service step.
+- `shims.ts` — minimal DOM/canvas shims so procgen texture code runs in Node (import first).
+- `draco3dgltf.d.ts` — type shim for the Draco encoder module.
+
+**`server/` — World API logic (§ world-api)**
+- `world.ts` — shared plumbing: job state + artifacts in Vercel Blob; status derived from which blobs exist.
+- `mapsPost.ts` — `POST /api/v1/maps`: request a map for a bbox, returns a deterministic cache-key job id.
+- `mapsGet.ts` — `GET /api/v1/maps/:id`: poll a job; ready responses embed the CDN-cached manifest.
+- `runJob.ts` — the generation worker: run headless pipeline → upload artifacts → write manifest last.
+
+**`state/` — app state (zustand)**
+- `store.ts` — the main editor store (selection, filters, toggles, context info).
+- `driveHud.ts` — drive-preview HUD state (speed etc.).
+- `curation.ts` — persisted in-app asset-library curation state read live by the build path.
+
+**`ui/` — panels & overlays (§10)**
+- `Toolbar.tsx` — top toolbar (build, toggles, export, drive, library assets).
+- `Hierarchy.tsx` — outliner grouped by type/tile; double-click to frame.
+- `Inspector.tsx` — property inspector + live procedural facade/roof/tint re-skinner.
+- `ReplacePanel.tsx` — the object replacement panel (§9): keep/generate/Sketchfab-search/upload + recognizer block.
+- `AreaPicker.tsx` — full-screen Leaflet location picker (search + draggable ≤4 km² rectangle).
+- `CurationStudio.tsx` — visual studio to hand-pick library model variants per kind.
+- `LoadingScreen.tsx` — watchable build loader (animated skyline + real-phase checklist + timer).
+- `HelpOverlay.tsx` — first-run help/controls overlay.
+- `StatusBar.tsx` — bottom status/info bar.
+
+**`__tests__/` — ~90 cases across the invariant suite (`npm test`)**
+- Correctness gates including: `flickerInvariants` / `coplanarOverdraw` / `geometryLint` (z-fighting + visibility), `roadElevation` / `corridorElevation` / `junctionConsolidation` / `roadGrounding` / `roadScale` (roads), `terrainField` / `terrainCarve` / `terrainIntegration` (terrain), `waterClassification` (water), `colliders` / `colliderAudit` (physics), `recognizer` (appearance), `assetManifest` (library pools), `signMath` / `signPlacement` (signs), `trafficIngest` / `trafficSemantics` (semantics), `exportOptimize` (export), `landmarkBridge`, `sanity`, plus `pragueBuild` / `headlessExport` integration tests.
+
+### 20.3 `tools/` — Node/CLI scripts
+
+- `generate-city.ts` — headless city export CLI (same pipeline as the World API, writing locally). `npm run generate`.
+- `bake-glb.mjs` — Draco-compress + clean up exported GLBs (weld→dedup→prune→join). `npm run bake`. ✅ real for Draco; KTX2 encode is 📋 plan (§14A).
+- `build-api.mjs` — esbuild-bundle each `src/server` endpoint into self-contained `api/` functions. `npm run build:api`.
+- `build-asset-manifest.mjs` — scan the asset library → `assets/manifest.json` + `assets/coverage-report.md`.
+- `sketchfab-lib.mjs` — shared Sketchfab Data API v3 client (token from env, retry/backoff).
+- `sketchfab-curate.mjs` — search Sketchfab per coverage gap → labeled, license-audited `assets/sketchfab-catalog.json`.
+- `sketchfab-fetch.mjs` — download vetted catalog models into the library so they become pooled assets.
+- `curate-kenney-roads.mjs` — catalog the Kenney City-Kit road tiles as **reference-only** (roads stay procedural/locked).
+- `curate-toxsam.mjs` — curate the ToxSam/Polygonal Mind CC0 pack into the library format.
+- `osm2streets-spike.mjs` — feasibility spike proving lane-accurate geometry from our OSM via osm2streets-js (WASM).
+
+### 20.4 `api/` — generated Vercel functions
+
+- `v1/maps/index.mjs` — **generated** bundle of `mapsPost` (POST) — edit `src/server/*`, not this.
+- `v1/maps/[id].mjs` — **generated** bundle of `mapsGet` (GET) — edit `src/server/*`, not this.
+
+### 20.5 Asset directories
+
+- `assets/manifest.json` — the scanned, classified library manifest (weighted pools) the resolver consumes.
+- `assets/coverage-report.md` — pipeline-consumed OSM tags vs. library supply + acquisition priorities.
+- `assets/sketchfab-catalog.json` — labeled, license-audited Sketchfab candidate index (no meshes bundled).
+- `assets/curation-selection.json` — exported curation picks.
+- `assets/library/<pack>/` — consumed packs in the fixed layout (`gltf/`, `fbx/unity|unreal/`, `textures/`, `previews/`, `LICENSE.txt`); served at `/assetlib/**`.
+- `asset-library/` — raw downloaded packs pre-curation (Quaternius Downtown City MegaKit, Kenney city-kit-roads, ToxSam/Polygonal Mind) + `build-manifest.mjs` + `README.md`.
+
+### 20.6 Docs & static
+
+- `docs/Road-updates.md` — traffic/road semantics & sign spec.
+- `docs/road-corridor-redesign.md` — the corridor elevation + junction consolidation design.
+- `docs/modular-road-asset-system.md` — modular road asset design notes.
+- `docs/water-and-flicker-rca.md` — root-cause analysis behind the depth/layer-convention invariants.
+- `docs/osm2streets-spike.md` (+ `osm2streets-preview.png`) — the lane-level geometry spike writeup.
+- `docs/world-api.md` — the headless World API design.
+- `docs/aaa-improvements-plan.md` — road/ground fidelity improvement plan.
+- `docs/asset-viewer-plan.md` — asset viewer/catalog plan.
+- `docs/screenshots/` — reference/QA screenshots.
+- `public/data/raw_osm.json` — prefetched Lower Manhattan sample city.
+- `public/data/prague_osm.json` — prefetched Prague Staré Město sample (landmark/bridge showcase).
