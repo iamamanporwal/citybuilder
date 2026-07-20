@@ -69,6 +69,8 @@ float cbHeightBlend(float ha, float hb, float t) {
 uniform sampler2D cbDetailNormalMap;
 uniform float cbDetailRepeat;
 uniform float cbDetailStrength;
+varying float vCbLane; // -1 (left kerb) .. +1 (right kerb); 0 where no lane frame
+varying float vCbWear; // 1 on driven carriageways, 0 elsewhere (gates lane wear)
 `
 
 // Large-scale variation keyed to WORLD position (not UV), so long roads don't
@@ -83,8 +85,8 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
     shader.uniforms.cbDetailRepeat = { value: ROAD_TILE_M / 0.5 } // vNormalMapUv is per-6m → ×12 = 0.5 m
     shader.uniforms.cbDetailStrength = { value: 0.6 }
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;\nattribute float aLane;\nattribute float aWear;\nvarying float vCbLane;\nvarying float vCbWear;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n\tvCbLane = aLane;\n\tvCbWear = aWear;')
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\nvarying vec3 vCbMacroW;\n${HEX_TILING_GLSL}`)
       .replace(
@@ -100,7 +102,27 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
         float cbHeight = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
         float cbPatch = 0.5 + 0.5 * sin(vCbMacroW.x * 0.043 - vCbMacroW.z * 0.057);
         float cbOily = cbHeightBlend(cbHeight, 0.55, cbPatch);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.74, 0.78), cbOily * 0.45);`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.74, 0.78), cbOily * 0.45);
+        // #7 lane-space wear: polished wheel tracks, oily centreline, dusty kerb
+        // edge. Gated by vCbWear so it only paints driven carriageways (0 on
+        // junction patches / paths / cobble that carry no lane frame).
+        float cbLat = abs(vCbLane);
+        float cbAlong = 0.5 + 0.5 * sin(vCbMacroW.x * 0.11 + vCbMacroW.z * 0.09);
+        float cbWheel = exp(-pow((cbLat - 0.55) / 0.13, 2.0)) * (0.55 + 0.45 * cbAlong);
+        float cbCenterOil = smoothstep(0.13, 0.0, cbLat);
+        float cbEdgeDust = smoothstep(0.82, 1.0, cbLat);
+        float cbW = vCbWear;
+        diffuseColor.rgb *= 1.0 - cbWheel * 0.13 * cbW;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.62, 0.64, 0.68), cbCenterOil * 0.45 * cbW);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.16, 1.14, 1.09), cbEdgeDust * 0.30 * cbW);`,
+      )
+      // #7 roughness: wheel tracks + oil read polished (lower roughness), the dusty
+      // kerb edge reads drier (higher). cbWheel/cbCenterOil/cbEdgeDust are declared
+      // in the map-fragment block above, still in scope here.
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor * (1.0 - (cbWheel * 0.22 + cbCenterOil * 0.18) * cbW + cbEdgeDust * 0.05 * cbW), 0.0, 1.0);`,
       )
       // #5 detail normal: blend fine grain into the tangent-space normal before the
       // TBN transform, faded out with view distance so far asphalt stays clean.

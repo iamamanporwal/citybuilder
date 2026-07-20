@@ -381,6 +381,20 @@ export function buildRoads(
       planarUvXZ(surface)
     } else {
       surface = ribbonGeometry(left, right, profile)
+      // Lane-space wear coords for the asphalt wear shader (#7). aLane: -1 (left
+      // kerb) → +1 (right kerb) across the ribbon (ribbonGeometry emits left then
+      // right per section, so even verts = left). aWear=1 flags a driven
+      // carriageway; junction patches / paths / cobble lack it, so the wear shader
+      // (gated by aWear) stays OFF there — no misfire where there is no lane frame.
+      const vc = surface.getAttribute('position').count
+      const lane = new Float32Array(vc)
+      const wear = new Float32Array(vc)
+      for (let i = 0; i < vc; i++) {
+        lane[i] = i % 2 === 0 ? -1 : 1
+        wear[i] = 1
+      }
+      surface.setAttribute('aLane', new THREE.BufferAttribute(lane, 1))
+      surface.setAttribute('aWear', new THREE.BufferAttribute(wear, 1))
     }
     const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ':uv')))
     mesh.name = r.name ?? `${r.roadClass} road`
