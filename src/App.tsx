@@ -5,6 +5,7 @@ import { Toolbar } from './ui/Toolbar'
 import { Hierarchy } from './ui/Hierarchy'
 import { Inspector } from './ui/Inspector'
 import { StatusBar } from './ui/StatusBar'
+import { CoordHud } from './ui/CoordHud'
 import { HelpOverlay } from './ui/HelpOverlay'
 import { CurationStudio } from './ui/CurationStudio'
 import { AreaPicker } from './ui/AreaPicker'
@@ -97,6 +98,7 @@ export default function App() {
         <Hierarchy />
         <div className="viewport">
           <Viewport />
+          <CoordHud />
           <DriveHudOverlay />
           <Toast />
         </div>
