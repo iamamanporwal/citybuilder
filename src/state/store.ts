@@ -16,7 +16,7 @@ import { loadCuration, saveCuration, type CurationMap } from './curation'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
 import { setTerrainEnabled } from '../procgen/terrain/config'
 import { setGreeneryEnabled } from '../procgen/vegetation'
-import { setRoadStyle, type RoadStyle } from '../materials/library'
+import { setRoadStyle, setWetness, type RoadStyle } from '../materials/library'
 import { setPaintWear } from '../procgen/materials'
 import { clampRoadScale } from '../procgen/roadScale'
 import type { ResolvedContext } from '../resolver/types'
@@ -65,6 +65,7 @@ interface EditorState {
   useCorridorElevation: boolean
   useTerrain: boolean
   roadsideGreenery: boolean
+  weather: 'dry' | 'wet'
   roadStyle: RoadStyle
   roadScale: number
   contextInfo: ContextInfo | null
@@ -89,6 +90,7 @@ interface EditorState {
   setUseCorridorElevation: (v: boolean) => void
   setUseTerrain: (v: boolean) => void
   setRoadsideGreenery: (v: boolean) => void
+  setWeather: (v: 'dry' | 'wet') => void
   setRoadStyle: (v: RoadStyle) => void
   setRoadScale: (v: number) => void
   setLintReport: (w: LintWarning[]) => void
@@ -196,6 +198,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
   // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
   roadsideGreenery: true,
+  // Weather (Phase 5 #14) — wet darkens the asphalt + drops roughness so the sun
+  // glints off it and pools in puddles. Live uniform, no rebuild. Default dry.
+  weather: 'dry',
   // Road surface style — realistic (textured aggregate) vs arcade (clean kit look).
   roadStyle: 'realistic',
   // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.
@@ -266,6 +271,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   setRoadsideGreenery: (v) => {
     setGreeneryEnabled(v)
     set({ roadsideGreenery: v })
+  },
+  setWeather: (v) => {
+    setWetness(v === 'wet' ? 1 : 0)
+    set({ weather: v })
   },
   setRoadStyle: (v) => {
     setRoadStyle(v)

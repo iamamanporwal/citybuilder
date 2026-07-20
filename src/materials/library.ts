@@ -19,6 +19,16 @@ const roofs = generateRoofTextures()
 export const decals = makeDecals()
 const DETAIL_NORMAL = makeDetailNormal() // shared meso-detail normal for asphalt (Phase 2 #5)
 
+// Wetness (Phase 5 #14) — a shared, live-adjustable uniform (like PAINT_WEAR): 0
+// dry, 1 fully wet. Wet asphalt darkens and drops in roughness so the sun glints
+// off it; a world-space puddle mask pools near-mirror water in low spots. Cheap
+// (no SSR / env map — the sharp sun specular alone reads as wet). setWetness +
+// an Invalidator dependency update the look with no scene rebuild.
+const CB_WET = { value: 0 }
+export function setWetness(v: number): void {
+  CB_WET.value = Math.max(0, Math.min(1, v))
+}
+
 function std(o: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial(o)
 }
@@ -71,6 +81,7 @@ uniform float cbDetailRepeat;
 uniform float cbDetailStrength;
 varying float vCbLane; // -1 (left kerb) .. +1 (right kerb); 0 where no lane frame
 varying float vCbWear; // 1 on driven carriageways, 0 elsewhere (gates lane wear)
+uniform float uWet;    // 0 dry .. 1 wet (Phase 5 #14)
 `
 
 // Large-scale variation keyed to WORLD position (not UV), so long roads don't
@@ -84,6 +95,7 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
     shader.uniforms.cbDetailNormalMap = { value: DETAIL_NORMAL }
     shader.uniforms.cbDetailRepeat = { value: ROAD_TILE_M / 0.5 } // vNormalMapUv is per-6m → ×12 = 0.5 m
     shader.uniforms.cbDetailStrength = { value: 0.6 }
+    shader.uniforms.uWet = CB_WET // Phase 5 #14 — shared wetness uniform
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;\nattribute float aLane;\nattribute float aWear;\nvarying float vCbLane;\nvarying float vCbWear;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n\tvCbLane = aLane;\n\tvCbWear = aWear;')
@@ -114,7 +126,11 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
         float cbW = vCbWear;
         diffuseColor.rgb *= 1.0 - cbWheel * 0.13 * cbW;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.62, 0.64, 0.68), cbCenterOil * 0.45 * cbW);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.16, 1.14, 1.09), cbEdgeDust * 0.30 * cbW);`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.16, 1.14, 1.09), cbEdgeDust * 0.30 * cbW);
+        // #14 wetness: darken (uniform wet + extra in puddles); roughness handled below
+        float cbPuddleF = 0.5 + 0.5 * sin(vCbMacroW.x * 0.08 + 1.3) * sin(vCbMacroW.z * 0.09 - 0.7);
+        float cbPuddle = smoothstep(0.6, 0.85, cbPuddleF) * uWet;
+        diffuseColor.rgb *= mix(1.0, 0.58, uWet * 0.55 + cbPuddle * 0.35);`,
       )
       // #7 roughness: wheel tracks + oil read polished (lower roughness), the dusty
       // kerb edge reads drier (higher). cbWheel/cbCenterOil/cbEdgeDust are declared
@@ -122,7 +138,9 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor * (1.0 - (cbWheel * 0.22 + cbCenterOil * 0.18) * cbW + cbEdgeDust * 0.05 * cbW), 0.0, 1.0);`,
+        roughnessFactor = clamp(roughnessFactor * (1.0 - (cbWheel * 0.22 + cbCenterOil * 0.18) * cbW + cbEdgeDust * 0.05 * cbW), 0.0, 1.0);
+        // #14 wet asphalt drops in roughness (sun glint); puddles go near-mirror
+        roughnessFactor = mix(roughnessFactor, mix(0.34, 0.05, cbPuddle), uWet);`,
       )
       // #5 detail normal: blend fine grain into the tangent-space normal before the
       // TBN transform, faded out with view distance so far asphalt stays clean.
@@ -186,6 +204,15 @@ export function roadMaterial(set: RoadSurfaceSet, uvSeed = 0): THREE.MeshStandar
   // seeded per-instance UV shift breaks visible tiling between adjacent segments;
   // albedo + normal share the same offset so their aggregate stays registered
   const m = base.clone()
+  // THREE.Material.copy() does NOT carry onBeforeCompile / customProgramCacheKey,
+  // so a naive clone silently drops withMacroVariation (hex-tiling, detail normal,
+  // wear, wetness) — the per-segment ROAD ribbons would render as plain asphalt
+  // while only junctions/paths (the uncloned base, uvSeed 0) got the shader.
+  // Re-attach both: the clone then shares the base's program (same cache key) and
+  // its shared uniforms (uWet, detail normal); the per-clone UV offset still
+  // uploads via the built-in uvTransform uniform.
+  m.onBeforeCompile = base.onBeforeCompile
+  m.customProgramCacheKey = base.customProgramCacheKey
   const ox = uvSeed % 1
   const oy = (uvSeed * 7.13) % 1
   m.map = base.map!.clone()

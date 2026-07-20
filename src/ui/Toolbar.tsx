@@ -158,6 +158,7 @@ function SettingsMenu() {
   const useCorridorElevation = useEditor((s) => s.useCorridorElevation)
   const useTerrain = useEditor((s) => s.useTerrain)
   const roadsideGreenery = useEditor((s) => s.roadsideGreenery)
+  const weather = useEditor((s) => s.weather)
   const roadStyle = useEditor((s) => s.roadStyle)
   const roadScale = useEditor((s) => s.roadScale)
   const s = useEditor.getState
@@ -253,6 +254,25 @@ function SettingsMenu() {
               <em>Grass tufts + shrubs on grass/bare verges beside the road. Rebuilds.</em>
             </span>
           </label>
+
+          <div className="tb-setting-seg">
+            <div className="tb-setting-seg-head">
+              <b>🌧️ Weather</b>
+              <em>{weather === 'wet' ? 'Wet — sun glints off the asphalt' : 'Dry'}</em>
+            </div>
+            <div className="tb-setting-seg-btns">
+              {(['dry', 'wet'] as const).map((w) => (
+                <button
+                  key={w}
+                  className={weather === w ? 'active' : ''}
+                  onClick={() => s().setWeather(w)}
+                  title={`Road weather: ${w}`}
+                >
+                  {w === 'dry' ? 'Dry' : 'Wet'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="tb-setting-seg">
             <div className="tb-setting-seg-head">

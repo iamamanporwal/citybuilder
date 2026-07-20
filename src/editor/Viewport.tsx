@@ -5,6 +5,7 @@ import { GizmoHelper, GizmoViewport, Sky } from '@react-three/drei'
 import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, N8AO, SMAA, Vignette } from '@react-three/postprocessing'
 import { useEditor } from '../state/store'
 import { CameraRig } from './CameraRig'
+import { CoordTracker } from './CoordTracker'
 import { SceneContent } from './SceneContent'
 import { lastOrbitTarget } from './bus'
 import { DEPTH_CONFIG } from './depthConfig'
@@ -132,9 +133,10 @@ function Invalidator() {
   const objects = useEditor((s) => s.objects)
   const cameraMode = useEditor((s) => s.cameraMode)
   const gizmoMode = useEditor((s) => s.gizmoMode)
+  const weather = useEditor((s) => s.weather)
   useEffect(() => {
     invalidate()
-  }, [invalidate, selection, selectedInstance, sunTime, fxPreview, objectOrder, objects, cameraMode, gizmoMode])
+  }, [invalidate, selection, selectedInstance, sunTime, fxPreview, objectOrder, objects, cameraMode, gizmoMode, weather])
   return null
 }
 
@@ -261,6 +263,7 @@ export function Viewport() {
       <AerialFog />
       <SceneContent />
       <CameraRig />
+      <CoordTracker />
       {/* navigation cube (orbit only — it drives the orbit controls): click a
           face/axis to snap to top/front/side, or drag it to spin the view */}
       {mode === 'orbit' && (
