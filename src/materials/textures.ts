@@ -94,6 +94,28 @@ function mrTexture(name: string, roughBase: number, roughVar: number, metal: num
   return register(name, 'metallicRoughness', c, false)
 }
 
+// Fine meso-scale detail normal (Phase 2 #5, docs/road-visual-techniques-research.md).
+// A high-frequency, tileable grain normal tiled at ~0.5 m over the base asphalt so
+// the surface holds micro-relief under the 1 m drive camera where the 6 m base
+// normal reads flat. Neutral-ish (subtle), distance-faded in the shader. Not a
+// content texture — a shader detail input, so it wraps and is sampled directly.
+export function makeDetailNormal(): THREE.Texture {
+  const size = 256
+  const [c, ctx] = makeCanvas(size)
+  const r = rng('asphalt-detail-normal')
+  ctx.fillStyle = '#808080'
+  ctx.fillRect(0, 0, size, size)
+  // two octaves of fine grain → crisp micro relief when converted to a normal
+  speckle(ctx, size, r, 14000, 0.22, true)
+  speckle(ctx, size, r, 14000, 0.22, false)
+  const n = heightToNormal(c, 1.1)
+  const tex = register('asphalt_detail_normal', 'normal', n, false)
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.RepeatWrapping
+  tex.needsUpdate = true
+  return tex
+}
+
 // ---------------------------------------------------------------------------
 // Road & ground surfaces
 // ---------------------------------------------------------------------------

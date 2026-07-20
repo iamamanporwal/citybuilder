@@ -5,6 +5,7 @@ import {
   generateRoofTextures,
   generateSurfaceTextures,
   makeDecals,
+  makeDetailNormal,
 } from './textures'
 import { FACADE_TILE_M, ROAD_TILE_M } from './packaging'
 
@@ -16,6 +17,7 @@ const surf = generateSurfaceTextures()
 const facades = generateFacadeTextures()
 const roofs = generateRoofTextures()
 export const decals = makeDecals()
+const DETAIL_NORMAL = makeDetailNormal() // shared meso-detail normal for asphalt (Phase 2 #5)
 
 function std(o: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial(o)
@@ -54,6 +56,19 @@ vec4 cbHexSample(sampler2D samp, vec2 uv) {
   w /= (w.x + w.y + w.z);
   return c1 * w.x + c2 * w.y + c3 * w.z;
 }
+// Height-blend (Phase 2 #10): crisp, height-aware transition between two layer
+// weights (Unreal-style) instead of a soft lerp — used to lay oily/sealed patches
+// that follow the aggregate contours rather than a flat sine ramp. d = blend
+// contrast. Foundation for the Phase 3 splat/wear-mask asphalt.
+float cbHeightBlend(float ha, float hb, float t) {
+  float d = 0.25;
+  float ma = ha + (1.0 - t);
+  float mb = hb + t;
+  return clamp((mb - max(ma, mb) + d) / d, 0.0, 1.0);
+}
+uniform sampler2D cbDetailNormalMap;
+uniform float cbDetailRepeat;
+uniform float cbDetailStrength;
 `
 
 // Large-scale variation keyed to WORLD position (not UV), so long roads don't
@@ -63,6 +78,10 @@ vec4 cbHexSample(sampler2D samp, vec2 uv) {
 // Also hex-tiles the albedo fetch (above) to break the tile repeat outright.
 function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (shader) => {
+    // detail-normal inputs (Phase 2 #5) — shared texture, ~0.5 m world tile
+    shader.uniforms.cbDetailNormalMap = { value: DETAIL_NORMAL }
+    shader.uniforms.cbDetailRepeat = { value: ROAD_TILE_M / 0.5 } // vNormalMapUv is per-6m → ×12 = 0.5 m
+    shader.uniforms.cbDetailStrength = { value: 0.6 }
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
@@ -76,7 +95,25 @@ function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.M
         float cbM1 = sin(vCbMacroW.x * 0.071 + vCbMacroW.z * 0.031);
         float cbM2 = sin(vCbMacroW.x * 0.017 - vCbMacroW.z * 0.089);
         float cbMacro = 0.5 + 0.5 * (cbM1 * 0.6 + cbM2 * 0.4);
-        diffuseColor.rgb *= mix(0.87, 1.11, cbMacro);`,
+        diffuseColor.rgb *= mix(0.87, 1.11, cbMacro);
+        // #10 height-blend: crisp oily/sealed patches that follow the aggregate
+        float cbHeight = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+        float cbPatch = 0.5 + 0.5 * sin(vCbMacroW.x * 0.043 - vCbMacroW.z * 0.057);
+        float cbOily = cbHeightBlend(cbHeight, 0.55, cbPatch);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.74, 0.78), cbOily * 0.45);`,
+      )
+      // #5 detail normal: blend fine grain into the tangent-space normal before the
+      // TBN transform, faded out with view distance so far asphalt stays clean.
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#ifdef USE_NORMALMAP_TANGENTSPACE
+          vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+          vec3 cbDetN = texture2D( cbDetailNormalMap, vNormalMapUv * cbDetailRepeat ).xyz * 2.0 - 1.0;
+          float cbDetFade = 1.0 - smoothstep(18.0, 45.0, length(vViewPosition));
+          mapN.xy += cbDetN.xy * cbDetailStrength * cbDetFade;
+          mapN.xy *= normalScale;
+          normal = normalize( tbn * mapN );
+        #endif`,
       )
   }
   m.customProgramCacheKey = () => key
