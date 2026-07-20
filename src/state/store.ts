@@ -194,20 +194,21 @@ export const useEditor = create<EditorState>((set, get) => ({
   // Kept in sync with the config module flag (procgen/corridor/config.ts), which
   // also defaults on; the toolbar toggle flips both for instant A/B.
   useCorridorElevation: true,
-  // Terrain relief (procgen/terrain) — ON by default (the main map ships with
-  // realistic ground). Kept in sync with the config module flag; the toolbar
-  // toggle flips both for instant A/B against the flat world.
-  useTerrain: true,
+  // Terrain relief (procgen/terrain) — OFF by default (flat world). Kept in sync
+  // with the config module flag; the toolbar toggle flips both for instant A/B
+  // against the terrain relief.
+  useTerrain: false,
   // Road cross-section (#8 crown / #22 superelevation) — crowned + banked
-  // carriageways. Module flag defaults off (test isolation); app default on here,
-  // synced in generateScene + rebuildWithRoadCrown.
-  roadCrown: true,
+  // carriageways. OFF by default (flat carriageways); module flag also defaults
+  // off. Synced in generateScene + rebuildWithRoadCrown.
+  roadCrown: false,
   // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
   // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
   roadsideGreenery: true,
   // Weather (Phase 5 #14) — wet darkens the asphalt + drops roughness so the sun
-  // glints off it and pools in puddles. Live uniform, no rebuild. Default dry.
-  weather: 'dry',
+  // glints off it and pools in puddles. Live uniform, no rebuild. Default wet;
+  // the uniform is synced to match at scene build (generateScene).
+  weather: 'wet',
   // Road surface style — realistic (textured aggregate) vs arcade (clean kit look).
   roadStyle: 'realistic',
   // Road-width multiplier (car-game "stretch roads" trigger, §14). 1 = original.

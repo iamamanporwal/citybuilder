@@ -14,6 +14,7 @@ import { cityGraph, sceneContext } from '../scene/registry'
 import { scaleRoadNetwork } from '../procgen/roadScale'
 import { setTerrainEnabled } from '../procgen/terrain/config'
 import { setCrossSectionEnabled } from '../procgen/crossSection'
+import { setWetness } from '../materials/library'
 import type { CityGraph } from '../types'
 import {
   cacheCity,
@@ -74,6 +75,9 @@ async function generateScene(raw: any, name: string) {
   // off for unit-test isolation; the app default is on via the store).
   setTerrainEnabled(s.useTerrain)
   setCrossSectionEnabled(s.roadCrown)
+  // Weather is a live shader uniform (no rebuild); sync it to the store default
+  // so a fresh load matches the "wet" default without needing a toolbar click.
+  setWetness(s.weather === 'wet' ? 1 : 0)
   s.setBuilding('Parsing map data…')
   await new Promise((r) => setTimeout(r, 30))
   let t = now()

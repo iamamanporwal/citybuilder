@@ -16,7 +16,7 @@
 //   --road-scale N                 road-width multiplier 1..4
 //   --no-trees / --no-signals      skip those OSM layers
 //   --no-elevation                 disable the network elevation solve
-//   --no-terrain                   disable terrain relief (flat world)
+//   --terrain                      enable terrain relief (off by default → flat world)
 //   --bake                         Draco-compress GLBs in-process
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -44,7 +44,7 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { trees: true, signals: true, elevation: true, terrain: true, bake: false }
+  const a: Args = { trees: true, signals: true, elevation: true, terrain: false, bake: false }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     switch (flag) {
@@ -63,6 +63,7 @@ function parseArgs(argv: string[]): Args {
       case '--no-trees': a.trees = false; break
       case '--no-signals': a.signals = false; break
       case '--no-elevation': a.elevation = false; break
+      case '--terrain': a.terrain = true; break
       case '--no-terrain': a.terrain = false; break
       case '--bake': a.bake = true; break
       default: throw new Error(`Unknown flag: ${flag}`)

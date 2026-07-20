@@ -11,6 +11,7 @@ import { resolveContext } from '../resolver/adapters'
 import { prefetchRecognizerData } from '../recognizer/prepass'
 import { loadLibraryTemplates } from '../scene/libraryTemplates'
 import { scaleRoadNetwork, clampRoadScale } from '../procgen/roadScale'
+import { setCrossSectionEnabled } from '../procgen/crossSection'
 import { useEditor } from '../state/store'
 import { fetchOsmArea, type BBox, type FetchOptions } from '../ingest/overpassFetch'
 import { buildExportBundle, type ExportBundle } from '../export/bundle'
@@ -30,7 +31,7 @@ export interface GenerateOptions {
   roadScale?: number
   /** Network elevation solve (semantics v3 y-channel). Default on. */
   corridorElevation?: boolean
-  /** Terrain relief (procgen/terrain) drives world elevation. Default on. */
+  /** Terrain relief (procgen/terrain) drives world elevation. Default off (flat world). */
   terrain?: boolean
   onProgress?: (message: string) => void
 }
@@ -91,7 +92,11 @@ export async function generateCity(opts: GenerateOptions): Promise<ExportBundle>
   await loadLibraryTemplates([], false)
   s.setUseLibraryAssets(false)
   s.setUseCorridorElevation(opts.corridorElevation ?? true)
-  s.setUseTerrain(opts.terrain ?? true)
+  s.setUseTerrain(opts.terrain ?? false)
+  // Road crown / superelevation (#8/#22) off by default in API output — flat
+  // carriageways. Set explicitly so a long-lived server process can't inherit a
+  // stale module flag from a prior request.
+  setCrossSectionEnabled(false)
   const roadScale = clampRoadScale(opts.roadScale ?? 1)
   s.setRoadScale(roadScale)
 
