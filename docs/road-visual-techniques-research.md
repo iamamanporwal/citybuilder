@@ -317,7 +317,7 @@ composes with what we already have. **V** = visual impact, **D** = difficulty (b
 
 ## Recommended phased roadmap (impact-first, composes with current code)
 
-1. **Post FX pass (fast, huge):** #1 GTAO + #4 aerial fog + #6 ACES/bloom + #16 contact shadows. Days, near drop-in via our `postprocessing` dep. Instantly grounds and moods the whole scene.
+1. **Post FX pass (fast, huge):** #1 GTAO + #4 aerial fog + #6 ACES/bloom + #16 contact shadows. Days, near drop-in via our `postprocessing` dep. Instantly grounds and moods the whole scene. **✅ SHIPPED** — `FxPreview` in `src/editor/Viewport.tsx` now runs N8AO (GTAO-quality AO; log-depth auto-detected, fog-aware; half-res while driving — folds in #16 contact shadows), sun-tinted `FogExp2` aerial haze (`AerialFog`, preview-gated), a subtle saturation grade, and keeps renderer ACES (no double-tonemap). Editor look-dev only — never baked/exported. Behind the existing **FX preview** toggle (default off; flip to see the grade).
 2. **Asphalt fidelity:** #2 hex-tiling + #5 detail normals + #10 height-blend + #8 crown. The road surface itself stops reading procedural.
 3. **Wear & markings:** #7 splat/wear mask + #12 decal atlas + #13 SDF markings. The "driven-in" look.
 4. **Integration & scale:** #3 terrain skirts + #15 corridor LOD + #9 InstancedMesh2 + #23 KTX2 bake. Makes it hold together and scale.

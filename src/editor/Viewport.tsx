@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { GizmoHelper, GizmoViewport, Sky } from '@react-three/drei'
-import { Bloom, BrightnessContrast, EffectComposer, SMAA, Vignette } from '@react-three/postprocessing'
+import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, N8AO, SMAA, Vignette } from '@react-three/postprocessing'
 import { useEditor } from '../state/store'
 import { CameraRig } from './CameraRig'
 import { SceneContent } from './SceneContent'
@@ -21,15 +21,62 @@ const DriveSim = lazy(() => import('./driving/DriveSim'))
  */
 function FxPreview() {
   const on = useEditor((s) => s.fxPreview)
+  const mode = useEditor((s) => s.cameraMode)
   if (!on) return null
+  // Phase 1 look-dev grade (docs/road-visual-techniques-research.md §Roadmap).
+  // Order matters: AO composites into the lit image first (reading depth — N8AO
+  // auto-detects our logarithmicDepthBuffer and is fog-aware), then bloom, then
+  // colour grade, with SMAA last as the antialias resolve. Tone mapping stays on
+  // the renderer (R3F default ACES) — adding a ToneMapping effect here would
+  // double-grade. Half-res AO while driving (frameloop=always) keeps fill-rate
+  // sane; full-res in orbit for crisp contact darkening on curbs/cracks.
   return (
     <EffectComposer>
-      <SMAA />
-      <Bloom intensity={0.25} luminanceThreshold={0.85} mipmapBlur />
+      <N8AO
+        aoRadius={3}
+        distanceFalloff={1}
+        intensity={1.8}
+        quality="medium"
+        halfRes={mode === 'drive'}
+      />
+      <Bloom intensity={0.28} luminanceThreshold={0.85} mipmapBlur />
+      <HueSaturation saturation={0.08} hue={0} />
       <BrightnessContrast brightness={0.02} contrast={0.12} />
-      <Vignette eskil={false} offset={0.22} darkness={0.55} />
+      <Vignette eskil={false} offset={0.22} darkness={0.5} />
+      <SMAA />
     </EffectComposer>
   )
+}
+
+// Aerial perspective: a subtle sun-tinted exponential haze so distant geometry
+// fades toward the horizon (depth cue + hides the LOD/streaming edge). Preview-
+// only and gated by fxPreview, so the clean-content default is untouched and the
+// A/B stays meaningful. Not exported (GLTFExporter ignores scene.fog); N8AO reads
+// it to keep AO fog-aware. FogExp2 is view-distance based, independent of the
+// log-depth buffer. Modern three recompiles materials when scene.fog toggles.
+function AerialFog() {
+  const on = useEditor((s) => s.fxPreview)
+  const sunTime = useEditor((s) => s.sunTime)
+  const scene = useThree((s) => s.scene)
+  const invalidate = useThree((s) => s.invalidate)
+  useEffect(() => {
+    if (on) {
+      // warmer haze near sunrise/sunset, cooler at midday
+      const t = Math.min(Math.max((sunTime - 6) / 12, 0), 1)
+      const warm = new THREE.Color('#d8c2a6')
+      const cool = new THREE.Color('#bcc9d6')
+      const c = warm.clone().lerp(cool, Math.sin(t * Math.PI))
+      scene.fog = new THREE.FogExp2(c.getHex(), 0.00026)
+    } else {
+      scene.fog = null
+    }
+    invalidate()
+    return () => {
+      scene.fog = null
+      invalidate()
+    }
+  }, [on, sunTime, scene, invalidate])
+  return null
 }
 
 // Dev-only bridge for scripted QA (Playwright): position the camera exactly and
@@ -211,6 +258,7 @@ export function Viewport() {
       <Invalidator />
       <DprController />
       <Lighting />
+      <AerialFog />
       <SceneContent />
       <CameraRig />
       {/* navigation cube (orbit only — it drives the orbit controls): click a
