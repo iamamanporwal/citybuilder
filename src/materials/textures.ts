@@ -597,20 +597,52 @@ function roofAlbedo(name: string, kind: 'bitumen' | 'tile' | 'metal' | 'concrete
 // Decals-as-content (cracks, stains, patches, manholes)
 // ---------------------------------------------------------------------------
 
-function decalTexture(name: string, draw: (ctx: CanvasRenderingContext2D, size: number, r: () => number) => void): THREE.Texture {
+export interface DecalMaps {
+  albedo: THREE.Texture
+  normal: THREE.Texture
+}
+
+// A decal is drawn once to an RGBA albedo canvas; its ALPHA coverage doubles as a
+// height field so the mark catches light (Phase 2 #12): `relief` < 0 recesses the
+// mark (cracks read as grooves), > 0 raises it (manhole cover / repaved patch), 0
+// stays flat (stains are pure discolouration). The height→normal is derived from
+// the same alpha, so albedo and relief always register.
+function decalTexture(
+  name: string,
+  relief: number,
+  draw: (ctx: CanvasRenderingContext2D, size: number, r: () => number) => void,
+): DecalMaps {
   const size = 128
   const [c, ctx] = makeCanvas(size)
   ctx.clearRect(0, 0, size, size)
   draw(ctx, size, rng(name))
-  const tex = register(name, 'decal-albedo', c, true)
-  tex.wrapS = THREE.ClampToEdgeWrapping
-  tex.wrapT = THREE.ClampToEdgeWrapping
-  return tex
+  const albedo = register(name, 'decal-albedo', c, true)
+  albedo.wrapS = THREE.ClampToEdgeWrapping
+  albedo.wrapT = THREE.ClampToEdgeWrapping
+
+  const [hc, hctx] = makeCanvas(size)
+  hctx.fillStyle = '#808080' // flat mid-height baseline
+  hctx.fillRect(0, 0, size, size)
+  if (relief !== 0) {
+    const src = ctx.getImageData(0, 0, size, size).data
+    const h = hctx.getImageData(0, 0, size, size)
+    for (let i = 0; i < size * size; i++) {
+      const a = src[i * 4 + 3] / 255 // mark coverage
+      const v = Math.max(0, Math.min(255, 128 + relief * a * 110))
+      h.data[i * 4] = h.data[i * 4 + 1] = h.data[i * 4 + 2] = v
+      h.data[i * 4 + 3] = 255
+    }
+    hctx.putImageData(h, 0, 0)
+  }
+  const normal = register(`${name}_n`, 'normal', heightToNormal(hc, 1.1), false)
+  normal.wrapS = THREE.ClampToEdgeWrapping
+  normal.wrapT = THREE.ClampToEdgeWrapping
+  return { albedo, normal }
 }
 
 export function makeDecals() {
   return {
-    crack: decalTexture('decal_crack', (ctx, size, r) => {
+    crack: decalTexture('decal_crack', -1, (ctx, size, r) => {
       ctx.strokeStyle = 'rgba(15,15,15,0.75)'
       ctx.lineWidth = 2.5
       ctx.beginPath()
@@ -629,7 +661,7 @@ export function makeDecals() {
       }
       ctx.stroke()
     }),
-    stain: decalTexture('decal_stain', (ctx, size, r) => {
+    stain: decalTexture('decal_stain', 0, (ctx, size, r) => {
       for (let i = 0; i < 7; i++) {
         const g = ctx.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size * (0.2 + r() * 0.28))
         g.addColorStop(0, `rgba(20,18,14,${0.28 + r() * 0.2})`)
@@ -640,11 +672,11 @@ export function makeDecals() {
         ctx.fill()
       }
     }),
-    patch: decalTexture('decal_patch', (ctx, size, r) => {
+    patch: decalTexture('decal_patch', 0.35, (ctx, size, r) => {
       ctx.fillStyle = 'rgba(28,28,30,0.85)'
       roundRect(ctx, size * 0.12, size * (0.2 + r() * 0.15), size * 0.76, size * 0.5, 8)
     }),
-    manhole: decalTexture('decal_manhole', (ctx, size) => {
+    manhole: decalTexture('decal_manhole', 0.6, (ctx, size) => {
       ctx.fillStyle = 'rgba(45,45,48,0.95)'
       ctx.beginPath()
       ctx.arc(size / 2, size / 2, size * 0.42, 0, Math.PI * 2)

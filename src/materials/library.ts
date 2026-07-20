@@ -246,8 +246,11 @@ export function roofMaterial(set: RoofSet): THREE.MeshStandardMaterial {
 // No polygonOffset: decals sit a real 30mm above the road layer, which the
 // log-depth buffer resolves at any in-scene distance (see editor/depthConfig.ts).
 // polygonOffset is also silently ignored once log depth writes gl_FragDepth.
-function decalMat(tex: THREE.Texture): THREE.MeshStandardMaterial {
-  return std({ map: tex, transparent: true, roughness: 1, depthWrite: false })
+// Decals carry a normal map (Phase 2 #12) so cracks read as recessed grooves and
+// manhole/patch relief catches the sun — the decal geometry has up-normals + UVs,
+// so three derives the TBN from screen derivatives.
+function decalMat(d: import('./textures').DecalMaps): THREE.MeshStandardMaterial {
+  return std({ map: d.albedo, normalMap: d.normal, transparent: true, roughness: 1, depthWrite: false })
 }
 
 export const decalMaterials = {
