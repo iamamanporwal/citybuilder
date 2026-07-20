@@ -3,6 +3,7 @@ import type { CityGraph, PointFeature, RoadSegment, Transform, Vec2 } from '../t
 import type { RoadResolution } from '../resolver/types'
 import { hash01 } from '../resolver/resolve'
 import {
+  crownedRibbonGeometry,
   offsetPolyline,
   pointAlong,
   polylineLength,
@@ -15,6 +16,7 @@ import {
   mergeGeometries,
   type Rect,
 } from '../procgen/geometry'
+import { bankProfile, CROSS_SECTION, crossFade } from '../procgen/crossSection'
 import { flatRingGeometry, waterRings } from '../procgen/areas'
 import { sampleTerrain } from '../procgen/terrain/field'
 import { isTerrainEnabled } from '../procgen/terrain/config'
@@ -163,10 +165,22 @@ function roadColliders(
     const cum = cumulative(pts)
     const profile = elevation.profileFor(r, cum).map((e) => e + Y_ROAD_COL)
     // untrimmed at junctions: physics tolerates overlap; trimming would leave
-    // gaps under the visual junction discs
-    const geometry = toTrimesh(
-      ribbonGeometry(offsetPolyline(pts, half), offsetPolyline(pts, -half), profile),
-    )
+    // gaps under the visual junction discs. When the cross-section is on, the
+    // collider is crowned + superelevated to match the visual surface so the car
+    // rides what it sees (fades to 0 at the ends → flat at junctions). Drivable
+    // carriageways only; paths keep the flat ribbon.
+    const crownCol = CROSS_SECTION.enabled && !NON_DRIVABLE.has(r.roadClass)
+    const surfaceMesh = crownCol
+      ? crownedRibbonGeometry(
+          offsetPolyline(pts, half),
+          offsetPolyline(pts, -half),
+          profile,
+          half,
+          cum.map((c) => crossFade(c, polylineLength(pts))),
+          bankProfile(pts),
+        )
+      : ribbonGeometry(offsetPolyline(pts, half), offsetPolyline(pts, -half), profile)
+    const geometry = toTrimesh(surfaceMesh)
     const res = resolutions.get(r.id)
     const material = res
       ? { ...SURFACE_PHYSICS[res.surface], surfaceTag: res.surface }

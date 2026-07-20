@@ -16,6 +16,7 @@ import { loadCuration, saveCuration, type CurationMap } from './curation'
 import { setCorridorElevationEnabled } from '../procgen/corridor'
 import { setTerrainEnabled } from '../procgen/terrain/config'
 import { setGreeneryEnabled } from '../procgen/vegetation'
+import { setCrossSectionEnabled } from '../procgen/crossSection'
 import { setRoadStyle, setWetness, type RoadStyle } from '../materials/library'
 import { setPaintWear } from '../procgen/materials'
 import { clampRoadScale } from '../procgen/roadScale'
@@ -64,6 +65,7 @@ interface EditorState {
   curation: CurationMap
   useCorridorElevation: boolean
   useTerrain: boolean
+  roadCrown: boolean
   roadsideGreenery: boolean
   weather: 'dry' | 'wet'
   roadStyle: RoadStyle
@@ -89,6 +91,7 @@ interface EditorState {
   setCuration: (c: CurationMap) => void
   setUseCorridorElevation: (v: boolean) => void
   setUseTerrain: (v: boolean) => void
+  setRoadCrown: (v: boolean) => void
   setRoadsideGreenery: (v: boolean) => void
   setWeather: (v: 'dry' | 'wet') => void
   setRoadStyle: (v: RoadStyle) => void
@@ -195,6 +198,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   // realistic ground). Kept in sync with the config module flag; the toolbar
   // toggle flips both for instant A/B against the flat world.
   useTerrain: true,
+  // Road cross-section (#8 crown / #22 superelevation) — crowned + banked
+  // carriageways. Module flag defaults off (test isolation); app default on here,
+  // synced in generateScene + rebuildWithRoadCrown.
+  roadCrown: true,
   // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
   // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
   roadsideGreenery: true,
@@ -267,6 +274,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   setUseTerrain: (v) => {
     setTerrainEnabled(v)
     set({ useTerrain: v })
+  },
+  setRoadCrown: (v) => {
+    setCrossSectionEnabled(v)
+    set({ roadCrown: v })
   },
   setRoadsideGreenery: (v) => {
     setGreeneryEnabled(v)

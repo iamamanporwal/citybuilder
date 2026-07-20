@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
 import { exportCity, exportDesignerGlb } from '../export/exporter'
-import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle, rebuildWithTerrain, rebuildWithGreenery } from '../app/buildCity'
+import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle, rebuildWithTerrain, rebuildWithGreenery, rebuildWithRoadCrown } from '../app/buildCity'
 
 export function Toolbar() {
   const cameraMode = useEditor((s) => s.cameraMode)
@@ -157,6 +157,7 @@ function SettingsMenu() {
   const useLibraryAssets = useEditor((s) => s.useLibraryAssets)
   const useCorridorElevation = useEditor((s) => s.useCorridorElevation)
   const useTerrain = useEditor((s) => s.useTerrain)
+  const roadCrown = useEditor((s) => s.roadCrown)
   const roadsideGreenery = useEditor((s) => s.roadsideGreenery)
   const weather = useEditor((s) => s.weather)
   const roadStyle = useEditor((s) => s.roadStyle)
@@ -244,6 +245,14 @@ function SettingsMenu() {
             <span>
               <b>⛰️ Terrain relief</b>
               <em>Rolling ground + river valley the roads follow, vs a flat world. Rebuilds.</em>
+            </span>
+          </label>
+
+          <label className="tb-setting-row">
+            <input type="checkbox" checked={roadCrown} onChange={() => rebuildWithRoadCrown(!roadCrown)} />
+            <span>
+              <b>🛣️ Road crown &amp; banking</b>
+              <em>Crowned carriageways that shed water + superelevated curves. Rebuilds.</em>
             </span>
           </label>
 

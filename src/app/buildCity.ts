@@ -13,6 +13,7 @@ import { prefetchRecognizerData } from '../recognizer/prepass'
 import { cityGraph, sceneContext } from '../scene/registry'
 import { scaleRoadNetwork } from '../procgen/roadScale'
 import { setTerrainEnabled } from '../procgen/terrain/config'
+import { setCrossSectionEnabled } from '../procgen/crossSection'
 import type { CityGraph } from '../types'
 import {
   cacheCity,
@@ -72,6 +73,7 @@ async function generateScene(raw: any, name: string) {
   // Honor the store's terrain toggle on the first build (the module flag defaults
   // off for unit-test isolation; the app default is on via the store).
   setTerrainEnabled(s.useTerrain)
+  setCrossSectionEnabled(s.roadCrown)
   s.setBuilding('Parsing map data…')
   await new Promise((r) => setTimeout(r, 30))
   let t = now()
@@ -222,6 +224,17 @@ export async function rebuildWithTerrain(enabled: boolean): Promise<void> {
   s.initScene(graph, sceneContext)
   s.setLintReport(buildGateLints())
   s.showToast(enabled ? 'Terrain relief on' : 'Flat terrain')
+}
+
+export async function rebuildWithRoadCrown(enabled: boolean): Promise<void> {
+  const s = useEditor.getState()
+  s.setRoadCrown(enabled)
+  setCrossSectionEnabled(enabled)
+  const graph = workingGraph()
+  if (!graph || !sceneContext) return
+  s.initScene(graph, sceneContext)
+  s.setLintReport(buildGateLints())
+  s.showToast(enabled ? 'Road crown + banking on' : 'Flat carriageways')
 }
 
 export async function rebuildWithGreenery(enabled: boolean): Promise<void> {

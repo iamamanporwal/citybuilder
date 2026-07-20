@@ -6,7 +6,8 @@ import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/lib
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import polygonClipping from 'polygon-clipping'
-import { mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, ringAreaM2, roundPolygon, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { crownedRibbonGeometry, mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, ringAreaM2, roundPolygon, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
+import { bankProfile, CROSS_SECTION, crossFade, crossOffset } from './crossSection'
 import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, discRadius, nodeKey, NON_DRIVABLE, segCenterline, siblingFootwayBridgeIds } from './roadNetwork'
 import { buildRoadElevation, isCorridorElevationEnabled } from './corridor'
 import { sampleTerrain } from './terrain/field'
@@ -346,9 +347,30 @@ export function buildRoads(
     // (§1.4). `surfElev` returns the road's ADDED elevation (0 = grade) at any
     // 2D point by projecting it onto the centerline; a flat road returns a
     // constant 0, so every layer keeps its exact legacy Y — byte-identical.
-    const surfElev = surfaceElevSampler(pts, trueProfile, elevated)
+    // Cross-section (#8 crown / #22 superelevation) — drivable carriageways only,
+    // never paths. `fadeAt` ramps the crown to 0 within TAPER of each end so a
+    // crowned mid-block meets the flat junction disc with no seam; `bankAt`
+    // interpolates the curvature-derived superelevation. Both the surface geometry
+    // AND surfElev use the SAME station (measured along `pts`) so every riding
+    // layer (markings/decals/crosswalks) tracks the crowned surface exactly.
+    const crownOn = CROSS_SECTION.enabled && !isPath
+    const rideLayers = elevated || crownOn
+    const lenPts = polylineLength(pts)
+    const bankArr = crownOn ? bankProfile(pts) : []
+    const bankAt = (station: number): number => {
+      if (!crownOn || bankArr.length === 0) return 0
+      let i = 1
+      while (i < cum.length && cum[i] < station) i++
+      const i0 = Math.max(0, i - 1)
+      const i1 = Math.min(i, cum.length - 1)
+      const span = cum[i1] - cum[i0] || 1
+      const t = Math.max(0, Math.min(1, (station - cum[i0]) / span))
+      return bankArr[i0] + (bankArr[i1] - bankArr[i0]) * t
+    }
+    const fadeAt = (station: number): number => (crownOn ? crossFade(station, lenPts) : 0)
+    const surfElev = surfaceElevSampler(pts, trueProfile, elevated, crownOn ? { half, bankAt, fadeAt } : null)
     const layerProfile = (line: Vec2[], layerY: number): number | number[] =>
-      elevated ? line.map((p) => surfElev(p) + layerY) : layerY
+      rideLayers ? line.map((p) => surfElev(p) + layerY) : layerY
 
     // Pedestrian ways (plazas / pedestrian streets) render as a RAISED slab with
     // a curb skirt — like a sidewalk — instead of a flush ribbon, so they read
@@ -379,6 +401,17 @@ export function buildRoads(
     } else if (isPath) {
       surface = ribbonGeometry(left, right, groundAt!.map((g) => g + Y_PATH))
       planarUvXZ(surface)
+    } else if (crownOn) {
+      // Engineering cross-section: subdivided, crowned + superelevated ribbon.
+      // fades/banks are keyed to the station along `pts` (startTrimApplied offsets
+      // the trimmed surface vertices back onto the full centerline) so they match
+      // surfElev exactly. crownedRibbonGeometry sets aLane; add the aWear gate.
+      const surfCum = cumulative(surfacePts)
+      const fades = surfCum.map((c) => fadeAt(startTrimApplied + c))
+      const banks = surfCum.map((c) => bankAt(startTrimApplied + c))
+      surface = crownedRibbonGeometry(left, right, profile, half, fades, banks)
+      const vc = surface.getAttribute('position').count
+      surface.setAttribute('aWear', new THREE.BufferAttribute(new Float32Array(vc).fill(1), 1))
     } else {
       surface = ribbonGeometry(left, right, profile)
       // Lane-space wear coords for the asphalt wear shader (#7). aLane: -1 (left
@@ -525,13 +558,13 @@ export function buildRoads(
             for (let s = 0; s < stripes; s++) {
               const lateral = -((stripes - 1) / 2) * 1.6 + s * 1.6
               const c = { x: endPt.x + inward.x * 1.6 + across.x * lateral, z: endPt.z + inward.z * 1.6 + across.z * lateral }
-              const cwY = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
+              const cwY = rideLayers ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
               pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 1.1, across, res.marking.crosswalk === 'ladder' ? 0.3 : 0.4, cwY)
             }
             if (res.marking.crosswalk === 'ladder') {
               for (const edge of [-1.3, 1.3]) {
                 const c = { x: endPt.x + inward.x * (1.6 + edge), z: endPt.z + inward.z * (1.6 + edge) }
-                const cwY = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
+                const cwY = rideLayers ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
                 pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.12, across, (stripes * 1.6) / 2 + 0.4, cwY)
               }
             }
@@ -547,7 +580,7 @@ export function buildRoads(
                 x: endPt.x + inward.x * STOP_LINE_DIST + across.x * lat,
                 z: endPt.z + inward.z * STOP_LINE_DIST + across.z * lat,
               }
-              const y = elevated ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
+              const y = rideLayers ? surfElev(c) + Y_CROSSWALK : Y_CROSSWALK
               pushQuad(whiteQuads.pos, whiteQuads.idx, c, inward, 0.3, across, halfWid, y)
             }
           }
@@ -569,7 +602,7 @@ export function buildRoads(
             const s = 0.9 + hash01(`${r.id}:ds${i}`) * 1.4
             if (!decalPlanner.tryPlace(c, s)) continue
             const q = decalQuads[kind]
-            const decalY = elevated ? surfElev(c) + Y_DECAL : Y_DECAL
+            const decalY = rideLayers ? surfElev(c) + Y_DECAL : Y_DECAL
             pushQuad(q.pos, q.idx, c, dir, s, across, s, decalY, q.uv)
           }
         }
@@ -588,7 +621,7 @@ export function buildRoads(
         for (let i = 0; i < n; i++) {
           const off = half - (i + 0.5) * lw
           const center = { x: p.x + w.x * off, z: p.z + w.z * off }
-          const y = elevated ? surfElev(center) + Y_MARK : Y_MARK
+          const y = rideLayers ? surfElev(center) + Y_MARK : Y_MARK
           pushTurnArrow(whiteQuads, center, dir, w, r.turnLanes[i], y)
         }
       }
@@ -956,11 +989,27 @@ function pushTurnArrow(
  * A flat road (`elevated === false`) returns a constant 0 so every derived layer
  * keeps its exact legacy global-Y constant — byte-identical, no promotion cost.
  */
-function surfaceElevSampler(pts: Vec2[], profile: number[], elevated: boolean): (q: Vec2) => number {
-  if (!elevated || pts.length < 2) return () => 0
+interface CrownParams {
+  half: number
+  bankAt: (station: number) => number
+  fadeAt: (station: number) => number
+}
+
+function surfaceElevSampler(
+  pts: Vec2[],
+  profile: number[],
+  elevated: boolean,
+  crown: CrownParams | null = null,
+): (q: Vec2) => number {
+  if ((!elevated && !crown) || pts.length < 2) return () => 0
+  // cumulative station along the centerline, for crown fade/bank lookup
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z))
   return (q: Vec2): number => {
     let best = Infinity
     let bestElev = 0
+    let bestStation = 0
+    let bestPerp = 0
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1].x
       const az = pts[i - 1].z
@@ -976,10 +1025,18 @@ function surfaceElevSampler(pts: Vec2[], profile: number[], elevated: boolean): 
         best = d2
         const e0 = profile[i - 1]
         const e1 = profile[Math.min(i, profile.length - 1)]
-        bestElev = e0 + (e1 - e0) * t
+        bestElev = elevated ? e0 + (e1 - e0) * t : 0
+        if (crown) {
+          const segLen = Math.sqrt(segLen2)
+          bestStation = cum[i - 1] + t * segLen
+          // signed perpendicular distance (left-normal (-dz, dx) / segLen)
+          bestPerp = ((q.x - px) * -dz + (q.z - pz) * dx) / segLen
+        }
       }
     }
-    return bestElev
+    if (!crown) return bestElev
+    const ln = Math.max(-1, Math.min(1, bestPerp / crown.half))
+    return bestElev + crown.fadeAt(bestStation) * crossOffset(ln, crown.half, crown.bankAt(bestStation))
   }
 }
 
@@ -1022,6 +1079,15 @@ function armUnionRing(
       [bx + perp.x * h, bz + perp.z * h],
     ])
   }
+  // Curb-return corner fills: the union of arm rectangles leaves an open concave
+  // NOTCH in every corner between two adjacent arms (the diagonal wedges of a +/T/X
+  // have no arm to cover them) — that is the bare grass the intersection showed
+  // through. Bridge each real corner by filling the wedge out to where the two
+  // arms' outer side-edges intersect (the natural curb-return apex), so the paved
+  // junction reads as one continuous surface. Only genuine corners are filled
+  // (25°–155° between arms): collinear pass-throughs and acute dual-carriageway
+  // slivers are skipped so nothing bulges into the grass behind a straight road.
+  for (const rect of armCornerFills(center, arms, reachFor, flare)) rects.push(rect)
   if (rects.length < 1) return []
   let merged: [number, number][][][]
   try {
@@ -1042,6 +1108,66 @@ function armUnionRing(
     if (a > bestA) { bestA = a; best = v }
   }
   return best
+}
+
+/**
+ * Curb-return fill polygons for the concave notches between adjacent arms. For each
+ * pair of arms that form a genuine corner (25°–155° apart), fill the wedge from the
+ * throat out to the intersection of their two outer side-edges (the curb-return
+ * apex), so the diagonal gaps a +/T/X leaves between its arms are paved rather than
+ * showing grass. Skips near-collinear pairs (a road passing straight through, whose
+ * union has no notch) and acute slivers (parallel dual carriageways). Each fill is a
+ * closed ring `[o A, mouth A, apex, mouth B, o B]`; the caller unions them with the
+ * arm rectangles, so overlap is dissolved and the result stays a simple polygon.
+ */
+function armCornerFills(
+  center: Vec2,
+  arms: UnionArm[],
+  reachFor: (a: UnionArm) => number,
+  flare: number,
+): [number, number][][] {
+  if (arms.length < 2) return []
+  const sorted = [...arms].sort((p, q) => Math.atan2(p.d.z, p.d.x) - Math.atan2(q.d.z, q.d.x))
+  const fills: [number, number][][] = []
+  for (let i = 0; i < sorted.length; i++) {
+    const A = sorted[i]
+    const B = sorted[(i + 1) % sorted.length]
+    const dot = Math.max(-1, Math.min(1, A.d.x * B.d.x + A.d.z * B.d.z))
+    const theta = Math.acos(dot) // undirected angle between the two arms
+    if (theta < 0.44 || theta > 2.70) continue // ~25°..~155°: real corners only
+    const oA = A.p ?? center
+    const oB = B.p ?? center
+    const perpA = { x: A.d.z, z: -A.d.x }
+    const perpB = { x: B.d.z, z: -B.d.x }
+    // the side of each arm that faces the other arm
+    const sideA = perpA.x * B.d.x + perpA.z * B.d.z >= 0 ? 1 : -1
+    const sideB = perpB.x * A.d.x + perpB.z * A.d.z >= 0 ? 1 : -1
+    const hA = A.h * flare
+    const hB = B.h * flare
+    const reachA = reachFor(A)
+    const reachB = reachFor(B)
+    // outer side-edge of each arm (a point on it + its direction)
+    const eAx = oA.x + perpA.x * sideA * hA, eAz = oA.z + perpA.z * sideA * hA
+    const eBx = oB.x + perpB.x * sideB * hB, eBz = oB.z + perpB.z * sideB * hB
+    // mouth corners on those facing edges
+    const mA: [number, number] = [eAx + A.d.x * reachA, eAz + A.d.z * reachA]
+    const mB: [number, number] = [eBx + B.d.x * reachB, eBz + B.d.z * reachB]
+    // apex = intersection of the two outer side-edge lines
+    const den = A.d.x * -B.d.z - A.d.z * -B.d.x
+    let apex: [number, number]
+    const maxOut = Math.max(reachA, reachB) * 1.9
+    if (Math.abs(den) > 1e-4) {
+      const t = ((eBx - eAx) * -B.d.z - (eBz - eAz) * -B.d.x) / den
+      apex = [eAx + A.d.x * t, eAz + A.d.z * t]
+      // reject an apex that shoots far out (shallow corner) — chamfer instead
+      if (t < 0 || Math.hypot(apex[0] - oA.x, apex[1] - oA.z) > maxOut) apex = [(mA[0] + mB[0]) / 2, (mA[1] + mB[1]) / 2]
+    } else {
+      apex = [(mA[0] + mB[0]) / 2, (mA[1] + mB[1]) / 2]
+    }
+    const ring: [number, number][] = [[oA.x, oA.z], mA, apex, mB, [oB.x, oB.z], [oA.x, oA.z]]
+    fills.push(ring)
+  }
+  return fills
 }
 
 /**

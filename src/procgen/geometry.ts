@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Vec2 } from '../types'
+import { CROSS_K, crossOffset } from './crossSection'
 
 // Polyline/ribbon helpers for road generation. All in XZ plane, Y up.
 
@@ -96,6 +97,68 @@ export function ribbonGeometry(left: Vec2[], right: Vec2[], y: number | number[]
   } else {
     g.computeVertexNormals()
   }
+  return g
+}
+
+/**
+ * Crowned/superelevated carriageway ribbon (cross-section #8/#22). Same left/right
+ * edge polylines and per-point `profile` as ribbonGeometry, but each station is
+ * subdivided into CROSS_K lateral samples whose height is raised by the engineering
+ * cross-section (crown + bank), scaled by a per-station `fade` (→0 at junctions).
+ * `banks[i]` is the signed superelevation at station i. Carries an `aLane` attribute
+ * (normalised lateral, -1..+1) for the wear shader. UVs match ribbonGeometry
+ * (u = metres across, v = distance along) so the asphalt texture/markings register.
+ */
+export function crownedRibbonGeometry(
+  left: Vec2[],
+  right: Vec2[],
+  profile: number | number[],
+  halfWidth: number,
+  fades: number[],
+  banks: number[],
+): THREE.BufferGeometry {
+  const n = Math.min(left.length, right.length)
+  const K = CROSS_K
+  const positions = new Float32Array(n * K * 3)
+  const uvs = new Float32Array(n * K * 2)
+  const lane = new Float32Array(n * K)
+  let dist = 0
+  for (let i = 0; i < n; i++) {
+    if (i > 0) dist += Math.hypot(left[i].x - left[i - 1].x, left[i].z - left[i - 1].z)
+    const base = typeof profile === 'number' ? profile : profile[Math.min(i, profile.length - 1)]
+    const w = Math.hypot(right[i].x - left[i].x, right[i].z - left[i].z)
+    const fade = fades[Math.min(i, fades.length - 1)] ?? 1
+    const bank = banks[Math.min(i, banks.length - 1)] ?? 0
+    for (let k = 0; k < K; k++) {
+      const s = k / (K - 1) // 0 (left) .. 1 (right)
+      const ln = s * 2 - 1
+      const x = left[i].x + (right[i].x - left[i].x) * s
+      const z = left[i].z + (right[i].z - left[i].z) * s
+      const y = base + fade * crossOffset(ln, halfWidth, bank)
+      const o = (i * K + k) * 3
+      positions[o] = x
+      positions[o + 1] = y
+      positions[o + 2] = z
+      uvs[(i * K + k) * 2] = w * s
+      uvs[(i * K + k) * 2 + 1] = dist
+      lane[i * K + k] = ln
+    }
+  }
+  const indices: number[] = []
+  const vid = (i: number, k: number) => i * K + k
+  for (let i = 0; i < n - 1; i++) {
+    for (let k = 0; k < K - 1; k++) {
+      // same winding convention as ribbonGeometry (→ upward face normals)
+      indices.push(vid(i, k), vid(i, k + 1), vid(i + 1, k))
+      indices.push(vid(i, k + 1), vid(i + 1, k + 1), vid(i + 1, k))
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
+  g.setAttribute('aLane', new THREE.BufferAttribute(lane, 1))
+  g.setIndex(indices)
+  g.computeVertexNormals()
   return g
 }
 
