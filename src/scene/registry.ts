@@ -4,8 +4,8 @@ import type { BuildingResolution, FacadeSet, ResolvedContext, RoadResolution, Ro
 import { resolveRoad } from '../resolver/resolve'
 import { buildRoads } from '../procgen/roads'
 import { buildEnhancedBuilding, buildProceduralBuilding, fitToSlot, footprintCentroid } from '../procgen/buildings'
-import { applyLandTextures, buildAreas, buildTerrain, waterRings } from '../procgen/areas'
-import { buildTerrainField, conformTerrainToRoads, setActiveTerrain, type RoadCorridor } from '../procgen/terrain/field'
+import { applyLandTextures, buildAreas, buildPiers, buildTerrain, footprintWaterFraction, waterRings } from '../procgen/areas'
+import { buildTerrainField, conformTerrainToRoads, sampleTerrain, setActiveTerrain, type RoadCorridor } from '../procgen/terrain/field'
 import { cumulative, NON_DRIVABLE, segCenterline } from '../procgen/roadNetwork'
 import { buildFurniture, buildTrafficSignal, buildTrees } from '../procgen/props'
 import { buildRoadsideVegetation } from '../procgen/vegetation'
@@ -338,6 +338,8 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   // drives the procedural facade + roof form; the local asset library is one
   // branch of the fallback chain, behind the (default-OFF) feature flag.
   const libraryEnabled = isLibraryEnabled()
+  const overWaterFootprints: BuildingFeature['footprint'][] = []
+  const PIER_GRADE = 0 // over-water buildings are reseated to land grade, then given a pier deck
   for (const b of graph.buildings) {
     buildingFeatures.set(b.id, b)
     const plan = recognizeBuilding(b, ctx, { libraryEnabled })
@@ -364,6 +366,14 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
     const mesh = fitted ?? buildProceduralBuilding(b, plan.resolution, plan.roofForm)
     if (fitted) { fitted.name = b.name ?? 'Building'; fitted.userData.objectId = b.id }
     const c = footprintCentroid(b.footprint)
+    // Waterfront structures on piers/moorings (ferry & heliport terminals, pier
+    // sheds) are geolocated over water. Over water the terrain field returns the
+    // submerged riverbed, so seat them at grade and give them a pier deck — they
+    // read as pier buildings instead of boxes sunk into or floating on the river.
+    if (footprintWaterFraction(b.footprint, waterAreas) >= 0.5) {
+      mesh.position.y += PIER_GRADE - sampleTerrain(c.x, c.z)
+      overWaterFootprints.push(b.footprint)
+    }
     add(
       {
         id: b.id, type: 'building',
@@ -391,6 +401,21 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
         },
       },
       mesh,
+    )
+  }
+
+  // ---- pier decks under the over-water buildings collected above (one mesh)
+  const piers = buildPiers(overWaterFootprints, PIER_GRADE)
+  if (piers) {
+    piers.userData.objectId = 'infra_piers'
+    add(
+      {
+        id: 'infra_piers', type: 'area', name: 'Piers', locked: true,
+        transform: { position: [0, 0, 0], ...IDENTITY },
+        asset: { ...PROC_ASSET },
+        meta: { 'pier decks': overWaterFootprints.length },
+      },
+      piers,
     )
   }
 

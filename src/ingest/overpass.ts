@@ -662,6 +662,11 @@ export function ingestOverpass(raw: { elements: OsmElement[] }, cityName: string
     }
 
     if (el.tags.building) {
+      // Some waterfront features are moored vessels mapped as buildings
+      // (e.g. South Street Seaport's museum ships Wavertree/Ambrose carry
+      // building=yes + historic=ship). They are not buildings and read as
+      // floating boxes on the water, so drop them from the building layer.
+      if (el.tags.historic === 'ship') continue
       const ring = el.geometry.map((g) => toLocal(g.lat, g.lon))
       // drop closing duplicate point
       const first = ring[0]

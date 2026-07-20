@@ -303,6 +303,42 @@ export function isWaterAt(p: Vec2, waterAreas: AreaFeature[]): boolean {
   )
 }
 
+/** Fraction of a footprint's vertices that fall over rendered water (0..1). */
+export function footprintWaterFraction(footprint: Vec2[], waterAreas: AreaFeature[]): number {
+  if (!footprint.length) return 0
+  let over = 0
+  for (const p of footprint) if (isWaterAt(p, waterAreas)) over++
+  return over / footprint.length
+}
+
+// Concrete pier deck under waterfront buildings that sit over water (piers,
+// ferry/heliport terminals). DoubleSide so we never depend on footprint winding.
+const PIER_MAT = new THREE.MeshStandardMaterial({ color: '#6c6e72', roughness: 0.92, side: THREE.DoubleSide })
+const PIER_DROP = 3.0 // pier wall descends this far below grade — clears the water surface & riverbed
+
+/**
+ * Solid-reading pier under one over-water building: a deck cap at `gradeY` (the
+ * grade the building is reseated to) plus a skirt wall dropping to the riverbed.
+ * The building's base sinks into the cap exactly as it would into land, so the
+ * building rises from a pier instead of floating on the water surface.
+ */
+export function pierGeometry(footprint: Vec2[], gradeY: number): THREE.BufferGeometry {
+  const cap = flatRingGeometry(footprint, gradeY)
+  const skirt = wallGeometry([...footprint, footprint[0]], gradeY, gradeY - PIER_DROP)
+  return mergeGeometries([cap, skirt])
+}
+
+/** One merged mesh for all pier decks (one draw call), or null when none. */
+export function buildPiers(footprints: Vec2[][], gradeY: number): THREE.Mesh | null {
+  const geoms = footprints.filter((f) => f.length >= 3).map((f) => pierGeometry(f, gradeY))
+  if (!geoms.length) return null
+  const mesh = new THREE.Mesh(mergeGeometries(geoms), PIER_MAT)
+  mesh.name = 'Piers'
+  mesh.receiveShadow = true
+  mesh.castShadow = true
+  return mesh
+}
+
 function ringBBox(ring: Vec2[]): Rect {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
   for (const p of ring) {
