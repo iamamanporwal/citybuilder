@@ -21,20 +21,58 @@ function std(o: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMateria
   return new THREE.MeshStandardMaterial(o)
 }
 
+// Hex-tiling (Mikkelsen, "Practical Real-Time Hex-Tiling", JCGT 2022 — Phase 2 of
+// docs/road-visual-techniques-research.md). Kills the visible ~6 m tile repeat on
+// asphalt aggregate by sampling on a triangular/hex lattice: each hex cell fetches
+// the source at a per-cell random OFFSET and the three overlapping cells blend by
+// barycentric weight. Offset-only (no per-tile rotation) so it drops onto albedo
+// without any tangent-frame concern; explicit textureGrad keeps mip selection
+// correct across the cell seams (three r169 is WebGL2/GLSL3 — textureGrad is core).
+// Applied to ALBEDO only, and only to stochastic asphalt — the research is explicit
+// that hex-tiling FAILS on structured textures (cobble/pavers/markings), which is
+// why those materials never route through here. Weights are contrast-sharpened to
+// counter the mild softening from omitting histogram preservation.
+const HEX_TILING_GLSL = `
+vec2 cbHexHash(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p) * 43758.5453123);
+}
+vec4 cbHexSample(sampler2D samp, vec2 uv) {
+  const mat2 toSkew = mat2(1.0, 0.0, -0.57735027, 1.15470054);
+  vec2 skew = toSkew * (uv * 3.4641016); // ~3.46 hex cells per texture tile
+  vec2 base = floor(skew);
+  vec2 f = fract(skew);
+  float wz = 1.0 - f.x - f.y;
+  vec2 dx = dFdx(uv), dy = dFdy(uv);
+  vec2 v1, v2, v3; vec3 w;
+  if (wz > 0.0) { w = vec3(wz, f.y, f.x); v1 = base; v2 = base + vec2(0.0, 1.0); v3 = base + vec2(1.0, 0.0); }
+  else { w = vec3(-wz, 1.0 - f.y, 1.0 - f.x); v1 = base + vec2(1.0, 1.0); v2 = base + vec2(1.0, 0.0); v3 = base + vec2(0.0, 1.0); }
+  vec4 c1 = textureGrad(samp, uv + cbHexHash(v1), dx, dy);
+  vec4 c2 = textureGrad(samp, uv + cbHexHash(v2), dx, dy);
+  vec4 c3 = textureGrad(samp, uv + cbHexHash(v3), dx, dy);
+  w = pow(w, vec3(3.0));               // sharpen the blend → tighter, less-ghosted seams
+  w /= (w.x + w.y + w.z);
+  return c1 * w.x + c2 * w.y + c3 * w.z;
+}
+`
+
 // Large-scale variation keyed to WORLD position (not UV), so long roads don't
 // show the 6 m tile repeat and — because it ignores the per-segment UV offset —
 // the patchiness stays continuous across segment seams. Cheap multi-sine "noise"
 // modulates brightness a little, the same onBeforeCompile pattern the ocean uses.
+// Also hex-tiles the albedo fetch (above) to break the tile repeat outright.
 function withMacroVariation(m: THREE.MeshStandardMaterial, key: string): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvCbMacroW = (modelMatrix * vec4(transformed, 1.0)).xyz;')
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCbMacroW;')
+      .replace('#include <common>', `#include <common>\nvarying vec3 vCbMacroW;\n${HEX_TILING_GLSL}`)
       .replace(
         '#include <map_fragment>',
-        `#include <map_fragment>
+        `#ifdef USE_MAP
+          diffuseColor *= cbHexSample( map, vMapUv );
+        #endif
         float cbM1 = sin(vCbMacroW.x * 0.071 + vCbMacroW.z * 0.031);
         float cbM2 = sin(vCbMacroW.x * 0.017 - vCbMacroW.z * 0.089);
         float cbMacro = 0.5 + 0.5 * (cbM1 * 0.6 + cbM2 * 0.4);
