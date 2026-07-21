@@ -12,7 +12,7 @@ import { analyzeRoadNodes } from '../procgen/roadNetwork'
 
 vi.mock('../materials/library', () => {
   const mat = () => new THREE.MeshBasicMaterial()
-  return { roadMaterial: mat, sidewalkMaterial: mat(), facadeMaterial: mat, roofMaterial: mat, decalMaterials: { crack: mat(), stain: mat(), patch: mat(), manhole: mat() } }
+  return { roadMaterial: mat, sidewalkMaterial: mat(), curbFrameMaterial: mat(), framedWalkMaterial: mat(), framedVergeMaterial: mat(), facadeMaterial: mat, roofMaterial: mat, decalMaterials: { crack: mat(), stain: mat(), patch: mat(), manhole: mat() } }
 })
 vi.mock('../procgen/materials', () => {
   const mat = () => new THREE.MeshBasicMaterial()

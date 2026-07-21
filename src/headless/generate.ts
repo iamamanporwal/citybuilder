@@ -12,6 +12,7 @@ import { prefetchRecognizerData } from '../recognizer/prepass'
 import { loadLibraryTemplates } from '../scene/libraryTemplates'
 import { scaleRoadNetwork, clampRoadScale } from '../procgen/roadScale'
 import { setCrossSectionEnabled } from '../procgen/crossSection'
+import { setFramedRoadsEnabled } from '../procgen/framedRoads'
 import { useEditor } from '../state/store'
 import { fetchOsmArea, type BBox, type FetchOptions } from '../ingest/overpassFetch'
 import { buildExportBundle, type ExportBundle } from '../export/bundle'
@@ -33,6 +34,8 @@ export interface GenerateOptions {
   corridorElevation?: boolean
   /** Terrain relief (procgen/terrain) drives world elevation. Default off (flat world). */
   terrain?: boolean
+  /** Framed road cross-section (raised concrete curb-frame + footpath). Default on. */
+  framedRoads?: boolean
   onProgress?: (message: string) => void
 }
 
@@ -97,6 +100,10 @@ export async function generateCity(opts: GenerateOptions): Promise<ExportBundle>
   // carriageways. Set explicitly so a long-lived server process can't inherit a
   // stale module flag from a prior request.
   setCrossSectionEnabled(false)
+  // Framed roads (raised curb-frame + footpath) default ON for API/headless
+  // output; still set explicitly per request so a warm server instance can't
+  // inherit a stale module flag.
+  setFramedRoadsEnabled(opts.framedRoads ?? true)
   const roadScale = clampRoadScale(opts.roadScale ?? 1)
   s.setRoadScale(roadScale)
 

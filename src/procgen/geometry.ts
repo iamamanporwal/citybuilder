@@ -195,9 +195,20 @@ export function raisedRibbonGeometry(
 ): THREE.BufferGeometry {
   const top = typeof base === 'number' ? base + h : base.map((b) => b + h)
   const parts: THREE.BufferGeometry[] = []
-  // top face gets world-planar UVs: sidewalk slabs from different arms overlap
-  // at corners and along dual carriageways at the same curb height
-  parts.push(planarUvXZ(ribbonGeometry(left, right, top)))
+  // Top face gets world-planar UVs so slabs from different arms that overlap — at
+  // junction corners, along dual carriageways, at way-split seams — sample
+  // identical texels: overdraw is idempotent and z-fighting cannot show. That
+  // idempotency ALSO requires identical normals. A per-point `base` (the road-
+  // elevation solve lifting each arm on its own centerline) otherwise routes the
+  // top through computeVertexNormals, so two overlapping tops get slightly
+  // different tilts → same albedo but different shading → high-frequency flicker
+  // (roads never overlap co-planarly, so they're immune). Force the top to the
+  // flat up-normal, restoring idempotency; the <6° curb tilt it ignores is
+  // imperceptible over a 0.22 m kerb. The vertical skirts keep their real normals.
+  const topGeo = planarUvXZ(ribbonGeometry(left, right, top))
+  const tn = topGeo.getAttribute('normal') as THREE.BufferAttribute
+  for (let i = 0; i < tn.count; i++) tn.setXYZ(i, 0, 1, 0)
+  parts.push(topGeo)
   parts.push(wallGeometry(left, top, base))
   parts.push(wallGeometry(right, base, top)) // reversed winding via height order
   return mergeGeometries(parts)

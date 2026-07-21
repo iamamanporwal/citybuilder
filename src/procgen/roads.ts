@@ -2,13 +2,15 @@ import * as THREE from 'three'
 import type { CityGraph, RoadSegment, Vec2 } from '../types'
 import type { ResolvedContext, RoadResolution } from '../resolver/types'
 import { hash01 } from '../resolver/resolve'
-import { decalMaterials, roadMaterial, sidewalkMaterial } from '../materials/library'
+import { curbFrameMaterial, decalMaterials, framedVergeMaterial, framedWalkMaterial, roadMaterial, sidewalkMaterial } from '../materials/library'
 import { mats } from './materials'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import polygonClipping from 'polygon-clipping'
 import { crownedRibbonGeometry, mergeGeometries, offsetPolyline, planarUvXZ, pointAlong, polylineLength, raisedRibbonGeometry, ribbonGeometry, ringAreaM2, roundPolygon, smoothPolyline, trimPolyline, wallGeometry } from './geometry'
 import { bankProfile, CROSS_SECTION, crossFade, crossOffset } from './crossSection'
+import { FRAME_CURB_H, FRAME_VERGE_H, FRAMED_ROADS, framedPresetFor } from './framedRoads'
 import { analyzeRoadNodes, BRIDGE_LAYER_H, cumulative, discRadius, nodeKey, NON_DRIVABLE, segCenterline, siblingFootwayBridgeIds } from './roadNetwork'
+import { CarriagewayIndex } from './props'
 import { buildRoadElevation, isCorridorElevationEnabled } from './corridor'
 import { sampleTerrain } from './terrain/field'
 import { TERRAIN } from './terrain/config'
@@ -57,10 +59,175 @@ const STOP_LINE_DIST = 3.15
 const JUNCTION_FLARE = 1.3
 const junctionFilletR = (maxWidth: number) => Math.min(7, Math.max(2, maxWidth * 0.45))
 
+/**
+ * Flat top ribbon for the framed cross-section: world-planar XZ UVs + forced +Y
+ * normals so overlapping kerbs/footpaths from adjacent roads sample identical
+ * texels and share the same normal — idempotent coplanar overdraw (the trick
+ * raisedRibbonGeometry uses for its top). Height may be a scalar or per-point.
+ * CRITICAL: the winding is normalised so the geometric normal always points +Y.
+ * The two sides of a road are mirror images, so ribbonGeometry winds them
+ * oppositely; with DoubleSide materials three flips the shading normal to face
+ * the camera, so a −Y-wound top shades as if lit from below → one side dark, the
+ * other bright. Forcing +Y winding makes both sides shade identically.
+ */
+function framedTop(a: Vec2[], b: Vec2[], y: number | number[]): THREE.BufferGeometry {
+  const g = planarUvXZ(ribbonGeometry(a, b, y))
+  windUp(g)
+  const n = g.getAttribute('normal') as THREE.BufferAttribute
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0)
+  return g
+}
+
+/**
+ * Framed junction corners: the clean, real-world "curb return". Given the (already
+ * rounded) asphalt-pad boundary `ring`, its incident `arms` and the node, offset the
+ * ring outward around the CORNERS (not across the road mouths) into a curb + footpath
+ * band. The rounded pad → curved corner sidewalks, hugging the asphalt with no gap —
+ * exactly a border-radius on the intersection. Emits into the framed geom arrays.
+ */
+function framedJunctionCorners(
+  ring: Vec2[],
+  arms: { p?: Vec2; d: Vec2; h: number }[], // cluster arms carry their own anchor; single-node arms fall back to `node`
+  node: Vec2,
+  y: number, // node surface elevation
+  curbW: number,
+  footW: number,
+  onRoad: (p: Vec2, margin: number) => boolean, // geometric truth: is this point on ANY drivable carriageway?
+  out: { frame: THREE.BufferGeometry[]; walk: THREE.BufferGeometry[] },
+): void {
+  const n = ring.length
+  if (n < 3) return
+  // Mouth vertices sit over a road exit. TWO tests, because a mouth vertex misread
+  // as corner paints a band straight across the carriageway:
+  //  1. arm-ray test with the flare (pads bell-mouth arms by ~1.3×) — covers the
+  //     widened mouth zone around every REGISTERED arm;
+  //  2. geometric onRoad test — covers roads the arm lists can't know about
+  //     (ways passing through mid-polyline, service exits, ends slightly off-node).
+  const mouth = ring.map((p) => {
+    if (onRoad(p, 1.0)) return true
+    for (const a of arms) {
+      const ax = a.p?.x ?? node.x
+      const az = a.p?.z ?? node.z
+      const rx = p.x - ax, rz = p.z - az
+      const t = rx * a.d.x + rz * a.d.z // along the arm
+      if (t <= -1) continue
+      const lat = Math.abs(rx * -a.d.z + rz * a.d.x) // lateral from the arm centreline
+      if (lat < a.h * 1.35 + 0.8) return true
+    }
+    return false
+  })
+  // contiguous non-mouth runs (cyclic)
+  let start = mouth.indexOf(false)
+  if (start < 0) return // all mouths (degenerate)
+  const runs: Vec2[][] = []
+  let i = 0
+  while (i < n) {
+    const idx = (start + i) % n
+    if (!mouth[idx]) {
+      const run: Vec2[] = []
+      let j = i
+      while (j < n && !mouth[(start + j) % n]) { run.push(ring[(start + j) % n]); j++ }
+      if (run.length >= 2) runs.push(run)
+      i = j + 1
+    } else i++
+  }
+  let cx = 0, cz = 0
+  for (const p of ring) { cx += p.x; cz += p.z }
+  cx /= n; cz /= n
+  // Outward offset sign from the RING WINDING, decided once at the vertex farthest
+  // from the centroid (that vertex is on the convex hull, so "away from centroid"
+  // is unambiguous there) and reused for every run — a simple polygon's interior
+  // stays on one consistent side of its boundary, while the old per-run centroid
+  // test flipped on elongated/concave pads and offset bands INTO the junction.
+  let far = 0, fd = -1
+  for (let k = 0; k < n; k++) {
+    const d = (ring[k].x - cx) ** 2 + (ring[k].z - cz) ** 2
+    if (d > fd) { fd = d; far = k }
+  }
+  const tri = [ring[(far - 1 + n) % n], ring[far], ring[(far + 1) % n]]
+  const triProbe = offsetPolyline(tri, 1)[1]
+  const sign =
+    Math.hypot(triProbe.x - cx, triProbe.z - cz) > Math.hypot(ring[far].x - cx, ring[far].z - cz) ? 1 : -1
+  const curbTop = y + FRAME_CURB_H
+  const asphY = y + Y_ROAD
+  const foundation = y - SIDEWALK_FOUNDATION
+  for (const run of runs) {
+    const curbOut = offsetPolyline(run, sign * curbW)
+    const footOut = offsetPolyline(run, sign * (curbW + footW))
+    // Safety net: a legitimate corner band NEVER stands on asphalt. If any offset
+    // point lands strictly inside a carriageway, something upstream mis-shaped this
+    // run (odd ring, unregistered road) — skip it rather than paint the road over.
+    if (curbOut.some((p) => onRoad(p, -0.25)) || footOut.some((p) => onRoad(p, -0.25))) continue
+    out.frame.push(wallGeometry(run, asphY, curbTop)) // curb face
+    out.frame.push(framedTop(run, curbOut, curbTop)) // curb strip
+    out.walk.push(framedTop(curbOut, footOut, curbTop)) // footpath
+    out.walk.push(wallGeometry(footOut, curbTop, foundation)) // outer skirt
+  }
+}
+
+/**
+ * offsetPolyline with a PER-POINT offset (same miter/fold handling). Used by the
+ * framed median band, whose width must follow the actual gap to the neighbouring
+ * carriageway station by station — a constant width overflows onto the neighbour
+ * wherever two parallel roads converge.
+ */
+function offsetPolylineVar(pts: Vec2[], offsets: number[]): Vec2[] {
+  const n = pts.length
+  const out: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const p = pts[i]
+    let dpx = 0, dpz = 0, dnx = 0, dnz = 0
+    let hasPrev = false, hasNext = false
+    if (i > 0) {
+      dpx = p.x - pts[i - 1].x; dpz = p.z - pts[i - 1].z
+      const l = Math.hypot(dpx, dpz) || 1; dpx /= l; dpz /= l; hasPrev = true
+    }
+    if (i < n - 1) {
+      dnx = pts[i + 1].x - p.x; dnz = pts[i + 1].z - p.z
+      const l = Math.hypot(dnx, dnz) || 1; dnx /= l; dnz /= l; hasNext = true
+    }
+    let dx = (hasPrev ? dpx : dnx) + (hasNext ? dnx : dpx)
+    let dz = (hasPrev ? dpz : dnz) + (hasNext ? dnz : dpz)
+    const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl
+    let scale = 1
+    if (hasPrev && hasNext) {
+      const dot = Math.max(-1, Math.min(1, dpx * dnx + dpz * dnz))
+      scale = Math.min(1 / Math.max(Math.sqrt((1 + dot) / 2), 0.45), 2.2)
+    }
+    out.push({ x: p.x + dz * offsets[i] * scale, z: p.z - dx * offsets[i] * scale })
+  }
+  for (let i = 1; i < n; i++) {
+    const rx = pts[i].x - pts[i - 1].x, rz = pts[i].z - pts[i - 1].z
+    const ox = out[i].x - out[i - 1].x, oz = out[i].z - out[i - 1].z
+    if (rx * ox + rz * oz < 0) out[i] = { ...out[i - 1] }
+  }
+  return out
+}
+
+/** Reverse triangle winding if the mesh's faces point −Y, so all faces are +Y
+ *  (front-facing from above). Keeps DoubleSide shading identical on mirrored sides. */
+function windUp(g: THREE.BufferGeometry): void {
+  const idx = g.getIndex()
+  const pos = g.getAttribute('position') as THREE.BufferAttribute
+  if (!idx || idx.count < 3) return
+  const i0 = idx.getX(0), i1 = idx.getX(1), i2 = idx.getX(2)
+  const e1x = pos.getX(i1) - pos.getX(i0), e1z = pos.getZ(i1) - pos.getZ(i0)
+  const e2x = pos.getX(i2) - pos.getX(i0), e2z = pos.getZ(i2) - pos.getZ(i0)
+  // normal.y = -(e1x*e2z - e1z*e2x); want it > 0 → flip when the cross is > 0
+  if (e1x * e2z - e1z * e2x > 0) {
+    const a = idx.array as Uint16Array | Uint32Array
+    for (let i = 0; i < a.length; i += 3) { const t = a[i + 1]; a[i + 1] = a[i + 2]; a[i + 2] = t }
+    idx.needsUpdate = true
+  }
+}
+
 export interface RoadBuildResult {
   roadMeshes: Map<string, THREE.Mesh>
   intersections: THREE.Mesh | null
   sidewalks: THREE.Mesh | null
+  frames: THREE.Mesh | null // "Framed roads": bright concrete curb strips (flag-gated)
+  framedWalks: THREE.Mesh | null // "Framed roads": footpath band beyond the frame (flag-gated)
+  framedVerge: THREE.Mesh | null // "Framed roads": raised tree-lawn grass verge (flag-gated)
   markings: THREE.Mesh | null
   markingsYellow: THREE.Mesh | null
   decals: THREE.Group | null
@@ -202,6 +369,9 @@ export function buildRoads(
 
   const roadMeshes = new Map<string, THREE.Mesh>()
   const sidewalkGeoms: THREE.BufferGeometry[] = []
+  const frameGeoms: THREE.BufferGeometry[] = [] // framed-roads curb strips
+  const framedWalkGeoms: THREE.BufferGeometry[] = [] // framed-roads footpaths
+  const framedVergeGeoms: THREE.BufferGeometry[] = [] // framed-roads tree-lawn verges
   const white = new MarkingBuffer()
   const yellow = new MarkingBuffer()
   const whiteQuads = { pos: [] as number[], idx: [] as number[] }
@@ -250,8 +420,107 @@ export function buildRoads(
   }
   const decalPlanner = new DecalPlanner()
 
+  // ---- FRAMED de-clutter (owner brief: "use as few things as possible"): in
+  // framed mode a road already carries its own clean curb+lawn+footpath, so the
+  // separate OSM sidewalk footways that run beside carriageways are REDUNDANT —
+  // they only stack coplanar concrete/pavers/cobble surfaces that clutter and
+  // z-fight. We drop them and keep only genuine standalone paths (park routes) +
+  // pedestrian plazas. Detection: a footway/cycleway ≥50% of whose points lie
+  // within a sidewalk-band of a drivable carriageway is a redundant sidewalk.
+  const framedDeclutter = FRAMED_ROADS.enabled
+  const SIDEWALK_BAND = 4.5 // how far beyond the carriageway a beside-road sidewalk sits
+  const cwIndex = framedDeclutter ? new CarriagewayIndex(graph.roads) : null
+  const isRedundantSidewalk = (r: RoadSegment): boolean => {
+    if (!cwIndex) return false
+    // pedestrian plazas/streets are real open surfaces — keep them; only footways
+    // and cycleways that hug a carriageway are the redundant sidewalks.
+    if (r.roadClass !== 'footway' && r.roadClass !== 'cycleway') return false
+    let near = 0
+    for (const p of r.points) if (cwIndex.insideCarriageway(p, SIDEWALK_BAND)) near++
+    return near / r.points.length >= 0.5
+  }
+
+  // ---- framed FORBIDDEN zones: a framed band must never stand on a junction pad,
+  // another carriageway or a standalone path. Rather than trusting end-trims and
+  // arm lists (which miss pass-through ways, off-node ends and pad flare), every
+  // band is point-tested against this and split around violations — the structural
+  // guarantee behind "no sidewalk ever overflows a road".
+  const FORBID_CELL = 24
+  const forbidDiscs = new Map<string, { x: number; z: number; r: number }[]>()
+  const forbidPaths = new Map<string, { ax: number; az: number; bx: number; bz: number; half: number }[]>()
+  if (framedDeclutter) {
+    const addDisc = (x: number, z: number, r: number) => {
+      for (let cx = Math.floor((x - r) / FORBID_CELL); cx <= Math.floor((x + r) / FORBID_CELL); cx++) {
+        for (let cz = Math.floor((z - r) / FORBID_CELL); cz <= Math.floor((z + r) / FORBID_CELL); cz++) {
+          const key = `${cx},${cz}`
+          let l = forbidDiscs.get(key)
+          if (!l) forbidDiscs.set(key, (l = []))
+          l.push({ x, z, r })
+        }
+      }
+    }
+    for (const [k, info] of nodeUse) {
+      if (info.count < 2 || passThrough.has(k)) continue
+      addDisc(info.p.x, info.p.z, discRadius(info.maxWidth) + 0.4) // ≈ the pad footprint incl. flare
+    }
+    for (const r of graph.roads) {
+      if (!NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue
+      if (isRedundantSidewalk(r)) continue // dropped ways can't forbid anything
+      const half = r.widthM / 2
+      for (let i = 1; i < r.points.length; i++) {
+        const a = r.points[i - 1], b = r.points[i]
+        const pad = half + 1
+        for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / FORBID_CELL); cx <= Math.floor((Math.max(a.x, b.x) + pad) / FORBID_CELL); cx++) {
+          for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / FORBID_CELL); cz <= Math.floor((Math.max(a.z, b.z) + pad) / FORBID_CELL); cz++) {
+            const key = `${cx},${cz}`
+            let l = forbidPaths.get(key)
+            if (!l) forbidPaths.set(key, (l = []))
+            l.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half })
+          }
+        }
+      }
+    }
+  }
+  /** Distance from p to the nearest standalone-path EDGE (like edgeGapTo, for the
+   *  kept footway/cycleway/pedestrian ways). null when none nearby. */
+  const pathEdgeGap = (p: Vec2): number | null => {
+    let best: number | null = null
+    const cx = Math.floor(p.x / FORBID_CELL)
+    const cz = Math.floor(p.z / FORBID_CELL)
+    for (let ix = cx - 1; ix <= cx + 1; ix++) {
+      for (let iz = cz - 1; iz <= cz + 1; iz++) {
+        for (const s of forbidPaths.get(`${ix},${iz}`) ?? []) {
+          const dx = s.bx - s.ax, dz = s.bz - s.az
+          const len2 = dx * dx + dz * dz
+          let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0
+          t = t < 0 ? 0 : t > 1 ? 1 : t
+          const gap = Math.hypot(p.x - (s.ax + dx * t), p.z - (s.az + dz * t)) - s.half
+          if (gap < 8 && (best === null || gap < best)) best = gap
+        }
+      }
+    }
+    return best
+  }
+  /** True where a framed band may not stand: junction pad, other carriageway, or path. */
+  const framedForbiddenAt = (p: Vec2, excludeId: string): boolean => {
+    const key = `${Math.floor(p.x / FORBID_CELL)},${Math.floor(p.z / FORBID_CELL)}`
+    for (const d of forbidDiscs.get(key) ?? []) {
+      if ((p.x - d.x) ** 2 + (p.z - d.z) ** 2 < d.r * d.r) return true
+    }
+    const pg = pathEdgeGap(p)
+    if (pg !== null && pg < 0.15) return true
+    return cwIndex !== null && cwIndex.insideCarriageway(p, -0.1, excludeId)
+  }
+  /** Corner-band probe: on a drivable carriageway OR a standalone path (margin-aware). */
+  const onRoadOrPath = (p: Vec2, margin: number): boolean => {
+    if (cwIndex !== null && cwIndex.insideCarriageway(p, margin)) return true
+    const pg = pathEdgeGap(p)
+    return pg !== null && pg < margin
+  }
+
   for (const r of graph.roads) {
     if (r.points.length < 2) continue
+    if (isRedundantSidewalk(r)) continue // framed mode: drop redundant beside-road sidewalks
     const res = resolutions.get(r.id)
     if (!res) continue
 
@@ -322,6 +591,7 @@ export function buildRoads(
     // below the road surface, and with world-planar UVs + a shared material so
     // path-over-path overlap (plaza polylines) paints identical texels.
     const isPath = NON_DRIVABLE.has(r.roadClass)
+    const framed = FRAMED_ROADS.enabled
     const yBase = isPath ? Y_PATH : Y_ROAD
     const cum = cumulative(pts)
     const trueProfile = elevation.profileFor(r, cum)
@@ -429,7 +699,12 @@ export function buildRoads(
       surface.setAttribute('aLane', new THREE.BufferAttribute(lane, 1))
       surface.setAttribute('aWear', new THREE.BufferAttribute(wear, 1))
     }
-    const mesh = new THREE.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ':uv')))
+    // In framed mode, standalone footways/cycleways/pedestrian ways (sidewalks not
+    // attached to a carriageway) render with the SAME flat framed footpath concrete
+    // as the carriageway sidewalks, so every pedestrian surface reads as one clean
+    // material instead of a mix of pavers/cobble slabs and flat concrete.
+    const surfaceMat = framed && isPath ? framedWalkMaterial : roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ':uv'))
+    const mesh = new THREE.Mesh(surface, surfaceMat)
     mesh.name = r.name ?? `${r.roadClass} road`
     mesh.userData.objectId = r.id
     mesh.receiveShadow = true
@@ -483,18 +758,25 @@ export function buildRoads(
     const drivable = !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== 'service'
 
     // ---- sidewalks from resolved cross-section, trimmed at junctions
-    // (at a consolidated cluster: back to the merged patch boundary)
-    if (res.crossSection.sidewalks) {
-      const sw = res.crossSection.sidewalkWidth
+    // (at a consolidated cluster: back to the merged patch boundary).
+    // "Framed roads" (flag): the clean library cross-section replaces OSM-driven
+    // sidewalks entirely — every drivable, non-bridge road with a class preset gets
+    // the frame; motorway/trunk stay frameless. Default off → original path.
+    const preset = framed && drivable && !r.bridge ? framedPresetFor(r.roadClass) : null
+    const wantSidewalk = framed ? preset !== null : res.crossSection.sidewalks
+    if (wantSidewalk) {
+      const sw = preset ? preset.curbW + preset.vergeW + preset.footW : res.crossSection.sidewalkWidth
       const cs = clusterExitTrim(pts, false)
       const ce = clusterExitTrim(pts, true)
-      const startTrim = cs !== null ? cs + sw : isJunction(pts[0]) ? junctionRadius(pts[0]) + sw : 0
-      const endTrim =
-        ce !== null
-          ? ce + sw
-          : isJunction(pts[pts.length - 1])
-            ? junctionRadius(pts[pts.length - 1]) + sw
-            : 0
+      // In framed mode junction pads get a curved corner-frame wrap that hugs the
+      // pad ring; trim the segment sidewalk close to the pad so it MEETS the corner
+      // band (instead of the legacy junctionRadius + sidewalk setback).
+      const jctTrim = (p: Vec2): number => {
+        if (framed && (nodeUse.get(nodeKey(p))?.count ?? 0) >= 3) return junctionRadius(p) * 0.72
+        return junctionRadius(p) + sw
+      }
+      const startTrim = cs !== null ? cs + (framed ? 0.4 : sw) : isJunction(pts[0]) ? jctTrim(pts[0]) : 0
+      const endTrim = ce !== null ? ce + (framed ? 0.4 : sw) : isJunction(pts[pts.length - 1]) ? jctTrim(pts[pts.length - 1]) : 0
       const walkPts = trimPolyline(pts, startTrim, endTrim)
       if (walkPts && walkPts.length >= 2) {
         // Curb/sidewalk slab: top face at base+curbHeight (base = the road surface
@@ -505,11 +787,114 @@ export function buildRoads(
         // curbHeight above the road; only the skirt extends downward.
         const base = layerProfile(walkPts, 0)
         const foot = typeof base === 'number' ? base - SIDEWALK_FOUNDATION : base.map((b) => b - SIDEWALK_FOUNDATION)
-        const slabH = res.crossSection.curbHeight + SIDEWALK_FOUNDATION
-        for (const side of [1, -1]) {
-          const inner = offsetPolyline(walkPts, side * (half + 0.05))
-          const outer = offsetPolyline(walkPts, side * (half + sw))
-          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, slabH, foot))
+        if (preset) {
+          // Framed cross-section, class-tuned: [curb strip | tree-lawn verge | footpath].
+          // Every band is a flat top (world-planar UV + forced up-normal → idempotent
+          // overdraw where adjacent roads' kerbs overlap) and each height step emits
+          // exactly ONE skirt so vertical walls never coincide → no z-fight.
+          //
+          // TWO structural guarantees (the "sidewalk can never overflow a road" fix):
+          //  1. SPLIT: each side's band is point-tested against the forbidden zones
+          //     (junction pads, other carriageways, standalone paths) and emitted
+          //     only over the clear runs — bands physically cannot cross a pad or a
+          //     road that end-trims/arm-lists failed to account for.
+          //  2. CLAMP: within a run, EVERY band edge is clamped per station to the
+          //     gap toward the nearest other carriageway (lawn gives way first, then
+          //     footpath), so converging parallel ways get hugged, never painted over.
+          //     A side whose gap stays inside the band becomes a MEDIAN side: curb +
+          //     shared footpath (the twin overlaps idempotently), no tree-lawn.
+          const { curbW, vergeW, footW } = preset
+          const hasVerge = vergeW > 0.05
+          const emitSide = (runPts: Vec2[], side: 1 | -1) => {
+            const baseR = layerProfile(runPts, 0)
+            const footR = typeof baseR === 'number' ? baseR - SIDEWALK_FOUNDATION : baseR.map((b) => b - SIDEWALK_FOUNDATION)
+            const curbTop = typeof baseR === 'number' ? baseR + FRAME_CURB_H : baseR.map((b) => b + FRAME_CURB_H)
+            const vergeTop = typeof baseR === 'number' ? baseR + FRAME_VERGE_H : baseR.map((b) => b + FRAME_VERGE_H)
+            const nPts = runPts.length
+            const gapAt = (i: number): number => {
+              const pr = runPts[Math.max(i - 1, 0)]
+              const nx = runPts[Math.min(i + 1, nPts - 1)]
+              let dx = nx.x - pr.x, dz = nx.z - pr.z
+              const l = Math.hypot(dx, dz) || 1
+              dx /= l; dz /= l
+              const off = side * (half + 0.3)
+              const probe = { x: runPts[i].x + dz * off, z: runPts[i].z - dx * off }
+              const gCw = cwIndex!.edgeGapTo(probe, r.id)
+              const gPath = pathEdgeGap(probe) // greenways/esplanades clamp the band too
+              const g = Math.min(gCw ?? 99, gPath ?? 99)
+              return g >= 99 ? 99 : Math.max(g + 0.3, 0) // probe sits 0.3 past our edge
+            }
+            const gaps = runPts.map((_, i) => gapAt(i))
+            let tight = 0
+            for (const g of gaps) if (g < sw + 1.0) tight++
+            const median = tight >= nPts / 2 // most of the run faces a parallel twin
+            // conservative per-point ends: min over the neighbourhood never overflows
+            const cEnds: number[] = []
+            const vEnds: number[] = []
+            const fEnds: number[] = []
+            for (let i = 0; i < nPts; i++) {
+              const g = Math.min(gaps[Math.max(i - 1, 0)], gaps[i], gaps[Math.min(i + 1, nPts - 1)])
+              const avail = Math.max(g - 0.1, 0.08)
+              const cEnd = Math.min(curbW, avail)
+              const vEnd = median || !hasVerge ? cEnd : Math.min(cEnd + vergeW, Math.max(avail, cEnd))
+              cEnds.push(cEnd)
+              vEnds.push(vEnd)
+              fEnds.push(Math.min(vEnd + footW, Math.max(avail, vEnd)))
+            }
+            const off = (ends: number[]) => offsetPolylineVar(runPts, ends.map((e) => side * (half + 0.05 + e)))
+            const o0 = offsetPolyline(runPts, side * (half + 0.05)) // curb inner (asphalt edge)
+            const oC = off(cEnds)
+            const oV = off(vEnds)
+            const oF = off(fEnds)
+            frameGeoms.push(framedTop(o0, oC, curbTop)) // curb strip + curb face
+            frameGeoms.push(wallGeometry(o0, footR, curbTop))
+            if (!median && hasVerge) {
+              frameGeoms.push(wallGeometry(oC, vergeTop, curbTop)) // curb back down to lawn
+              framedVergeGeoms.push(framedTop(oC, oV, vergeTop)) // raised tree-lawn
+              framedWalkGeoms.push(wallGeometry(oV, vergeTop, curbTop)) // footpath face up from lawn
+            }
+            framedWalkGeoms.push(framedTop(oV, oF, curbTop)) // footpath
+            framedWalkGeoms.push(wallGeometry(oF, curbTop, footR)) // outer skirt (hidden under a shared median band)
+          }
+          for (const side of [1, -1] as const) {
+            // forbidden-zone mask at the curb line, then emit each clear run
+            const nAll = walkPts.length
+            const allowed: boolean[] = []
+            for (let i = 0; i < nAll; i++) {
+              const pr = walkPts[Math.max(i - 1, 0)]
+              const nx = walkPts[Math.min(i + 1, nAll - 1)]
+              let dx = nx.x - pr.x, dz = nx.z - pr.z
+              const l = Math.hypot(dx, dz) || 1
+              dx /= l; dz /= l
+              const off = side * (half + 0.4)
+              allowed.push(!framedForbiddenAt({ x: walkPts[i].x + dz * off, z: walkPts[i].z - dx * off }, r.id))
+            }
+            let i0 = -1
+            for (let i = 0; i <= nAll; i++) {
+              const ok = i < nAll && allowed[i]
+              if (ok && i0 < 0) i0 = i
+              if (!ok && i0 >= 0) {
+                if (i - i0 >= 2) emitSide(walkPts.slice(i0, i), side)
+                i0 = -1
+              }
+            }
+          }
+        } else {
+          const slabH = res.crossSection.curbHeight + SIDEWALK_FOUNDATION
+          for (const side of [1, -1]) {
+            const inner = offsetPolyline(walkPts, side * (half + 0.05))
+            const outer = offsetPolyline(walkPts, side * (half + sw))
+            // raisedRibbonGeometry hard-codes one winding convention (first arg =
+            // +normal edge, second = −normal edge) so its top face winds upward and
+            // its curb faces point outward. On the −1 side `inner` is the +normal
+            // edge; on the +1 side `outer` is. Pass them in that order for BOTH
+            // sides — otherwise the +1 slab is built with inverted winding, and the
+            // single-sided sidewalk material backface-culls its curb/top, so kerb
+            // lines show only from certain angles and vanish when driving low.
+            const edgeL = side === 1 ? outer : inner
+            const edgeR = side === 1 ? inner : outer
+            sidewalkGeoms.push(raisedRibbonGeometry(edgeL, edgeR, slabH, foot))
+          }
         }
       }
     }
@@ -589,7 +974,10 @@ export function buildRoads(
         // ---- wear decals-as-content (seeded per segment). All decals share one
         // Y layer, so overlapping quads would be exactly coplanar — the planner
         // rejects any placement that intersects a decal already placed anywhere.
-        if (res.decalDensity > 0 && res.surface.startsWith('asphalt')) {
+        // Framed mode is deliberately minimal: no scattered wear decals (cracks/
+        // stains/patches) — they read as random texture clutter and are the last
+        // near-coplanar flicker source. Only the clean library cross-section shows.
+        if (!framed && res.decalDensity > 0 && res.surface.startsWith('asphalt')) {
           const L = polylineLength(markPts)
           const count = Math.floor((res.decalDensity * L) / 100 + hash01(r.id + ':dseed'))
           for (let i = 0; i < count; i++) {
@@ -689,6 +1077,17 @@ export function buildRoads(
           discGeoms.push(g)
           padded = true
         }
+        // FRAMED: curved curb-return corners on the big consolidated junctions too —
+        // these are most of a city's real intersections, and without them only the
+        // simple nodes got the clean corner wrap. Flat clusters only; each arm knows
+        // its own anchor node, so the mouth carve-out follows every exit.
+        if (framedDeclutter && ring.length >= 3 && Math.abs(zc) < 0.01) {
+          framedJunctionCorners(
+            ring, arms, { x: discs[0].x, z: discs[0].z }, 0, 0.4, 2.4,
+            onRoadOrPath,
+            { frame: frameGeoms, walk: framedWalkGeoms },
+          )
+        }
       }
     }
     // Fallback (degenerate arm set): the previous circle-union blob.
@@ -761,6 +1160,16 @@ export function buildRoads(
           ring = junctionArmHull(info.p, arms, junctionRadius(info.p) * 0.72 - 0.6, 1)
         }
         if (ring.length >= 3) g = junctionPatchGeometry([ring.map((p) => [p.x, p.z] as [number, number])], nodeElev + Y_DISC)
+        // FRAMED: wrap the (rounded) pad corners with a curb + footpath band — clean
+        // curved corner sidewalks hugging the asphalt (real-world curb return). Real
+        // junctions only (degree ≥3), flat nodes; the tree-lawn stops before the corner.
+        if (framedDeclutter && ring.length >= 3 && info.count >= 3 && nodeElev === 0) {
+          framedJunctionCorners(
+            ring, arms, info.p, nodeElev, 0.4, 2.4,
+            onRoadOrPath,
+            { frame: frameGeoms, walk: framedWalkGeoms },
+          )
+        }
       }
       if (!g) {
         const seg = Math.max(10, Math.min(24, Math.round(rad * 3)))
@@ -771,7 +1180,7 @@ export function buildRoads(
       }
       discGeoms.push(g)
     }
-    if (info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ':mh') > 0.45) {
+    if (!framedDeclutter && info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ':mh') > 0.45) {
       const off = (hash01(k + ':mo') - 0.5) * rad
       const c = { x: info.p.x + off, z: info.p.z + off * 0.6 }
       // manholes share the decal non-overlap budget: junction nodes a few
@@ -786,6 +1195,7 @@ export function buildRoads(
   // manholes on consolidated junction patches too (members left the singles
   // loop above): same seeds, same planner guard, at the cluster's ONE height.
   for (const [k, info] of [...nodeUse.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    if (framedDeclutter) break // framed mode: no manhole decals (minimal, flicker-free)
     if (info.count < 2 || !elevation.clusterOf(k) || passThrough.has(k)) continue
     if (info.maxWidth < 6 || elevation.nodeElevation(k) !== 0 || hash01(k + ':mh') <= 0.45) continue
     const off = (hash01(k + ':mo') - 0.5) * discRadius(info.maxWidth)
@@ -808,6 +1218,9 @@ export function buildRoads(
 
   const intersections = asMesh(discGeoms, roadMaterial('asphalt-worn'), 'Intersections', 'net_intersections')
   const sidewalks = asMesh(sidewalkGeoms, sidewalkMaterial, 'Sidewalks & curbs', 'net_sidewalks')
+  const frames = asMesh(frameGeoms, curbFrameMaterial, 'Road curb frame', 'net_road_frames')
+  const framedWalks = asMesh(framedWalkGeoms, framedWalkMaterial, 'Framed footpaths', 'net_framed_walks')
+  const framedVerge = asMesh(framedVergeGeoms, framedVergeMaterial, 'Framed verges', 'net_framed_verge')
 
   const whiteGeoms: THREE.BufferGeometry[] = []
   const wg1 = geometryFromArrays(white.pos, white.idx)
@@ -904,7 +1317,7 @@ export function buildRoads(
     })
   }
 
-  return { roadMeshes, intersections, sidewalks, markings, markingsYellow, decals: decalsGroup, bridges, portals, landmarkBridges }
+  return { roadMeshes, intersections, sidewalks, frames, framedWalks, framedVerge, markings, markingsYellow, decals: decalsGroup, bridges, portals, landmarkBridges }
 
   // ---- local helpers ----
 

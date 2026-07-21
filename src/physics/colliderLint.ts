@@ -173,18 +173,31 @@ export function colliderLint(graph: CityGraph, set: ColliderSet): LintWarning[] 
   // phantom a car slams into. Junction discs are excluded — an intersection is an
   // open drivable area where corner devices (signals) legitimately sit near the
   // untrimmed ribbon overlap; only a straight-segment intrusion is a real hazard.
+  // Props AND buildings are guarded here (barriers are excluded: medians/guardrails
+  // legitimately sit within a divided road's carriageway envelope). A building on
+  // the carriageway is the worst "invisible obstacle"; buildingColliders now clears
+  // those, so this is a regression tripwire. Trimesh position is the centroid, so
+  // for buildings this is a coarse centre test — the fine footprint clearance
+  // (vertices + interior road-through) lives in buildingColliders.
   const lanes = new DrivableLaneSet(graph.roads, analyzeRoadNodes(graph.roads))
   const intruders: string[] = []
   for (const c of set.colliders) {
-    if (c.semantics.sensor || c.semantics.class !== 'prop') continue
+    if (c.semantics.sensor) continue
+    if (c.semantics.class !== 'prop' && c.semantics.class !== 'building') continue
     const [x, , z] = c.transform.position
-    if (lanes.intrudes({ x, z })) intruders.push(c.semantics.featureId ?? c.id)
+    if (lanes.intrudes({ x, z })) intruders.push(`${c.semantics.class}:${c.semantics.featureId ?? c.id}`)
   }
   if (intruders.length) {
     warn(
-      `Collider: ${intruders.length} solid prop collider(s) intrude into a driving lane ` +
+      `Collider: ${intruders.length} solid collider(s) intrude into a driving lane ` +
         `(e.g. ${intruders[0]}) — obstacle on the drivable surface`,
     )
+  }
+  if (set.roadClearedBuildings) {
+    warnings.push({
+      severity: 'info',
+      message: `Collider: ${set.roadClearedBuildings} building(s) on the carriageway cleared/carved off the road`,
+    })
   }
 
   // 7) seam continuity — where a road ribbon meets its junction disc both are

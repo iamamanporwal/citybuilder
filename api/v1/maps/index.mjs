@@ -245,7 +245,10 @@ function planarUvXZ(g) {
 function raisedRibbonGeometry(left, right, h, base = 0) {
   const top = typeof base === "number" ? base + h : base.map((b) => b + h);
   const parts = [];
-  parts.push(planarUvXZ(ribbonGeometry(left, right, top)));
+  const topGeo = planarUvXZ(ribbonGeometry(left, right, top));
+  const tn = topGeo.getAttribute("normal");
+  for (let i = 0; i < tn.count; i++) tn.setXYZ(i, 0, 1, 0);
+  parts.push(topGeo);
   parts.push(wallGeometry(left, top, base));
   parts.push(wallGeometry(right, base, top));
   return mergeGeometries(parts);
@@ -22213,11 +22216,39 @@ function displaceBarrier(b, field) {
   return moved ? { ...b, points } : b;
 }
 
+// src/procgen/framedRoads.ts
+var FRAMED_ROADS = { enabled: false };
+function setFramedRoadsEnabled(v) {
+  FRAMED_ROADS.enabled = v;
+}
+var FRAME_CURB_H = 0.16;
+var FRAME_VERGE_H = 0.04;
+function framedPresetFor(roadClass) {
+  switch (roadClass) {
+    case "motorway":
+    case "trunk":
+      return null;
+    // frameless: expressway shoulders, no pedestrian frame
+    case "primary":
+      return { curbW: 0.45, vergeW: 1, footW: 2.4 };
+    case "secondary":
+      return { curbW: 0.42, vergeW: 1.2, footW: 2.2 };
+    case "tertiary":
+    case "unclassified":
+      return { curbW: 0.4, vergeW: 1.3, footW: 2 };
+    case "residential":
+    case "living_street":
+      return { curbW: 0.4, vergeW: 1.6, footW: 1.8 };
+    default:
+      return { curbW: 0.4, vergeW: 1.3, footW: 2 };
+  }
+}
+
 // src/state/store.ts
 import { create } from "zustand";
 
 // src/procgen/roads.ts
-import * as THREE7 from "three";
+import * as THREE8 from "three";
 
 // src/materials/library.ts
 import * as THREE4 from "three";
@@ -23176,6 +23207,9 @@ var sidewalkMaterial = std({
   metalness: 1
 });
 for (const t of [sidewalkMaterial.map, sidewalkMaterial.normalMap]) t.repeat.set(1 / 2.4, 1 / 2.4);
+var curbFrameMaterial = std({ color: "#cfccc1", roughness: 0.78, metalness: 0, side: THREE4.DoubleSide });
+var framedWalkMaterial = std({ color: "#c6c3b8", roughness: 0.85, metalness: 0, side: THREE4.DoubleSide });
+var framedVergeMaterial = std({ color: "#5d7050", roughness: 1, metalness: 0, side: THREE4.DoubleSide });
 var FACADE_GLASSINESS = {
   "brick-red": { rough: 0.92, metal: 0 },
   "brick-brown": { rough: 0.92, metal: 0 },
@@ -23296,6 +23330,9 @@ var mats = {
 // src/procgen/roads.ts
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import polygonClipping2 from "polygon-clipping";
+
+// src/procgen/props.ts
+import * as THREE6 from "three";
 
 // src/procgen/terrain/config.ts
 var enabled = false;
@@ -23945,6 +23982,505 @@ function legacyElevation(roads) {
   };
 }
 
+// src/procgen/signMath.ts
+function nearestRoadInfo(pos, roads, includePaths = false) {
+  let best = Infinity;
+  let bestDir = null;
+  let bestRoad = null;
+  let bestPoint = null;
+  let bestStation = 0;
+  for (const r of roads) {
+    if (!includePaths && NON_DRIVABLE.has(r.roadClass)) continue;
+    const pts = r.points;
+    let cum = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const ax = pts[i - 1].x;
+      const az = pts[i - 1].z;
+      const dx = pts[i].x - ax;
+      const dz = pts[i].z - az;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-9) continue;
+      const l = Math.sqrt(len2);
+      let t = ((pos.x - ax) * dx + (pos.z - az) * dz) / len2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = ax + dx * t;
+      const pz = az + dz * t;
+      const d22 = (pos.x - px) * (pos.x - px) + (pos.z - pz) * (pos.z - pz);
+      if (d22 < best) {
+        best = d22;
+        bestDir = { x: dx / l, z: dz / l };
+        bestRoad = r;
+        bestPoint = { x: px, z: pz };
+        bestStation = cum + l * t;
+      }
+      cum += l;
+    }
+  }
+  if (!bestDir || !bestRoad) return null;
+  return {
+    dir: bestDir,
+    oneway: bestRoad.oneway,
+    dist: Math.sqrt(best),
+    road: bestRoad,
+    point: bestPoint,
+    station: bestStation
+  };
+}
+function curbsideDevicePosition(pos, near, drivingSide) {
+  if (!near || !near.road || !near.point) return pos;
+  const half = near.road.widthM / 2;
+  if (near.dist > half + 0.2) return pos;
+  const s = drivingSide === "right" ? -1 : 1;
+  const across = { x: -near.dir.z * s, z: near.dir.x * s };
+  const off = half + 0.7;
+  return { x: near.point.x + across.x * off, z: near.point.z + across.z * off };
+}
+function deviceHeading(near, faceOncoming) {
+  if (!near) return 0;
+  const s = faceOncoming ? -1 : 1;
+  return Math.atan2(near.dir.x * s, near.dir.z * s);
+}
+function speedUnitFor(region) {
+  return region === "us" || region === "uk" ? "mph" : "km/h";
+}
+function displaySpeed(kmh, unit) {
+  if (unit === "mph") return Math.max(5, Math.round(kmh / 1.60934 / 5) * 5);
+  return Math.max(5, Math.round(kmh / 5) * 5);
+}
+var DEFAULT_SPEED_KMH = {
+  motorway: 100,
+  trunk: 90,
+  primary: 60,
+  secondary: 50,
+  tertiary: 50,
+  unclassified: 40,
+  residential: 30,
+  living_street: 20,
+  service: 20,
+  pedestrian: 10,
+  footway: 0,
+  cycleway: 20
+};
+function effectiveSpeed(road, _region) {
+  if (NON_DRIVABLE.has(road.roadClass)) return null;
+  if (road.maxspeedKmh != null && isFinite(road.maxspeedKmh)) {
+    return { kmh: road.maxspeedKmh, source: "tag" };
+  }
+  return { kmh: DEFAULT_SPEED_KMH[road.roadClass] ?? 40, source: "default" };
+}
+
+// src/procgen/props.ts
+function buildTrafficSignal(p) {
+  const g = new THREE6.Group();
+  g.name = "Traffic signal";
+  g.userData.objectId = p.id;
+  g.position.set(p.position.x, sampleTerrain(p.position.x, p.position.z), p.position.z);
+  const pole = new THREE6.Mesh(new THREE6.CylinderGeometry(0.09, 0.11, 4.6, 8), mats.signalPole);
+  pole.position.y = 2.3;
+  pole.castShadow = true;
+  g.add(pole);
+  const head = new THREE6.Mesh(new THREE6.BoxGeometry(0.34, 1, 0.26), mats.signalHead);
+  head.position.set(0, 4.4, 0.14);
+  g.add(head);
+  const lampGeo = new THREE6.SphereGeometry(0.09, 10, 8);
+  const lamps = [
+    [mats.signalRed, 0.3],
+    [mats.signalAmber, 0],
+    [mats.signalGreen, -0.3]
+  ];
+  for (const [mat, dy] of lamps) {
+    const lamp = new THREE6.Mesh(lampGeo, mat);
+    lamp.position.set(0, 4.4 + dy, 0.28);
+    g.add(lamp);
+  }
+  return g;
+}
+function speciesGeometry() {
+  return {
+    broadleaf: { trunk: new THREE6.CylinderGeometry(0.12, 0.18, 1, 6), canopy: new THREE6.IcosahedronGeometry(1, 1), canopyColor: "#4d7038", trunkH: 2.6 },
+    columnar: { trunk: new THREE6.CylinderGeometry(0.1, 0.14, 1, 6), canopy: new THREE6.ConeGeometry(0.75, 3.4, 8), canopyColor: "#3c5a33", trunkH: 1.1 },
+    conifer: { trunk: new THREE6.CylinderGeometry(0.1, 0.16, 1, 6), canopy: new THREE6.ConeGeometry(1.15, 2.9, 8), canopyColor: "#38543a", trunkH: 1.6 },
+    palm: { trunk: new THREE6.CylinderGeometry(0.09, 0.13, 1, 6), canopy: new THREE6.SphereGeometry(1, 8, 5).scale(1.5, 0.42, 1.5), canopyColor: "#4f7a34", trunkH: 4.6 },
+    acacia: { trunk: new THREE6.CylinderGeometry(0.1, 0.15, 1, 6), canopy: new THREE6.SphereGeometry(1, 8, 5).scale(1.7, 0.55, 1.7), canopyColor: "#5c7540", trunkH: 3 }
+  };
+}
+function buildTrees(trees, ctx) {
+  const group = new THREE6.Group();
+  group.name = `Street trees (${trees.length})`;
+  group.userData.objectId = "veg_trees";
+  if (!trees.length) return group;
+  const treePlacements = trees.filter((t) => ctx.landCoverAt(t.position) !== "water").map((t) => ({
+    seed: t.id,
+    x: t.position.x,
+    z: t.position.z,
+    rotY: hash01(t.id) * Math.PI * 2,
+    scale: resolveTree(t.id, ctx).scale
+  }));
+  const treeMeshes = instanceKindVaried("tree", treePlacements, "veg_trees");
+  if (treeMeshes) {
+    group.add(...treeMeshes);
+    group.userData.librarySource = "library trees";
+    return group;
+  }
+  const geos = speciesGeometry();
+  const bySpecies = /* @__PURE__ */ new Map();
+  for (const t of trees) {
+    if (ctx.landCoverAt(t.position) === "water") continue;
+    const res = resolveTree(t.id, ctx);
+    if (!bySpecies.has(res.species)) bySpecies.set(res.species, []);
+    bySpecies.get(res.species).push({ t, scale: res.scale, tint: res.tint });
+  }
+  const m = new THREE6.Matrix4();
+  const q3 = new THREE6.Quaternion();
+  const s = new THREE6.Vector3();
+  const v = new THREE6.Vector3();
+  const c = new THREE6.Color();
+  for (const [species, list2] of bySpecies) {
+    const geo = geos[species];
+    const trunks = new THREE6.InstancedMesh(geo.trunk, mats.treeTrunk, list2.length);
+    const canopyMat = new THREE6.MeshStandardMaterial({ color: geo.canopyColor, roughness: 1 });
+    const canopies = new THREE6.InstancedMesh(geo.canopy, canopyMat, list2.length);
+    trunks.castShadow = true;
+    canopies.castShadow = true;
+    list2.forEach((e, i) => {
+      const trunkH = geo.trunkH * e.scale;
+      const cs = e.scale * (species === "broadleaf" ? 1.9 : 1.15);
+      const ty = sampleTerrain(e.t.position.x, e.t.position.z);
+      s.set(e.scale, trunkH, e.scale);
+      v.set(e.t.position.x, ty + trunkH / 2, e.t.position.z);
+      m.compose(v, q3, s);
+      trunks.setMatrixAt(i, m);
+      s.set(cs, cs, cs);
+      v.set(e.t.position.x, ty + trunkH + cs * (species === "columnar" || species === "conifer" ? 1.1 : 0.45), e.t.position.z);
+      m.compose(v, q3, s);
+      canopies.setMatrixAt(i, m);
+      c.set(geo.canopyColor).offsetHSL(e.tint * 0.03, e.tint * 0.06, e.tint * 0.045);
+      canopies.setColorAt(i, c);
+    });
+    trunks.instanceMatrix.needsUpdate = true;
+    canopies.instanceMatrix.needsUpdate = true;
+    if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
+    trunks.computeBoundingSphere();
+    canopies.computeBoundingSphere();
+    trunks.userData.objectId = "veg_trees";
+    canopies.userData.objectId = "veg_trees";
+    group.add(trunks, canopies);
+  }
+  return group;
+}
+var FURNITURE_ROADS = /* @__PURE__ */ new Set(["primary", "secondary", "tertiary", "residential", "unclassified", "living_street", "trunk"]);
+function lampGeometry(style) {
+  const parts = [];
+  const pole = new THREE6.CylinderGeometry(0.07, 0.1, 7.4, 8);
+  pole.translate(0, 3.7, 0);
+  parts.push(pole);
+  if (style === "cobra") {
+    const arm = new THREE6.CylinderGeometry(0.05, 0.05, 2.2, 6);
+    arm.rotateZ(Math.PI / 2);
+    arm.translate(1, 7.3, 0);
+    parts.push(arm);
+    const head = new THREE6.BoxGeometry(0.85, 0.16, 0.3);
+    head.translate(2, 7.28, 0);
+    parts.push(head);
+  } else {
+    const lantern = new THREE6.CylinderGeometry(0.16, 0.22, 0.55, 8);
+    lantern.translate(0, 7.6, 0);
+    parts.push(lantern);
+  }
+  return mergeGeometries(parts);
+}
+function benchGeometry() {
+  const parts = [];
+  const seat = new THREE6.BoxGeometry(1.7, 0.07, 0.5);
+  seat.translate(0, 0.45, 0);
+  parts.push(seat);
+  const back = new THREE6.BoxGeometry(1.7, 0.45, 0.06);
+  back.translate(0, 0.75, -0.24);
+  parts.push(back);
+  for (const x of [-0.7, 0.7]) {
+    const leg = new THREE6.BoxGeometry(0.08, 0.45, 0.45);
+    leg.translate(x, 0.22, 0);
+    parts.push(leg);
+  }
+  return mergeGeometries(parts);
+}
+function binGeometry() {
+  const g = new THREE6.CylinderGeometry(0.28, 0.24, 0.85, 10);
+  g.translate(0, 0.42, 0);
+  return g;
+}
+function signGeometry(shape) {
+  const parts = [];
+  const pole = new THREE6.CylinderGeometry(0.045, 0.055, 2.6, 6);
+  pole.translate(0, 1.3, 0);
+  parts.push(pole);
+  const plate = shape === "us-rect" ? new THREE6.BoxGeometry(0.6, 0.75, 0.04) : new THREE6.CylinderGeometry(0.38, 0.38, 0.04, 16).rotateX(Math.PI / 2);
+  plate.translate(0, 2.6, 0);
+  parts.push(plate);
+  return parts.length > 1 ? mergeGeometries(parts) : parts[0];
+}
+var CarriagewayIndex = class _CarriagewayIndex {
+  cells = /* @__PURE__ */ new Map();
+  static CELL = 24;
+  constructor(roads) {
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
+      const half = r.widthM / 2;
+      for (let i = 1; i < r.points.length; i++) {
+        const a = r.points[i - 1];
+        const b = r.points[i];
+        const pad = half + 1;
+        const minX = Math.min(a.x, b.x) - pad;
+        const maxX = Math.max(a.x, b.x) + pad;
+        const minZ = Math.min(a.z, b.z) - pad;
+        const maxZ = Math.max(a.z, b.z) + pad;
+        const C = _CarriagewayIndex.CELL;
+        for (let cx = Math.floor(minX / C); cx <= Math.floor(maxX / C); cx++) {
+          for (let cz = Math.floor(minZ / C); cz <= Math.floor(maxZ / C); cz++) {
+            const key = `${cx},${cz}`;
+            let list2 = this.cells.get(key);
+            if (!list2) this.cells.set(key, list2 = []);
+            list2.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half, id: r.id });
+          }
+        }
+      }
+    }
+  }
+  /** Distance from p to the nearest OTHER carriageway's EDGE (distance to its
+   *  centerline minus its half-width; ≤0 = inside it). Searches the 3×3 cell
+   *  neighbourhood so nearby parallel roads are found even across a cell seam.
+   *  Returns null when nothing is within `cap` metres. Used by framed roads to
+   *  detect dual-carriageway/median sides. */
+  edgeGapTo(p, excludeId, cap = 8) {
+    const C = _CarriagewayIndex.CELL;
+    const cx = Math.floor(p.x / C);
+    const cz = Math.floor(p.z / C);
+    let best = null;
+    for (let ix = cx - 1; ix <= cx + 1; ix++) {
+      for (let iz = cz - 1; iz <= cz + 1; iz++) {
+        const list2 = this.cells.get(`${ix},${iz}`);
+        if (!list2) continue;
+        for (const s of list2) {
+          if (s.id === excludeId) continue;
+          const dx = s.bx - s.ax;
+          const dz = s.bz - s.az;
+          const len2 = dx * dx + dz * dz;
+          let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const gap = Math.hypot(p.x - (s.ax + dx * t), p.z - (s.az + dz * t)) - s.half;
+          if (gap < cap && (best === null || gap < best)) best = gap;
+        }
+      }
+    }
+    return best;
+  }
+  /** True when p is inside any carriageway (+margin), optionally ignoring one road. */
+  insideCarriageway(p, margin, excludeId) {
+    const C = _CarriagewayIndex.CELL;
+    const key = `${Math.floor(p.x / C)},${Math.floor(p.z / C)}`;
+    const list2 = this.cells.get(key);
+    if (!list2) return false;
+    for (const s of list2) {
+      if (excludeId && s.id === excludeId) continue;
+      const dx = s.bx - s.ax;
+      const dz = s.bz - s.az;
+      const len2 = dx * dx + dz * dz;
+      let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = s.ax + dx * t;
+      const pz = s.az + dz * t;
+      const d = Math.hypot(p.x - px, p.z - pz);
+      if (d < s.half + margin) return true;
+    }
+    return false;
+  }
+};
+var furniturePlacements = { current: null };
+function buildFurniture(graph, ctx) {
+  const group = new THREE6.Group();
+  group.name = "Street furniture";
+  const elevation = buildRoadElevation(graph.roads);
+  const index = new CarriagewayIndex(graph.roads);
+  const elevAt = (r, station) => {
+    const e = elevation.profileFor(r, [station])[0] ?? 0;
+    return Math.abs(e) > 1e-6 ? e : 0;
+  };
+  const CURB_H = 0.22;
+  const sidewalkCurb = (r) => !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== "service" && r.roadClass !== "motorway" && !r.bridge ? CURB_H : 0;
+  const raiseAt = (r, station, at) => elevAt(r, station) - sampleTerrain(at.x, at.z);
+  const placeOsm = (p, rotY) => {
+    const near = nearestRoadInfo(p.position, graph.roads, true);
+    if (!near?.road || near.dist > near.road.widthM / 2 + 8)
+      return { p: p.position, rotY, y: sampleTerrain(p.position.x, p.position.z) };
+    const e = elevAt(near.road, near.station ?? 0);
+    if (!near.road.bridge && raiseAt(near.road, near.station ?? 0, p.position) < 0.5)
+      return { p: p.position, rotY, y: e };
+    const deck = nearestRoadInfo(p.position, graph.roads, false);
+    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || raiseAt(deck.road, deck.station ?? 0, deck.point) > 0.5)) {
+      const halfD = deck.road.widthM / 2;
+      const yDeck = elevAt(deck.road, deck.station ?? 0);
+      if (deck.dist > halfD - 0.55) {
+        const n = { x: -deck.dir.z, z: deck.dir.x };
+        const side = n.x * (p.position.x - deck.point.x) + n.z * (p.position.z - deck.point.z) >= 0 ? 1 : -1;
+        const pos = {
+          x: deck.point.x + n.x * side * (halfD - 0.55),
+          z: deck.point.z + n.z * side * (halfD - 0.55)
+        };
+        return { p: pos, rotY, y: yDeck };
+      }
+      return { p: p.position, rotY, y: yDeck };
+    }
+    return { p: p.position, rotY, y: e };
+  };
+  const osmLamps = graph.points.filter((p) => p.kind === "street_lamp");
+  const osmBenches = graph.points.filter((p) => p.kind === "bench");
+  const osmBins = graph.points.filter((p) => p.kind === "waste_basket");
+  const lamps = osmLamps.map((p) => placeOsm(p, hash01(p.id) * Math.PI * 2));
+  const benches = osmBenches.map((p) => placeOsm(p, hash01(p.id) * Math.PI * 2));
+  const bins = osmBins.map((p) => placeOsm(p, 0));
+  const signs = [];
+  const nearExistingLamp = (p) => lamps.some((l) => (l.p.x - p.x) ** 2 + (l.p.z - p.z) ** 2 < 64);
+  for (const r of graph.roads) {
+    if (!FURNITURE_ROADS.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
+    const L = polyLen(r.points);
+    if (L < 20) continue;
+    const mid = r.points[Math.floor(r.points.length / 2)];
+    const zone = ctx.zoneAt(mid);
+    const rules = propRulesFor(zone);
+    const onBridge = r.bridge;
+    if (rules.lampSpacing && (!onBridge || r.widthM >= 8)) {
+      const lampOff = onBridge ? r.widthM / 2 - 0.55 : r.widthM / 2 + 1.1;
+      let side = hash01(r.id + ":side") > 0.5 ? 1 : -1;
+      for (let d = rules.lampSpacing * 0.5; d < L; d += rules.lampSpacing) {
+        const jitter = onBridge ? 0 : (hash01(`${r.id}:lj${d}`) - 0.5) * 6;
+        const station = Math.min(Math.max(d + jitter, 2), L - 2);
+        const { p, dir } = alongWithDir(r.points, station);
+        const across = { x: -dir.z * side, z: dir.x * side };
+        const lp = { x: p.x + across.x * lampOff, z: p.z + across.z * lampOff };
+        const clearOfRoads = onBridge ? !index.insideCarriageway(lp, 0.35, r.id) : !index.insideCarriageway(lp, 0.35);
+        if ((onBridge || ctx.landCoverAt(lp) !== "water") && clearOfRoads && !nearExistingLamp(lp)) {
+          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) + sidewalkCurb(r) });
+        }
+        side = -side;
+      }
+    }
+    if (onBridge) continue;
+    if (rules.benchDensity > 0) {
+      const count = Math.floor(rules.benchDensity * L / 100 + hash01(r.id + ":bseed") * 0.8);
+      for (let i = 0; i < count; i++) {
+        const d = (0.15 + 0.7 * hash01(`${r.id}:b${i}`)) * L;
+        const side = hash01(`${r.id}:bs${i}`) > 0.5 ? 1 : -1;
+        const { p, dir } = alongWithDir(r.points, d);
+        const across = { x: -dir.z * side, z: dir.x * side };
+        const bp = { x: p.x + across.x * (r.widthM / 2 + 1.6), z: p.z + across.z * (r.widthM / 2 + 1.6) };
+        if (ctx.landCoverAt(bp) !== "water" && !index.insideCarriageway(bp, 0.3)) {
+          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) + sidewalkCurb(r) });
+        }
+      }
+    }
+    if (rules.binDensity > 0) {
+      const count = Math.floor(rules.binDensity * L / 100 + hash01(r.id + ":binseed") * 0.6);
+      for (let i = 0; i < count; i++) {
+        const d = (0.1 + 0.8 * hash01(`${r.id}:bin${i}`)) * L;
+        const side = hash01(`${r.id}:bins${i}`) > 0.5 ? 1 : -1;
+        const { p, dir } = alongWithDir(r.points, d);
+        const across = { x: -dir.z * side, z: dir.x * side };
+        const bp = { x: p.x + across.x * (r.widthM / 2 + 0.9), z: p.z + across.z * (r.widthM / 2 + 0.9) };
+        if (ctx.landCoverAt(bp) !== "water" && !index.insideCarriageway(bp, 0.3)) {
+          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) + sidewalkCurb(r) });
+        }
+      }
+    }
+    for (const atEnd of [false, true]) {
+      if (hash01(`${r.id}:sign${atEnd}`) > 0.35) continue;
+      const d = atEnd ? Math.max(L - 6, 2) : Math.min(6, L - 2);
+      const { p, dir } = alongWithDir(r.points, d);
+      const side = ctx.region.drivingSide === "right" ? -1 : 1;
+      const across = { x: -dir.z * side, z: dir.x * side };
+      const sp = { x: p.x + across.x * (r.widthM / 2 + 0.8), z: p.z + across.z * (r.widthM / 2 + 0.8) };
+      if (ctx.landCoverAt(sp) !== "water" && !index.insideCarriageway(sp, 0.3)) {
+        signs.push({ p: sp, rotY: Math.atan2(dir.x, dir.z), y: elevAt(r, d) });
+      }
+    }
+  }
+  const poleMat = mats.signalPole;
+  const woodMat = new THREE6.MeshStandardMaterial({ color: "#6b5138", roughness: 0.9 });
+  const binMat = new THREE6.MeshStandardMaterial({ color: "#3a4a3d", roughness: 0.8, metalness: 0.3 });
+  const signMat = new THREE6.MeshStandardMaterial({ color: "#c8cccf", roughness: 0.5, metalness: 0.4 });
+  const addInstanced = (geo, mat, list2, name) => {
+    if (!list2.length) return;
+    const im = new THREE6.InstancedMesh(geo, mat, list2.length);
+    const m = new THREE6.Matrix4();
+    const q3 = new THREE6.Quaternion();
+    const up = new THREE6.Vector3(0, 1, 0);
+    const s = new THREE6.Vector3(1, 1, 1);
+    const v = new THREE6.Vector3();
+    list2.forEach((e, i) => {
+      q3.setFromAxisAngle(up, e.rotY);
+      v.set(e.p.x, e.y ?? 0, e.p.z);
+      m.compose(v, q3, s);
+      im.setMatrixAt(i, m);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    im.computeBoundingSphere();
+    im.castShadow = true;
+    im.name = name;
+    im.userData.objectId = "furn_all";
+    group.add(im);
+  };
+  const addKind = (kind, geo, mat, list2, name) => {
+    if (!list2.length) return;
+    const placements = list2.map((e) => ({
+      seed: `${kind}:${e.p.x.toFixed(1)},${e.p.z.toFixed(1)}`,
+      x: e.p.x,
+      y: e.y,
+      z: e.p.z,
+      rotY: e.rotY
+    }));
+    const meshes = instanceKindVaried(kind, placements, "furn_all");
+    if (meshes) {
+      meshes.forEach((mesh2, i) => {
+        mesh2.name = i === 0 ? name : `${name} #${i}`;
+      });
+      group.add(...meshes);
+    } else {
+      addInstanced(geo, mat, list2, name);
+    }
+  };
+  addKind("street_lamp", lampGeometry(ctx.region.lampStyle), poleMat, lamps, `Streetlights (${lamps.length})`);
+  addKind("bench", benchGeometry(), woodMat, benches, `Benches (${benches.length})`);
+  addKind("waste_basket", binGeometry(), binMat, bins, `Bins (${bins.length})`);
+  addInstanced(signGeometry(ctx.region.signShape), signMat, signs, `Signs (${signs.length})`);
+  group.userData.objectId = "furn_all";
+  group.userData.counts = { lamps: lamps.length, benches: benches.length, bins: bins.length, signs: signs.length };
+  furniturePlacements.current = { lamps, benches, bins, signs };
+  return group;
+}
+function polyLen(pts) {
+  let l = 0;
+  for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+  return l;
+}
+function alongWithDir(pts, dist) {
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+    if (acc + seg >= dist && seg > 0) {
+      const t = (dist - acc) / seg;
+      return {
+        p: { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, z: pts[i - 1].z + (pts[i].z - pts[i - 1].z) * t },
+        dir: { x: (pts[i].x - pts[i - 1].x) / seg, z: (pts[i].z - pts[i - 1].z) / seg }
+      };
+    }
+    acc += seg;
+  }
+  const n = pts.length;
+  const dx = pts[n - 1].x - pts[n - 2].x;
+  const dz = pts[n - 1].z - pts[n - 2].z;
+  const l = Math.hypot(dx, dz) || 1;
+  return { p: pts[n - 1], dir: { x: dx / l, z: dz / l } };
+}
+
 // src/procgen/decalPlan.ts
 var CELL = 10;
 var DecalPlanner = class {
@@ -24056,7 +24592,7 @@ function matchBridgeLandmark(road) {
 }
 
 // src/procgen/bridges.ts
-import * as THREE6 from "three";
+import * as THREE7 from "three";
 var d2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 function chainCenterlines(segs) {
   if (segs.length === 1) return segs[0].points;
@@ -24105,7 +24641,7 @@ function crossAt(pts, d, half) {
   return { p, dir, left: { x: p.x + nx * half, z: p.z + nz * half }, right: { x: p.x - nx * half, z: p.z - nz * half } };
 }
 function boxAt(x, y, z, w, h, dep, yaw) {
-  const g = new THREE6.BoxGeometry(w, h, dep);
+  const g = new THREE7.BoxGeometry(w, h, dep);
   if (yaw) g.rotateY(yaw);
   g.translate(x, y, z);
   return g;
@@ -24115,7 +24651,7 @@ function toIndexed(g) {
   const count = g.getAttribute("position").count;
   const idx = new Uint32Array(count);
   for (let i = 0; i < count; i++) idx[i] = i;
-  g.setIndex(new THREE6.BufferAttribute(idx, 1));
+  g.setIndex(new THREE7.BufferAttribute(idx, 1));
   return g;
 }
 function buildSuspensionBridge(centerline, widthM, spec) {
@@ -24140,8 +24676,8 @@ function buildSuspensionBridge(centerline, widthM, spec) {
       struct.push(boxAt(c.p.x, deckY + towerH * frac, c.p.z, half * 2.1, legW * 0.9, legW * 0.8, yaw + Math.PI / 2));
     }
     towerTops.push({
-      left: new THREE6.Vector3(c.left.x, deckY + towerH, c.left.z),
-      right: new THREE6.Vector3(c.right.x, deckY + towerH, c.right.z)
+      left: new THREE7.Vector3(c.left.x, deckY + towerH, c.left.z),
+      right: new THREE7.Vector3(c.right.x, deckY + towerH, c.right.z)
     });
   }
   const sag = towerH * 0.86;
@@ -24154,18 +24690,18 @@ function buildSuspensionBridge(centerline, widthM, spec) {
     const t2 = side === "left" ? towerTops[1].left : towerTops[1].right;
     const startA = edgeAt(2);
     const endA = edgeAt(Math.max(L - 2, 2));
-    const path = [new THREE6.Vector3(startA.x, deckY + 1, startA.z), t1.clone()];
+    const path = [new THREE7.Vector3(startA.x, deckY + 1, startA.z), t1.clone()];
     const steps = Math.max(6, Math.round((towerD[1] - towerD[0]) / 18));
     for (let s = 1; s < steps; s++) {
       const tt = s / steps;
       const d = towerD[0] + (towerD[1] - towerD[0]) * tt;
       const pos = edgeAt(d);
       const y = deckY + towerH - sag * (1 - Math.pow(2 * tt - 1, 2));
-      path.push(new THREE6.Vector3(pos.x, y, pos.z));
+      path.push(new THREE7.Vector3(pos.x, y, pos.z));
     }
-    path.push(t2.clone(), new THREE6.Vector3(endA.x, deckY + 1, endA.z));
-    const curve = new THREE6.CatmullRomCurve3(path, false, "catmullrom", 0.2);
-    cables.push(new THREE6.TubeGeometry(curve, Math.max(24, path.length * 3), Math.max(0.35, half * 0.045), 5, false));
+    path.push(t2.clone(), new THREE7.Vector3(endA.x, deckY + 1, endA.z));
+    const curve = new THREE7.CatmullRomCurve3(path, false, "catmullrom", 0.2);
+    cables.push(new THREE7.TubeGeometry(curve, Math.max(24, path.length * 3), Math.max(0.35, half * 0.045), 5, false));
   };
   buildCable("left");
   buildCable("right");
@@ -24175,7 +24711,7 @@ function buildSuspensionBridge(centerline, widthM, spec) {
     const c = crossAt(pts, d, half);
     for (const edge of [c.left, c.right]) {
       const h = Math.max(cableY - (deckY + 1.2), 0.5);
-      const cyl = new THREE6.CylinderGeometry(0.18, 0.18, h, 5);
+      const cyl = new THREE7.CylinderGeometry(0.18, 0.18, h, 5);
       cyl.translate(edge.x, deckY + 1.2 + h / 2, edge.z);
       cables.push(cyl);
     }
@@ -24190,11 +24726,11 @@ function buildSuspensionBridge(centerline, widthM, spec) {
   }
   struct.push(wallGeometry(leftEdge, deckY - 1.6, deckY + 1.2));
   struct.push(wallGeometry(rightEdge, deckY + 1.2, deckY - 1.6));
-  const group = new THREE6.Group();
-  const structMat = new THREE6.MeshStandardMaterial({ color: spec.color, roughness: 0.6, metalness: 0.2 });
-  const cableMat = new THREE6.MeshStandardMaterial({ color: spec.color, roughness: 0.45, metalness: 0.35 });
-  if (struct.length) group.add(new THREE6.Mesh(mergeGeometries(struct.map(toIndexed)), structMat));
-  if (cables.length) group.add(new THREE6.Mesh(mergeGeometries(cables.map(toIndexed)), cableMat));
+  const group = new THREE7.Group();
+  const structMat = new THREE7.MeshStandardMaterial({ color: spec.color, roughness: 0.6, metalness: 0.2 });
+  const cableMat = new THREE7.MeshStandardMaterial({ color: spec.color, roughness: 0.45, metalness: 0.35 });
+  if (struct.length) group.add(new THREE7.Mesh(mergeGeometries(struct.map(toIndexed)), structMat));
+  if (cables.length) group.add(new THREE7.Mesh(mergeGeometries(cables.map(toIndexed)), cableMat));
   group.traverse((o) => {
     o.castShadow = true;
     o.receiveShadow = true;
@@ -24255,8 +24791,8 @@ function extrudeTri(a, b, c, y0, y1) {
     5
     // side c-a
   ];
-  const g = new THREE6.BufferGeometry();
-  g.setAttribute("position", new THREE6.Float32BufferAttribute(pos, 3));
+  const g = new THREE7.BufferGeometry();
+  g.setAttribute("position", new THREE7.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
@@ -24344,9 +24880,9 @@ function buildArchBridge(centerline, widthM, spec) {
       stone2.push(extrudeTri(b0, b1, apex, waterY, springY + 0.2));
     }
   }
-  const group = new THREE6.Group();
-  const stoneMat = new THREE6.MeshStandardMaterial({ color: spec.color, roughness: 0.92, metalness: 0, side: THREE6.DoubleSide });
-  group.add(new THREE6.Mesh(mergeGeometries(stone2.map(toIndexed)), stoneMat));
+  const group = new THREE7.Group();
+  const stoneMat = new THREE7.MeshStandardMaterial({ color: spec.color, roughness: 0.92, metalness: 0, side: THREE7.DoubleSide });
+  group.add(new THREE7.Mesh(mergeGeometries(stone2.map(toIndexed)), stoneMat));
   if (spec.towers) {
     const towers = [];
     const gateH = 5.5;
@@ -24361,13 +24897,13 @@ function buildArchBridge(centerline, widthM, spec) {
       towers.push(boxAt(c.left.x, deckY + gateH / 2, c.left.z, legW, gateH, depth, yaw));
       towers.push(boxAt(c.right.x, deckY + gateH / 2, c.right.z, legW, gateH, depth, yaw));
       towers.push(boxAt(c.p.x, deckY + gateH + bodyH / 2, c.p.z, towerHalf * 2 + 0.6, bodyH, depth + 0.6, yaw));
-      const spire = new THREE6.ConeGeometry(towerHalf * 1.15, coneH, 4);
+      const spire = new THREE7.ConeGeometry(towerHalf * 1.15, coneH, 4);
       spire.rotateY(Math.PI / 4 + yaw);
       spire.translate(c.p.x, deckY + gateH + bodyH + coneH / 2, c.p.z);
       towers.push(spire);
     }
-    const towerMat = new THREE6.MeshStandardMaterial({ color: "#8f8069", roughness: 0.9, metalness: 0 });
-    group.add(new THREE6.Mesh(mergeGeometries(towers.map(toIndexed)), towerMat));
+    const towerMat = new THREE7.MeshStandardMaterial({ color: "#8f8069", roughness: 0.9, metalness: 0 });
+    group.add(new THREE7.Mesh(mergeGeometries(towers.map(toIndexed)), towerMat));
   }
   group.traverse((o) => {
     o.castShadow = true;
@@ -24389,6 +24925,136 @@ var STOP_LINE_CLASSES = /* @__PURE__ */ new Set(["trunk", "primary", "secondary"
 var STOP_LINE_DIST = 3.15;
 var JUNCTION_FLARE = 1.3;
 var junctionFilletR = (maxWidth) => Math.min(7, Math.max(2, maxWidth * 0.45));
+function framedTop(a, b, y) {
+  const g = planarUvXZ(ribbonGeometry(a, b, y));
+  windUp(g);
+  const n = g.getAttribute("normal");
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
+  return g;
+}
+function framedJunctionCorners(ring, arms, node, y, curbW, footW, onRoad, out) {
+  const n = ring.length;
+  if (n < 3) return;
+  const mouth = ring.map((p) => {
+    if (onRoad(p, 1)) return true;
+    for (const a of arms) {
+      const ax = a.p?.x ?? node.x;
+      const az = a.p?.z ?? node.z;
+      const rx = p.x - ax, rz = p.z - az;
+      const t = rx * a.d.x + rz * a.d.z;
+      if (t <= -1) continue;
+      const lat = Math.abs(rx * -a.d.z + rz * a.d.x);
+      if (lat < a.h * 1.35 + 0.8) return true;
+    }
+    return false;
+  });
+  let start = mouth.indexOf(false);
+  if (start < 0) return;
+  const runs = [];
+  let i = 0;
+  while (i < n) {
+    const idx = (start + i) % n;
+    if (!mouth[idx]) {
+      const run = [];
+      let j = i;
+      while (j < n && !mouth[(start + j) % n]) {
+        run.push(ring[(start + j) % n]);
+        j++;
+      }
+      if (run.length >= 2) runs.push(run);
+      i = j + 1;
+    } else i++;
+  }
+  let cx = 0, cz = 0;
+  for (const p of ring) {
+    cx += p.x;
+    cz += p.z;
+  }
+  cx /= n;
+  cz /= n;
+  let far = 0, fd = -1;
+  for (let k = 0; k < n; k++) {
+    const d = (ring[k].x - cx) ** 2 + (ring[k].z - cz) ** 2;
+    if (d > fd) {
+      fd = d;
+      far = k;
+    }
+  }
+  const tri = [ring[(far - 1 + n) % n], ring[far], ring[(far + 1) % n]];
+  const triProbe = offsetPolyline(tri, 1)[1];
+  const sign = Math.hypot(triProbe.x - cx, triProbe.z - cz) > Math.hypot(ring[far].x - cx, ring[far].z - cz) ? 1 : -1;
+  const curbTop = y + FRAME_CURB_H;
+  const asphY = y + Y_ROAD;
+  const foundation = y - SIDEWALK_FOUNDATION;
+  for (const run of runs) {
+    const curbOut = offsetPolyline(run, sign * curbW);
+    const footOut = offsetPolyline(run, sign * (curbW + footW));
+    if (curbOut.some((p) => onRoad(p, -0.25)) || footOut.some((p) => onRoad(p, -0.25))) continue;
+    out.frame.push(wallGeometry(run, asphY, curbTop));
+    out.frame.push(framedTop(run, curbOut, curbTop));
+    out.walk.push(framedTop(curbOut, footOut, curbTop));
+    out.walk.push(wallGeometry(footOut, curbTop, foundation));
+  }
+}
+function offsetPolylineVar(pts, offsets) {
+  const n = pts.length;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    let dpx = 0, dpz = 0, dnx = 0, dnz = 0;
+    let hasPrev = false, hasNext = false;
+    if (i > 0) {
+      dpx = p.x - pts[i - 1].x;
+      dpz = p.z - pts[i - 1].z;
+      const l = Math.hypot(dpx, dpz) || 1;
+      dpx /= l;
+      dpz /= l;
+      hasPrev = true;
+    }
+    if (i < n - 1) {
+      dnx = pts[i + 1].x - p.x;
+      dnz = pts[i + 1].z - p.z;
+      const l = Math.hypot(dnx, dnz) || 1;
+      dnx /= l;
+      dnz /= l;
+      hasNext = true;
+    }
+    let dx = (hasPrev ? dpx : dnx) + (hasNext ? dnx : dpx);
+    let dz = (hasPrev ? dpz : dnz) + (hasNext ? dnz : dpz);
+    const dl = Math.hypot(dx, dz) || 1;
+    dx /= dl;
+    dz /= dl;
+    let scale = 1;
+    if (hasPrev && hasNext) {
+      const dot = Math.max(-1, Math.min(1, dpx * dnx + dpz * dnz));
+      scale = Math.min(1 / Math.max(Math.sqrt((1 + dot) / 2), 0.45), 2.2);
+    }
+    out.push({ x: p.x + dz * offsets[i] * scale, z: p.z - dx * offsets[i] * scale });
+  }
+  for (let i = 1; i < n; i++) {
+    const rx = pts[i].x - pts[i - 1].x, rz = pts[i].z - pts[i - 1].z;
+    const ox = out[i].x - out[i - 1].x, oz = out[i].z - out[i - 1].z;
+    if (rx * ox + rz * oz < 0) out[i] = { ...out[i - 1] };
+  }
+  return out;
+}
+function windUp(g) {
+  const idx = g.getIndex();
+  const pos = g.getAttribute("position");
+  if (!idx || idx.count < 3) return;
+  const i0 = idx.getX(0), i1 = idx.getX(1), i2 = idx.getX(2);
+  const e1x = pos.getX(i1) - pos.getX(i0), e1z = pos.getZ(i1) - pos.getZ(i0);
+  const e2x = pos.getX(i2) - pos.getX(i0), e2z = pos.getZ(i2) - pos.getZ(i0);
+  if (e1x * e2z - e1z * e2x > 0) {
+    const a = idx.array;
+    for (let i = 0; i < a.length; i += 3) {
+      const t = a[i + 1];
+      a[i + 1] = a[i + 2];
+      a[i + 2] = t;
+    }
+    idx.needsUpdate = true;
+  }
+}
 function pushQuad(positions, indices, c, along, halfLen, across, halfWid, y, uvs) {
   const base = positions.length / 3;
   const corners = [
@@ -24403,9 +25069,9 @@ function pushQuad(positions, indices, c, along, halfLen, across, halfWid, y, uvs
 }
 function geometryFromArrays(positions, indices, uvs) {
   if (positions.length === 0) return null;
-  const g = new THREE7.BufferGeometry();
-  g.setAttribute("position", new THREE7.Float32BufferAttribute(positions, 3));
-  if (uvs) g.setAttribute("uv", new THREE7.Float32BufferAttribute(uvs, 2));
+  const g = new THREE8.BufferGeometry();
+  g.setAttribute("position", new THREE8.Float32BufferAttribute(positions, 3));
+  if (uvs) g.setAttribute("uv", new THREE8.Float32BufferAttribute(uvs, 2));
   g.setIndex(indices);
   g.computeVertexNormals();
   return g;
@@ -24483,6 +25149,9 @@ function buildRoads(graph, ctx, resolutions) {
   const siblingFootways = consolidate ? siblingFootwayBridgeIds(graph.roads) : /* @__PURE__ */ new Set();
   const roadMeshes = /* @__PURE__ */ new Map();
   const sidewalkGeoms = [];
+  const frameGeoms = [];
+  const framedWalkGeoms = [];
+  const framedVergeGeoms = [];
   const white = new MarkingBuffer();
   const yellow = new MarkingBuffer();
   const whiteQuads = { pos: [], idx: [] };
@@ -24518,8 +25187,87 @@ function buildRoads(graph, ctx, resolutions) {
     manhole: { pos: [], idx: [], uv: [] }
   };
   const decalPlanner = new DecalPlanner();
+  const framedDeclutter = FRAMED_ROADS.enabled;
+  const SIDEWALK_BAND = 4.5;
+  const cwIndex = framedDeclutter ? new CarriagewayIndex(graph.roads) : null;
+  const isRedundantSidewalk = (r) => {
+    if (!cwIndex) return false;
+    if (r.roadClass !== "footway" && r.roadClass !== "cycleway") return false;
+    let near = 0;
+    for (const p of r.points) if (cwIndex.insideCarriageway(p, SIDEWALK_BAND)) near++;
+    return near / r.points.length >= 0.5;
+  };
+  const FORBID_CELL = 24;
+  const forbidDiscs = /* @__PURE__ */ new Map();
+  const forbidPaths = /* @__PURE__ */ new Map();
+  if (framedDeclutter) {
+    const addDisc = (x, z, r) => {
+      for (let cx = Math.floor((x - r) / FORBID_CELL); cx <= Math.floor((x + r) / FORBID_CELL); cx++) {
+        for (let cz = Math.floor((z - r) / FORBID_CELL); cz <= Math.floor((z + r) / FORBID_CELL); cz++) {
+          const key = `${cx},${cz}`;
+          let l = forbidDiscs.get(key);
+          if (!l) forbidDiscs.set(key, l = []);
+          l.push({ x, z, r });
+        }
+      }
+    };
+    for (const [k, info] of nodeUse) {
+      if (info.count < 2 || passThrough.has(k)) continue;
+      addDisc(info.p.x, info.p.z, discRadius(info.maxWidth) + 0.4);
+    }
+    for (const r of graph.roads) {
+      if (!NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
+      if (isRedundantSidewalk(r)) continue;
+      const half = r.widthM / 2;
+      for (let i = 1; i < r.points.length; i++) {
+        const a = r.points[i - 1], b = r.points[i];
+        const pad = half + 1;
+        for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / FORBID_CELL); cx <= Math.floor((Math.max(a.x, b.x) + pad) / FORBID_CELL); cx++) {
+          for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / FORBID_CELL); cz <= Math.floor((Math.max(a.z, b.z) + pad) / FORBID_CELL); cz++) {
+            const key = `${cx},${cz}`;
+            let l = forbidPaths.get(key);
+            if (!l) forbidPaths.set(key, l = []);
+            l.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half });
+          }
+        }
+      }
+    }
+  }
+  const pathEdgeGap = (p) => {
+    let best = null;
+    const cx = Math.floor(p.x / FORBID_CELL);
+    const cz = Math.floor(p.z / FORBID_CELL);
+    for (let ix = cx - 1; ix <= cx + 1; ix++) {
+      for (let iz = cz - 1; iz <= cz + 1; iz++) {
+        for (const s of forbidPaths.get(`${ix},${iz}`) ?? []) {
+          const dx = s.bx - s.ax, dz = s.bz - s.az;
+          const len2 = dx * dx + dz * dz;
+          let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const gap = Math.hypot(p.x - (s.ax + dx * t), p.z - (s.az + dz * t)) - s.half;
+          if (gap < 8 && (best === null || gap < best)) best = gap;
+        }
+      }
+    }
+    return best;
+  };
+  const framedForbiddenAt = (p, excludeId) => {
+    const key = `${Math.floor(p.x / FORBID_CELL)},${Math.floor(p.z / FORBID_CELL)}`;
+    for (const d of forbidDiscs.get(key) ?? []) {
+      if ((p.x - d.x) ** 2 + (p.z - d.z) ** 2 < d.r * d.r) return true;
+    }
+    const pg = pathEdgeGap(p);
+    if (pg !== null && pg < 0.15) return true;
+    return cwIndex !== null && cwIndex.insideCarriageway(p, -0.1, excludeId);
+  };
+  const onRoadOrPath = (p, margin) => {
+    if (cwIndex !== null && cwIndex.insideCarriageway(p, margin)) return true;
+    const pg = pathEdgeGap(p);
+    return pg !== null && pg < margin;
+  };
   for (const r of graph.roads) {
     if (r.points.length < 2) continue;
+    if (isRedundantSidewalk(r)) continue;
     const res = resolutions.get(r.id);
     if (!res) continue;
     if (archLandmarkRoadIds.has(r.id)) continue;
@@ -24567,6 +25315,7 @@ function buildRoads(graph, ctx, resolutions) {
     const left = offsetPolyline(surfacePts, half);
     const right = offsetPolyline(surfacePts, -half);
     const isPath = NON_DRIVABLE.has(r.roadClass);
+    const framed = FRAMED_ROADS.enabled;
     const yBase = isPath ? Y_PATH : Y_ROAD;
     const cum = cumulative(pts);
     const trueProfile = elevation.profileFor(r, cum);
@@ -24608,7 +25357,7 @@ function buildRoads(graph, ctx, resolutions) {
       const banks = surfCum.map((c) => bankAt(startTrimApplied + c));
       surface = crownedRibbonGeometry(left, right, profile, half, fades, banks);
       const vc = surface.getAttribute("position").count;
-      surface.setAttribute("aWear", new THREE7.BufferAttribute(new Float32Array(vc).fill(1), 1));
+      surface.setAttribute("aWear", new THREE8.BufferAttribute(new Float32Array(vc).fill(1), 1));
     } else {
       surface = ribbonGeometry(left, right, profile);
       const vc = surface.getAttribute("position").count;
@@ -24618,10 +25367,11 @@ function buildRoads(graph, ctx, resolutions) {
         lane[i] = i % 2 === 0 ? -1 : 1;
         wear[i] = 1;
       }
-      surface.setAttribute("aLane", new THREE7.BufferAttribute(lane, 1));
-      surface.setAttribute("aWear", new THREE7.BufferAttribute(wear, 1));
+      surface.setAttribute("aLane", new THREE8.BufferAttribute(lane, 1));
+      surface.setAttribute("aWear", new THREE8.BufferAttribute(wear, 1));
     }
-    const mesh2 = new THREE7.Mesh(surface, roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ":uv")));
+    const surfaceMat = framed && isPath ? framedWalkMaterial : roadMaterial(res.surface, isPath ? 0 : hash01(r.id + ":uv"));
+    const mesh2 = new THREE8.Mesh(surface, surfaceMat);
     mesh2.name = r.name ?? `${r.roadClass} road`;
     mesh2.userData.objectId = r.id;
     mesh2.receiveShadow = true;
@@ -24657,7 +25407,7 @@ function buildRoads(graph, ctx, resolutions) {
           const { p } = pointAlong(surfacePts, d);
           const elevHere = deck[nearestIndex(cumS, d)];
           if (elevHere > 3.5) {
-            const pier = new THREE7.CylinderGeometry(0.85, 1, elevHere - 0.35, 10);
+            const pier = new THREE8.CylinderGeometry(0.85, 1, elevHere - 0.35, 10);
             pier.translate(p.x, (elevHere - 0.35) / 2, p.z);
             pierGeoms.push(pier);
           }
@@ -24666,21 +25416,108 @@ function buildRoads(graph, ctx, resolutions) {
       continue;
     }
     const drivable = !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== "service";
-    if (res.crossSection.sidewalks) {
-      const sw = res.crossSection.sidewalkWidth;
+    const preset = framed && drivable && !r.bridge ? framedPresetFor(r.roadClass) : null;
+    const wantSidewalk = framed ? preset !== null : res.crossSection.sidewalks;
+    if (wantSidewalk) {
+      const sw = preset ? preset.curbW + preset.vergeW + preset.footW : res.crossSection.sidewalkWidth;
       const cs = clusterExitTrim(pts, false);
       const ce = clusterExitTrim(pts, true);
-      const startTrim = cs !== null ? cs + sw : isJunction(pts[0]) ? junctionRadius(pts[0]) + sw : 0;
-      const endTrim = ce !== null ? ce + sw : isJunction(pts[pts.length - 1]) ? junctionRadius(pts[pts.length - 1]) + sw : 0;
+      const jctTrim = (p) => {
+        if (framed && (nodeUse.get(nodeKey(p))?.count ?? 0) >= 3) return junctionRadius(p) * 0.72;
+        return junctionRadius(p) + sw;
+      };
+      const startTrim = cs !== null ? cs + (framed ? 0.4 : sw) : isJunction(pts[0]) ? jctTrim(pts[0]) : 0;
+      const endTrim = ce !== null ? ce + (framed ? 0.4 : sw) : isJunction(pts[pts.length - 1]) ? jctTrim(pts[pts.length - 1]) : 0;
       const walkPts = trimPolyline(pts, startTrim, endTrim);
       if (walkPts && walkPts.length >= 2) {
         const base = layerProfile(walkPts, 0);
         const foot = typeof base === "number" ? base - SIDEWALK_FOUNDATION : base.map((b) => b - SIDEWALK_FOUNDATION);
-        const slabH = res.crossSection.curbHeight + SIDEWALK_FOUNDATION;
-        for (const side of [1, -1]) {
-          const inner = offsetPolyline(walkPts, side * (half + 0.05));
-          const outer = offsetPolyline(walkPts, side * (half + sw));
-          sidewalkGeoms.push(raisedRibbonGeometry(inner, outer, slabH, foot));
+        if (preset) {
+          const { curbW, vergeW, footW } = preset;
+          const hasVerge = vergeW > 0.05;
+          const emitSide = (runPts, side) => {
+            const baseR = layerProfile(runPts, 0);
+            const footR = typeof baseR === "number" ? baseR - SIDEWALK_FOUNDATION : baseR.map((b) => b - SIDEWALK_FOUNDATION);
+            const curbTop = typeof baseR === "number" ? baseR + FRAME_CURB_H : baseR.map((b) => b + FRAME_CURB_H);
+            const vergeTop = typeof baseR === "number" ? baseR + FRAME_VERGE_H : baseR.map((b) => b + FRAME_VERGE_H);
+            const nPts = runPts.length;
+            const gapAt = (i) => {
+              const pr = runPts[Math.max(i - 1, 0)];
+              const nx = runPts[Math.min(i + 1, nPts - 1)];
+              let dx = nx.x - pr.x, dz = nx.z - pr.z;
+              const l = Math.hypot(dx, dz) || 1;
+              dx /= l;
+              dz /= l;
+              const off2 = side * (half + 0.3);
+              const probe = { x: runPts[i].x + dz * off2, z: runPts[i].z - dx * off2 };
+              const gCw = cwIndex.edgeGapTo(probe, r.id);
+              const gPath = pathEdgeGap(probe);
+              const g = Math.min(gCw ?? 99, gPath ?? 99);
+              return g >= 99 ? 99 : Math.max(g + 0.3, 0);
+            };
+            const gaps = runPts.map((_, i) => gapAt(i));
+            let tight = 0;
+            for (const g of gaps) if (g < sw + 1) tight++;
+            const median = tight >= nPts / 2;
+            const cEnds = [];
+            const vEnds = [];
+            const fEnds = [];
+            for (let i = 0; i < nPts; i++) {
+              const g = Math.min(gaps[Math.max(i - 1, 0)], gaps[i], gaps[Math.min(i + 1, nPts - 1)]);
+              const avail = Math.max(g - 0.1, 0.08);
+              const cEnd = Math.min(curbW, avail);
+              const vEnd = median || !hasVerge ? cEnd : Math.min(cEnd + vergeW, Math.max(avail, cEnd));
+              cEnds.push(cEnd);
+              vEnds.push(vEnd);
+              fEnds.push(Math.min(vEnd + footW, Math.max(avail, vEnd)));
+            }
+            const off = (ends) => offsetPolylineVar(runPts, ends.map((e) => side * (half + 0.05 + e)));
+            const o0 = offsetPolyline(runPts, side * (half + 0.05));
+            const oC = off(cEnds);
+            const oV = off(vEnds);
+            const oF = off(fEnds);
+            frameGeoms.push(framedTop(o0, oC, curbTop));
+            frameGeoms.push(wallGeometry(o0, footR, curbTop));
+            if (!median && hasVerge) {
+              frameGeoms.push(wallGeometry(oC, vergeTop, curbTop));
+              framedVergeGeoms.push(framedTop(oC, oV, vergeTop));
+              framedWalkGeoms.push(wallGeometry(oV, vergeTop, curbTop));
+            }
+            framedWalkGeoms.push(framedTop(oV, oF, curbTop));
+            framedWalkGeoms.push(wallGeometry(oF, curbTop, footR));
+          };
+          for (const side of [1, -1]) {
+            const nAll = walkPts.length;
+            const allowed = [];
+            for (let i = 0; i < nAll; i++) {
+              const pr = walkPts[Math.max(i - 1, 0)];
+              const nx = walkPts[Math.min(i + 1, nAll - 1)];
+              let dx = nx.x - pr.x, dz = nx.z - pr.z;
+              const l = Math.hypot(dx, dz) || 1;
+              dx /= l;
+              dz /= l;
+              const off = side * (half + 0.4);
+              allowed.push(!framedForbiddenAt({ x: walkPts[i].x + dz * off, z: walkPts[i].z - dx * off }, r.id));
+            }
+            let i0 = -1;
+            for (let i = 0; i <= nAll; i++) {
+              const ok = i < nAll && allowed[i];
+              if (ok && i0 < 0) i0 = i;
+              if (!ok && i0 >= 0) {
+                if (i - i0 >= 2) emitSide(walkPts.slice(i0, i), side);
+                i0 = -1;
+              }
+            }
+          }
+        } else {
+          const slabH = res.crossSection.curbHeight + SIDEWALK_FOUNDATION;
+          for (const side of [1, -1]) {
+            const inner = offsetPolyline(walkPts, side * (half + 0.05));
+            const outer = offsetPolyline(walkPts, side * (half + sw));
+            const edgeL = side === 1 ? outer : inner;
+            const edgeR = side === 1 ? inner : outer;
+            sidewalkGeoms.push(raisedRibbonGeometry(edgeL, edgeR, slabH, foot));
+          }
         }
       }
     }
@@ -24745,7 +25582,7 @@ function buildRoads(graph, ctx, resolutions) {
             }
           }
         }
-        if (res.decalDensity > 0 && res.surface.startsWith("asphalt")) {
+        if (!framed && res.decalDensity > 0 && res.surface.startsWith("asphalt")) {
           const L = polylineLength(markPts);
           const count = Math.floor(res.decalDensity * L / 100 + hash01(r.id + ":dseed"));
           for (let i = 0; i < count; i++) {
@@ -24817,6 +25654,18 @@ function buildRoads(graph, ctx, resolutions) {
           discGeoms.push(g);
           padded = true;
         }
+        if (framedDeclutter && ring.length >= 3 && Math.abs(zc) < 0.01) {
+          framedJunctionCorners(
+            ring,
+            arms,
+            { x: discs[0].x, z: discs[0].z },
+            0,
+            0.4,
+            2.4,
+            onRoadOrPath,
+            { frame: frameGeoms, walk: framedWalkGeoms }
+          );
+        }
       }
     }
     if (!padded) {
@@ -24870,17 +25719,29 @@ function buildRoads(graph, ctx, resolutions) {
           ring = junctionArmHull(info.p, arms, junctionRadius(info.p) * 0.72 - 0.6, 1);
         }
         if (ring.length >= 3) g = junctionPatchGeometry([ring.map((p) => [p.x, p.z])], nodeElev + Y_DISC);
+        if (framedDeclutter && ring.length >= 3 && info.count >= 3 && nodeElev === 0) {
+          framedJunctionCorners(
+            ring,
+            arms,
+            info.p,
+            nodeElev,
+            0.4,
+            2.4,
+            onRoadOrPath,
+            { frame: frameGeoms, walk: framedWalkGeoms }
+          );
+        }
       }
       if (!g) {
         const seg = Math.max(10, Math.min(24, Math.round(rad * 3)));
-        const cg = new THREE7.CircleGeometry(rad, seg);
+        const cg = new THREE8.CircleGeometry(rad, seg);
         cg.rotateX(-Math.PI / 2);
         cg.translate(info.p.x, nodeElev + Y_DISC, info.p.z);
         g = planarUvXZ(nonIndexedToIndexed(cg));
       }
       discGeoms.push(g);
     }
-    if (info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ":mh") > 0.45) {
+    if (!framedDeclutter && info.maxWidth >= 6 && nodeElev === 0 && hash01(k + ":mh") > 0.45) {
       const off = (hash01(k + ":mo") - 0.5) * rad;
       const c = { x: info.p.x + off, z: info.p.z + off * 0.6 };
       if (decalPlanner.tryPlace(c, 0.45)) {
@@ -24890,6 +25751,7 @@ function buildRoads(graph, ctx, resolutions) {
     }
   }
   for (const [k, info] of [...nodeUse.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)) {
+    if (framedDeclutter) break;
     if (info.count < 2 || !elevation.clusterOf(k) || passThrough.has(k)) continue;
     if (info.maxWidth < 6 || elevation.nodeElevation(k) !== 0 || hash01(k + ":mh") <= 0.45) continue;
     const off = (hash01(k + ":mo") - 0.5) * discRadius(info.maxWidth);
@@ -24901,7 +25763,7 @@ function buildRoads(graph, ctx, resolutions) {
   }
   const asMesh = (geoms, mat, name, id) => {
     if (!geoms.length) return null;
-    const m = new THREE7.Mesh(mergeVertices(mergeGeometries(geoms), 1e-3), mat);
+    const m = new THREE8.Mesh(mergeVertices(mergeGeometries(geoms), 1e-3), mat);
     m.name = name;
     m.userData.objectId = id;
     m.receiveShadow = true;
@@ -24909,18 +25771,21 @@ function buildRoads(graph, ctx, resolutions) {
   };
   const intersections = asMesh(discGeoms, roadMaterial("asphalt-worn"), "Intersections", "net_intersections");
   const sidewalks = asMesh(sidewalkGeoms, sidewalkMaterial, "Sidewalks & curbs", "net_sidewalks");
+  const frames = asMesh(frameGeoms, curbFrameMaterial, "Road curb frame", "net_road_frames");
+  const framedWalks = asMesh(framedWalkGeoms, framedWalkMaterial, "Framed footpaths", "net_framed_walks");
+  const framedVerge = asMesh(framedVergeGeoms, framedVergeMaterial, "Framed verges", "net_framed_verge");
   const whiteGeoms = [];
   const wg1 = geometryFromArrays(white.pos, white.idx);
   if (wg1) whiteGeoms.push(wg1);
   const wg2 = geometryFromArrays(whiteQuads.pos, whiteQuads.idx);
   if (wg2) whiteGeoms.push(wg2);
-  const markings = whiteGeoms.length ? new THREE7.Mesh(whiteGeoms.length > 1 ? mergeNoUv(whiteGeoms) : whiteGeoms[0], mats.markingWhite) : null;
+  const markings = whiteGeoms.length ? new THREE8.Mesh(whiteGeoms.length > 1 ? mergeNoUv(whiteGeoms) : whiteGeoms[0], mats.markingWhite) : null;
   if (markings) {
     markings.name = "Lane markings (white)";
     markings.userData.objectId = "net_markings";
   }
   const yg = geometryFromArrays(yellow.pos, yellow.idx);
-  const markingsYellow = yg ? new THREE7.Mesh(yg, mats.markingYellow) : null;
+  const markingsYellow = yg ? new THREE8.Mesh(yg, mats.markingYellow) : null;
   if (markingsYellow) {
     markingsYellow.name = "Lane markings (yellow)";
     markingsYellow.userData.objectId = "net_markings_yellow";
@@ -24929,8 +25794,8 @@ function buildRoads(graph, ctx, resolutions) {
   for (const [kind, q3] of Object.entries(decalQuads)) {
     const g = geometryFromArrays(q3.pos, q3.idx, q3.uv);
     if (!g) continue;
-    decalsGroup ??= new THREE7.Group();
-    decalsGroup.add(new THREE7.Mesh(g, decalMaterials[kind]));
+    decalsGroup ??= new THREE8.Group();
+    decalsGroup.add(new THREE8.Mesh(g, decalMaterials[kind]));
   }
   if (decalsGroup) {
     decalsGroup.name = "Surface decals";
@@ -24939,11 +25804,11 @@ function buildRoads(graph, ctx, resolutions) {
   }
   let bridges = null;
   if (bridgeGeoms.length || pierGeoms.length) {
-    bridges = new THREE7.Group();
+    bridges = new THREE8.Group();
     bridges.name = "Bridge structures";
-    const structMat = new THREE7.MeshStandardMaterial({ color: "#9d9e97", roughness: 0.9, side: THREE7.DoubleSide });
-    if (bridgeGeoms.length) bridges.add(new THREE7.Mesh(mergeVertices(mergeGeometries(bridgeGeoms), 1e-3), structMat));
-    if (pierGeoms.length) bridges.add(new THREE7.Mesh(mergeGeometries(pierGeoms.map(nonIndexedToIndexed)), structMat));
+    const structMat = new THREE8.MeshStandardMaterial({ color: "#9d9e97", roughness: 0.9, side: THREE8.DoubleSide });
+    if (bridgeGeoms.length) bridges.add(new THREE8.Mesh(mergeVertices(mergeGeometries(bridgeGeoms), 1e-3), structMat));
+    if (pierGeoms.length) bridges.add(new THREE8.Mesh(mergeGeometries(pierGeoms.map(nonIndexedToIndexed)), structMat));
     bridges.traverse((o) => {
       o.userData.objectId = "net_bridges";
       o.castShadow = true;
@@ -24951,10 +25816,10 @@ function buildRoads(graph, ctx, resolutions) {
   }
   let portals = null;
   if (portalBoxes.length) {
-    portals = new THREE7.Group();
+    portals = new THREE8.Group();
     portals.name = "Tunnel portals";
-    const portalMat = new THREE7.MeshStandardMaterial({ color: "#8c8d86", roughness: 0.95 });
-    portals.add(new THREE7.Mesh(mergeGeometries(portalBoxes.map(nonIndexedToIndexed)), portalMat));
+    const portalMat = new THREE8.MeshStandardMaterial({ color: "#8c8d86", roughness: 0.95 });
+    portals.add(new THREE8.Mesh(mergeGeometries(portalBoxes.map(nonIndexedToIndexed)), portalMat));
     portals.traverse((o) => o.userData.objectId = "net_portals");
   }
   const landmarkBridges = [];
@@ -24992,7 +25857,7 @@ function buildRoads(graph, ctx, resolutions) {
       group: grp
     });
   }
-  return { roadMeshes, intersections, sidewalks, markings, markingsYellow, decals: decalsGroup, bridges, portals, landmarkBridges };
+  return { roadMeshes, intersections, sidewalks, frames, framedWalks, framedVerge, markings, markingsYellow, decals: decalsGroup, bridges, portals, landmarkBridges };
   function dashedLine(pts, offset, buf, elev) {
     const linePts = offsetPolyline(pts, offset);
     const total = polylineLength(linePts);
@@ -25218,7 +26083,7 @@ function circleRing(d) {
 }
 function junctionPatchGeometry(poly, y) {
   const toV2 = (ring) => {
-    const pts = ring.map(([x, z]) => new THREE7.Vector2(x, z));
+    const pts = ring.map(([x, z]) => new THREE8.Vector2(x, z));
     if (pts.length > 1 && pts[0].distanceTo(pts[pts.length - 1]) < 1e-9) pts.pop();
     return pts;
   };
@@ -25227,7 +26092,7 @@ function junctionPatchGeometry(poly, y) {
   const holes = poly.slice(1).map(toV2).filter((h) => h.length >= 3);
   let faces;
   try {
-    faces = THREE7.ShapeUtils.triangulateShape(contour, holes);
+    faces = THREE8.ShapeUtils.triangulateShape(contour, holes);
   } catch {
     return null;
   }
@@ -25237,8 +26102,8 @@ function junctionPatchGeometry(poly, y) {
   all.forEach((p, i) => pos.set([p.x, y, p.y], i * 3));
   const idx = [];
   for (const f of faces) idx.push(f[0], f[1], f[2]);
-  const g = new THREE7.BufferGeometry();
-  g.setAttribute("position", new THREE7.BufferAttribute(pos, 3));
+  const g = new THREE8.BufferGeometry();
+  g.setAttribute("position", new THREE8.BufferAttribute(pos, 3));
   g.setIndex(idx);
   const a = all[idx[0]];
   const b = all[idx[1]];
@@ -25253,13 +26118,13 @@ function junctionPatchGeometry(poly, y) {
   }
   const normals = new Float32Array(all.length * 3);
   for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
-  g.setAttribute("normal", new THREE7.BufferAttribute(normals, 3));
+  g.setAttribute("normal", new THREE8.BufferAttribute(normals, 3));
   return planarUvXZ(g);
 }
 function portalGeometry(p, dir, width) {
   const angle = Math.atan2(dir.x, dir.z);
   const make = (w, h, d, ox, oy) => {
-    const g = new THREE7.BoxGeometry(w, h, d);
+    const g = new THREE8.BoxGeometry(w, h, d);
     g.rotateY(angle);
     const ax = Math.cos(angle);
     const az = -Math.sin(angle);
@@ -25282,12 +26147,12 @@ function nonIndexedToIndexed(g) {
   const count = g.getAttribute("position").count;
   const idx = new Uint32Array(count);
   for (let i = 0; i < count; i++) idx[i] = i;
-  g.setIndex(new THREE7.BufferAttribute(idx, 1));
+  g.setIndex(new THREE8.BufferAttribute(idx, 1));
   return g;
 }
 
 // src/procgen/buildings.ts
-import * as THREE8 from "three";
+import * as THREE9 from "three";
 function footprintCentroid(fp) {
   let x = 0;
   let z = 0;
@@ -25298,12 +26163,12 @@ function footprintCentroid(fp) {
   return { x: x / fp.length, z: z / fp.length };
 }
 function footprintShape(fp, c, scale = 1) {
-  const pts = fp.map((p) => new THREE8.Vector2((p.x - c.x) * scale, -(p.z - c.z) * scale));
-  if (THREE8.ShapeUtils.isClockWise(pts)) pts.reverse();
-  return new THREE8.Shape(pts);
+  const pts = fp.map((p) => new THREE9.Vector2((p.x - c.x) * scale, -(p.z - c.z) * scale));
+  if (THREE9.ShapeUtils.isClockWise(pts)) pts.reverse();
+  return new THREE9.Shape(pts);
 }
 function extrudeFootprint(fp, c, height, yBase, scale, bevel) {
-  const geo = new THREE8.ExtrudeGeometry(footprintShape(fp, c, scale), {
+  const geo = new THREE9.ExtrudeGeometry(footprintShape(fp, c, scale), {
     depth: height,
     bevelEnabled: bevel,
     bevelThickness: bevel ? 0.6 : 0,
@@ -25322,7 +26187,7 @@ function capMaterial(res) {
   let ds = doubleSidedRoofCache.get(base);
   if (!ds) {
     ds = base.clone();
-    ds.side = THREE8.DoubleSide;
+    ds.side = THREE9.DoubleSide;
     doubleSidedRoofCache.set(base, ds);
   }
   return ds;
@@ -25346,17 +26211,17 @@ function buildRoofCap(fp, c, form, topY, res) {
   if (minExtent < 2) return null;
   if (form === "dome") {
     const domeH = Math.min(minExtent * 0.5, 8);
-    const geo2 = new THREE8.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    const geo2 = new THREE9.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
     geo2.scale(rx, domeH, rz);
     geo2.translate((ext.minX + ext.maxX) / 2 - c.x, topY, (ext.minZ + ext.maxZ) / 2 - c.z);
-    const mesh3 = new THREE8.Mesh(geo2, roofMaterial(res.roof));
+    const mesh3 = new THREE9.Mesh(geo2, roofMaterial(res.roof));
     mesh3.castShadow = true;
     mesh3.receiveShadow = true;
     return mesh3;
   }
   if (!TENT_FORMS.has(form)) return null;
   const pitch = Math.max(1.2, Math.min(minExtent * (form === "skillion" ? 0.22 : 0.35), 6));
-  const apex = new THREE8.Vector3(0, topY + pitch, 0);
+  const apex = new THREE9.Vector3(0, topY + pitch, 0);
   const positions = [];
   const n = fp.length;
   for (let i = 0; i < n; i++) {
@@ -25374,10 +26239,10 @@ function buildRoofCap(fp, c, form, topY, res) {
       apex.z
     );
   }
-  const geo = new THREE8.BufferGeometry();
-  geo.setAttribute("position", new THREE8.Float32BufferAttribute(positions, 3));
+  const geo = new THREE9.BufferGeometry();
+  geo.setAttribute("position", new THREE9.Float32BufferAttribute(positions, 3));
   geo.computeVertexNormals();
-  const mesh2 = new THREE8.Mesh(geo, capMaterial(res));
+  const mesh2 = new THREE9.Mesh(geo, capMaterial(res));
   mesh2.castShadow = true;
   mesh2.receiveShadow = true;
   return mesh2;
@@ -25386,7 +26251,7 @@ function buildProceduralBuilding(b, res, roofForm = "flat") {
   const c = footprintCentroid(b.footprint);
   const gy = sampleTerrain(c.x, c.z);
   const geo = extrudeFootprint(b.footprint, c, b.heightM + BASE_SINK, -BASE_SINK, 1, false);
-  const mesh2 = new THREE8.Mesh(geo, [
+  const mesh2 = new THREE9.Mesh(geo, [
     roofMaterial(res.roof),
     facadeMaterial(res.facade, res.tint, res.uvSeed)
   ]);
@@ -25399,7 +26264,7 @@ function buildProceduralBuilding(b, res, roofForm = "flat") {
   const cornice = roofForm === "flat" ? buildCornice(b.footprint, c, b.heightM, res) : null;
   const extras = [cap, cornice].filter((x) => x !== null);
   if (extras.length === 0) return mesh2;
-  const group = new THREE8.Group();
+  const group = new THREE9.Group();
   group.name = mesh2.name;
   group.userData.objectId = b.id;
   group.position.set(c.x, gy, c.z);
@@ -25415,7 +26280,7 @@ function buildCornice(fp, c, topY, res) {
   const scale = Math.min(1.06, Math.max(1.01, 1 + overhang / r));
   const band = 0.7;
   const geo = extrudeFootprint(fp, c, band, topY - band / 2, scale, false);
-  const mesh2 = new THREE8.Mesh(geo, roofMaterial(res.roof));
+  const mesh2 = new THREE9.Mesh(geo, roofMaterial(res.roof));
   mesh2.castShadow = true;
   mesh2.receiveShadow = true;
   return mesh2;
@@ -25423,14 +26288,14 @@ function buildCornice(fp, c, topY, res) {
 function buildEnhancedBuilding(b, res) {
   const c = footprintCentroid(b.footprint);
   const rand = (salt) => hash01(b.id + ":gen:" + salt);
-  const group = new THREE8.Group();
+  const group = new THREE9.Group();
   group.position.set(c.x, sampleTerrain(c.x, c.z), c.z);
   group.name = `${b.name ?? "Building"} (generated)`;
   const wall = facadeMaterial(res.facade, res.tint, [rand("u"), rand("v")]);
   const wallUpper = facadeMaterial(res.facade, res.tint, [rand("u2"), rand("v2")]);
   const hasTier = b.heightM > 35 && b.footprint.length >= 4;
   const baseH = hasTier ? b.heightM * (0.55 + rand("h") * 0.15) : b.heightM;
-  const base = new THREE8.Mesh(extrudeFootprint(b.footprint, c, baseH + BASE_SINK, -BASE_SINK, 1, true), [
+  const base = new THREE9.Mesh(extrudeFootprint(b.footprint, c, baseH + BASE_SINK, -BASE_SINK, 1, true), [
     roofMaterial(res.roof),
     wall
   ]);
@@ -25439,28 +26304,28 @@ function buildEnhancedBuilding(b, res) {
   group.add(base);
   if (hasTier) {
     const tierScale = 0.62 + rand("ts") * 0.15;
-    const tier = new THREE8.Mesh(
+    const tier = new THREE9.Mesh(
       extrudeFootprint(b.footprint, c, b.heightM - baseH, baseH, tierScale, true),
       [roofMaterial(res.roof), wallUpper]
     );
     tier.castShadow = true;
     group.add(tier);
   }
-  const bbox = new THREE8.Box3().setFromObject(group);
-  const size = bbox.getSize(new THREE8.Vector3());
+  const bbox = new THREE9.Box3().setFromObject(group);
+  const size = bbox.getSize(new THREE9.Vector3());
   const phW = Math.min(size.x, size.z) * 0.25;
   if (phW > 1.5) {
-    const ph = new THREE8.Mesh(
-      new THREE8.BoxGeometry(phW, 2.4, phW * 0.8),
-      new THREE8.MeshStandardMaterial({ color: "#6b6b66", roughness: 0.9 })
+    const ph = new THREE9.Mesh(
+      new THREE9.BoxGeometry(phW, 2.4, phW * 0.8),
+      new THREE9.MeshStandardMaterial({ color: "#6b6b66", roughness: 0.9 })
     );
     ph.position.set(0, b.heightM + 1.2, 0);
     ph.castShadow = true;
     group.add(ph);
   }
   if (b.tier === "landmark" && b.heightM > 60) {
-    const antenna = new THREE8.Mesh(
-      new THREE8.CylinderGeometry(0.15, 0.3, b.heightM * 0.15, 6),
+    const antenna = new THREE9.Mesh(
+      new THREE9.CylinderGeometry(0.15, 0.3, b.heightM * 0.15, 6),
       mats.signalPole
     );
     antenna.position.set(0, b.heightM + b.heightM * 0.075, 0);
@@ -25481,22 +26346,22 @@ function fitToSlot(model, b) {
     maxZ = Math.max(maxZ, p.z);
   }
   const slotExtent = Math.max(maxX - minX, maxZ - minZ);
-  const bbox = new THREE8.Box3().setFromObject(model);
-  const size = bbox.getSize(new THREE8.Vector3());
+  const bbox = new THREE9.Box3().setFromObject(model);
+  const size = bbox.getSize(new THREE9.Vector3());
   if (![size.x, size.y, size.z].every((v) => Number.isFinite(v) && v > 1e-3)) return null;
   const modelExtent = Math.max(size.x, size.z) || 1;
   const scaleXZ = slotExtent / modelExtent;
   const targetH = b.heightM > 1 ? b.heightM : size.y * scaleXZ;
   const ratio = Math.min(Math.max(targetH / size.y / scaleXZ, 0.4), 3);
   const scaleY = scaleXZ * ratio;
-  const center = bbox.getCenter(new THREE8.Vector3());
-  const wrapper = new THREE8.Group();
+  const center = bbox.getCenter(new THREE9.Vector3());
+  const wrapper = new THREE9.Group();
   model.position.set(-center.x, -center.y, -center.z);
-  const inner = new THREE8.Group();
+  const inner = new THREE9.Group();
   inner.add(model);
   inner.scale.set(scaleXZ, scaleY, scaleXZ);
   wrapper.add(inner);
-  const after = new THREE8.Box3().setFromObject(wrapper);
+  const after = new THREE9.Box3().setFromObject(wrapper);
   wrapper.position.set(c.x, sampleTerrain(c.x, c.z) - after.min.y - BASE_SINK, c.z);
   wrapper.traverse((o) => {
     if (o.isMesh) {
@@ -25508,11 +26373,11 @@ function fitToSlot(model, b) {
 }
 
 // src/procgen/areas.ts
-import * as THREE10 from "three";
+import * as THREE11 from "three";
 import polygonClipping3 from "polygon-clipping";
 
 // src/procgen/terrain/mesh.ts
-import * as THREE9 from "three";
+import * as THREE10 from "three";
 function terrainGridGeometry(bounds, cell = TERRAIN.cell) {
   const w = bounds.maxX - bounds.minX;
   const d = bounds.maxZ - bounds.minZ;
@@ -25521,7 +26386,7 @@ function terrainGridGeometry(bounds, cell = TERRAIN.cell) {
   const c = Math.max(6, Math.ceil(Math.max(w, d) / 380));
   const cols = Math.max(1, Math.round(w / c));
   const rows = Math.max(1, Math.round(d / c));
-  const geo = new THREE9.PlaneGeometry(w, d, cols, rows).rotateX(-Math.PI / 2);
+  const geo = new THREE10.PlaneGeometry(w, d, cols, rows).rotateX(-Math.PI / 2);
   geo.translate(cx, 0, cz);
   const pos = geo.getAttribute("position");
   for (let i = 0; i < pos.count; i++) {
@@ -25534,12 +26399,12 @@ function terrainGridGeometry(bounds, cell = TERRAIN.cell) {
 
 // src/procgen/areas.ts
 var AREA_STYLE = {
-  grass: { y: 0.022, mat: new THREE10.MeshStandardMaterial({ color: "#5d7050", roughness: 1 }) },
-  park: { y: 0.032, mat: new THREE10.MeshStandardMaterial({ color: "#55684a", roughness: 1 }) },
-  sand: { y: 0.037, mat: new THREE10.MeshStandardMaterial({ color: "#c2b280", roughness: 1 }) },
-  forest: { y: 0.042, mat: new THREE10.MeshStandardMaterial({ color: "#48583f", roughness: 1 }) }
+  grass: { y: 0.022, mat: new THREE11.MeshStandardMaterial({ color: "#5d7050", roughness: 1 }) },
+  park: { y: 0.032, mat: new THREE11.MeshStandardMaterial({ color: "#55684a", roughness: 1 }) },
+  sand: { y: 0.037, mat: new THREE11.MeshStandardMaterial({ color: "#c2b280", roughness: 1 }) },
+  forest: { y: 0.042, mat: new THREE11.MeshStandardMaterial({ color: "#48583f", roughness: 1 }) }
 };
-var GROUND_MAT = new THREE10.MeshStandardMaterial({ color: "#4d5545", roughness: 1 });
+var GROUND_MAT = new THREE11.MeshStandardMaterial({ color: "#4d5545", roughness: 1 });
 var landTexturesApplied = false;
 function applyLandTextures() {
   if (landTexturesApplied) return;
@@ -25560,7 +26425,7 @@ function applyLandTextures() {
 }
 var OCEAN_UNIFORMS = { uTime: { value: 0 } };
 function makeOceanMaterial() {
-  const m = new THREE10.MeshStandardMaterial({ color: "#1e4d68", roughness: 0.18, metalness: 0 });
+  const m = new THREE11.MeshStandardMaterial({ color: "#1e4d68", roughness: 0.18, metalness: 0 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = OCEAN_UNIFORMS.uTime;
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vOceanWPos;").replace(
@@ -25585,7 +26450,7 @@ function makeOceanMaterial() {
   return m;
 }
 var WATER_MAT = makeOceanMaterial();
-var BANK_MAT = new THREE10.MeshStandardMaterial({ color: "#6b6353", roughness: 1, side: THREE10.DoubleSide });
+var BANK_MAT = new THREE11.MeshStandardMaterial({ color: "#6b6353", roughness: 1, side: THREE11.DoubleSide });
 var WATER_DEPTH = 0.35;
 var WATER_PAINT_Y = 0.012;
 var toClipPoly = (ring, holes = []) => [
@@ -25625,7 +26490,7 @@ function buildAreas(areas) {
   const out = [];
   for (const [kind, geoms] of byKind) {
     const geo = conformToTerrain(mergeGeometries(geoms));
-    const mesh2 = new THREE10.Mesh(geo, AREA_STYLE[kind].mat);
+    const mesh2 = new THREE11.Mesh(geo, AREA_STYLE[kind].mat);
     mesh2.name = kind === "park" ? "Parks" : kind === "grass" ? "Grass" : kind === "sand" ? "Sand & beaches" : "Forest floor";
     mesh2.receiveShadow = true;
     out.push({ kind, mesh: mesh2 });
@@ -25671,9 +26536,9 @@ function buildTerrainRelief(waterAreas, bounds) {
   const surfaces = [...carved, ...painted].map((w) => holedFlatGeometry(w.ring, w.holes, TERRAIN.waterSurfaceY));
   let water = null;
   if (surfaces.length) {
-    water = new THREE10.Group();
+    water = new THREE11.Group();
     water.name = "Water";
-    const m = new THREE10.Mesh(mergeGeometries(surfaces), WATER_MAT);
+    const m = new THREE11.Mesh(mergeGeometries(surfaces), WATER_MAT);
     m.receiveShadow = true;
     water.add(m);
   }
@@ -25682,19 +26547,19 @@ function buildTerrainRelief(waterAreas, bounds) {
 function buildTerrainFlat(waterAreas, bounds) {
   const { carved, painted } = waterRings(waterAreas, bounds);
   const paintGeoms = painted.map((p) => holedFlatGeometry(p.ring, p.holes, WATER_PAINT_Y));
-  const groundShape = new THREE10.Shape([
-    new THREE10.Vector2(bounds.minX, -bounds.minZ),
-    new THREE10.Vector2(bounds.maxX, -bounds.minZ),
-    new THREE10.Vector2(bounds.maxX, -bounds.maxZ),
-    new THREE10.Vector2(bounds.minX, -bounds.maxZ)
+  const groundShape = new THREE11.Shape([
+    new THREE11.Vector2(bounds.minX, -bounds.minZ),
+    new THREE11.Vector2(bounds.maxX, -bounds.minZ),
+    new THREE11.Vector2(bounds.maxX, -bounds.maxZ),
+    new THREE11.Vector2(bounds.minX, -bounds.maxZ)
   ]);
   for (const c of carved) {
-    groundShape.holes.push(new THREE10.Path(c.ring.map((p) => new THREE10.Vector2(p.x, -p.z))));
+    groundShape.holes.push(new THREE11.Path(c.ring.map((p) => new THREE11.Vector2(p.x, -p.z))));
   }
-  const groundGeo = indexed(new THREE10.ShapeGeometry(groundShape).rotateX(-Math.PI / 2));
+  const groundGeo = indexed(new THREE11.ShapeGeometry(groundShape).rotateX(-Math.PI / 2));
   const islandGeoms = [];
   for (const c of carved) for (const h of c.holes) islandGeoms.push(flatRingGeometry(h, 0));
-  const ground = new THREE10.Mesh(
+  const ground = new THREE11.Mesh(
     islandGeoms.length ? mergeGeometries([groundGeo, ...islandGeoms]) : groundGeo,
     GROUND_MAT
   );
@@ -25709,16 +26574,16 @@ function buildTerrainFlat(waterAreas, bounds) {
   }
   let water = null;
   if (waterGeoms.length || paintGeoms.length) {
-    water = new THREE10.Group();
+    water = new THREE11.Group();
     water.name = "Water";
     if (waterGeoms.length) {
-      const m = new THREE10.Mesh(mergeGeometries(waterGeoms), WATER_MAT);
+      const m = new THREE11.Mesh(mergeGeometries(waterGeoms), WATER_MAT);
       m.receiveShadow = true;
       water.add(m);
     }
-    if (bankGeoms.length) water.add(new THREE10.Mesh(mergeGeometries(bankGeoms), BANK_MAT));
+    if (bankGeoms.length) water.add(new THREE11.Mesh(mergeGeometries(bankGeoms), BANK_MAT));
     if (paintGeoms.length) {
-      const m = new THREE10.Mesh(mergeGeometries(paintGeoms), WATER_MAT);
+      const m = new THREE11.Mesh(mergeGeometries(paintGeoms), WATER_MAT);
       m.receiveShadow = true;
       water.add(m);
     }
@@ -25736,7 +26601,7 @@ function footprintWaterFraction(footprint, waterAreas) {
   for (const p of footprint) if (isWaterAt(p, waterAreas)) over++;
   return over / footprint.length;
 }
-var PIER_MAT = new THREE10.MeshStandardMaterial({ color: "#6c6e72", roughness: 0.92, side: THREE10.DoubleSide });
+var PIER_MAT = new THREE11.MeshStandardMaterial({ color: "#6c6e72", roughness: 0.92, side: THREE11.DoubleSide });
 var PIER_DROP = 3;
 function pierGeometry(footprint, gradeY) {
   const cap = flatRingGeometry(footprint, gradeY);
@@ -25746,7 +26611,7 @@ function pierGeometry(footprint, gradeY) {
 function buildPiers(footprints, gradeY) {
   const geoms = footprints.filter((f) => f.length >= 3).map((f) => pierGeometry(f, gradeY));
   if (!geoms.length) return null;
-  const mesh2 = new THREE10.Mesh(mergeGeometries(geoms), PIER_MAT);
+  const mesh2 = new THREE11.Mesh(mergeGeometries(geoms), PIER_MAT);
   mesh2.name = "Piers";
   mesh2.receiveShadow = true;
   mesh2.castShadow = true;
@@ -25763,25 +26628,25 @@ function ringBBox(ring) {
   return { minX, maxX, minZ, maxZ };
 }
 function flatRingGeometry(ring, y) {
-  const pts = ring.map((p) => new THREE10.Vector2(p.x, -p.z));
-  if (THREE10.ShapeUtils.isClockWise(pts)) pts.reverse();
-  const geo = new THREE10.ShapeGeometry(new THREE10.Shape(pts));
+  const pts = ring.map((p) => new THREE11.Vector2(p.x, -p.z));
+  if (THREE11.ShapeUtils.isClockWise(pts)) pts.reverse();
+  const geo = new THREE11.ShapeGeometry(new THREE11.Shape(pts));
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, y, 0);
   return indexed(geo);
 }
 function holedFlatGeometry(ring, holes, y) {
   if (!holes.length) return flatRingGeometry(ring, y);
-  const outer = ring.map((p) => new THREE10.Vector2(p.x, -p.z));
-  if (THREE10.ShapeUtils.isClockWise(outer)) outer.reverse();
-  const shape = new THREE10.Shape(outer);
+  const outer = ring.map((p) => new THREE11.Vector2(p.x, -p.z));
+  if (THREE11.ShapeUtils.isClockWise(outer)) outer.reverse();
+  const shape = new THREE11.Shape(outer);
   for (const h of holes) {
     if (h.length < 3) continue;
-    const hp = h.map((p) => new THREE10.Vector2(p.x, -p.z));
-    if (!THREE10.ShapeUtils.isClockWise(hp)) hp.reverse();
-    shape.holes.push(new THREE10.Path(hp));
+    const hp = h.map((p) => new THREE11.Vector2(p.x, -p.z));
+    if (!THREE11.ShapeUtils.isClockWise(hp)) hp.reverse();
+    shape.holes.push(new THREE11.Path(hp));
   }
-  const geo = new THREE10.ShapeGeometry(shape);
+  const geo = new THREE11.ShapeGeometry(shape);
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, y, 0);
   return indexed(geo);
@@ -25791,7 +26656,7 @@ function indexed(g) {
   const count = g.getAttribute("position").count;
   const idx = new Uint32Array(count);
   for (let i = 0; i < count; i++) idx[i] = i;
-  g.setIndex(new THREE10.BufferAttribute(idx, 1));
+  g.setIndex(new THREE11.BufferAttribute(idx, 1));
   return g;
 }
 function conformToTerrain(geo) {
@@ -25804,483 +26669,9 @@ function conformToTerrain(geo) {
   return geo;
 }
 function buildGroundGrid(bounds) {
-  const mesh2 = new THREE10.Mesh(terrainGridGeometry(bounds), GROUND_MAT);
+  const mesh2 = new THREE11.Mesh(terrainGridGeometry(bounds), GROUND_MAT);
   mesh2.receiveShadow = true;
   return mesh2;
-}
-
-// src/procgen/props.ts
-import * as THREE11 from "three";
-
-// src/procgen/signMath.ts
-function nearestRoadInfo(pos, roads, includePaths = false) {
-  let best = Infinity;
-  let bestDir = null;
-  let bestRoad = null;
-  let bestPoint = null;
-  let bestStation = 0;
-  for (const r of roads) {
-    if (!includePaths && NON_DRIVABLE.has(r.roadClass)) continue;
-    const pts = r.points;
-    let cum = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const ax = pts[i - 1].x;
-      const az = pts[i - 1].z;
-      const dx = pts[i].x - ax;
-      const dz = pts[i].z - az;
-      const len2 = dx * dx + dz * dz;
-      if (len2 < 1e-9) continue;
-      const l = Math.sqrt(len2);
-      let t = ((pos.x - ax) * dx + (pos.z - az) * dz) / len2;
-      t = t < 0 ? 0 : t > 1 ? 1 : t;
-      const px = ax + dx * t;
-      const pz = az + dz * t;
-      const d22 = (pos.x - px) * (pos.x - px) + (pos.z - pz) * (pos.z - pz);
-      if (d22 < best) {
-        best = d22;
-        bestDir = { x: dx / l, z: dz / l };
-        bestRoad = r;
-        bestPoint = { x: px, z: pz };
-        bestStation = cum + l * t;
-      }
-      cum += l;
-    }
-  }
-  if (!bestDir || !bestRoad) return null;
-  return {
-    dir: bestDir,
-    oneway: bestRoad.oneway,
-    dist: Math.sqrt(best),
-    road: bestRoad,
-    point: bestPoint,
-    station: bestStation
-  };
-}
-function curbsideDevicePosition(pos, near, drivingSide) {
-  if (!near || !near.road || !near.point) return pos;
-  const half = near.road.widthM / 2;
-  if (near.dist > half + 0.2) return pos;
-  const s = drivingSide === "right" ? -1 : 1;
-  const across = { x: -near.dir.z * s, z: near.dir.x * s };
-  const off = half + 0.7;
-  return { x: near.point.x + across.x * off, z: near.point.z + across.z * off };
-}
-function deviceHeading(near, faceOncoming) {
-  if (!near) return 0;
-  const s = faceOncoming ? -1 : 1;
-  return Math.atan2(near.dir.x * s, near.dir.z * s);
-}
-function speedUnitFor(region) {
-  return region === "us" || region === "uk" ? "mph" : "km/h";
-}
-function displaySpeed(kmh, unit) {
-  if (unit === "mph") return Math.max(5, Math.round(kmh / 1.60934 / 5) * 5);
-  return Math.max(5, Math.round(kmh / 5) * 5);
-}
-var DEFAULT_SPEED_KMH = {
-  motorway: 100,
-  trunk: 90,
-  primary: 60,
-  secondary: 50,
-  tertiary: 50,
-  unclassified: 40,
-  residential: 30,
-  living_street: 20,
-  service: 20,
-  pedestrian: 10,
-  footway: 0,
-  cycleway: 20
-};
-function effectiveSpeed(road, _region) {
-  if (NON_DRIVABLE.has(road.roadClass)) return null;
-  if (road.maxspeedKmh != null && isFinite(road.maxspeedKmh)) {
-    return { kmh: road.maxspeedKmh, source: "tag" };
-  }
-  return { kmh: DEFAULT_SPEED_KMH[road.roadClass] ?? 40, source: "default" };
-}
-
-// src/procgen/props.ts
-function buildTrafficSignal(p) {
-  const g = new THREE11.Group();
-  g.name = "Traffic signal";
-  g.userData.objectId = p.id;
-  g.position.set(p.position.x, sampleTerrain(p.position.x, p.position.z), p.position.z);
-  const pole = new THREE11.Mesh(new THREE11.CylinderGeometry(0.09, 0.11, 4.6, 8), mats.signalPole);
-  pole.position.y = 2.3;
-  pole.castShadow = true;
-  g.add(pole);
-  const head = new THREE11.Mesh(new THREE11.BoxGeometry(0.34, 1, 0.26), mats.signalHead);
-  head.position.set(0, 4.4, 0.14);
-  g.add(head);
-  const lampGeo = new THREE11.SphereGeometry(0.09, 10, 8);
-  const lamps = [
-    [mats.signalRed, 0.3],
-    [mats.signalAmber, 0],
-    [mats.signalGreen, -0.3]
-  ];
-  for (const [mat, dy] of lamps) {
-    const lamp = new THREE11.Mesh(lampGeo, mat);
-    lamp.position.set(0, 4.4 + dy, 0.28);
-    g.add(lamp);
-  }
-  return g;
-}
-function speciesGeometry() {
-  return {
-    broadleaf: { trunk: new THREE11.CylinderGeometry(0.12, 0.18, 1, 6), canopy: new THREE11.IcosahedronGeometry(1, 1), canopyColor: "#4d7038", trunkH: 2.6 },
-    columnar: { trunk: new THREE11.CylinderGeometry(0.1, 0.14, 1, 6), canopy: new THREE11.ConeGeometry(0.75, 3.4, 8), canopyColor: "#3c5a33", trunkH: 1.1 },
-    conifer: { trunk: new THREE11.CylinderGeometry(0.1, 0.16, 1, 6), canopy: new THREE11.ConeGeometry(1.15, 2.9, 8), canopyColor: "#38543a", trunkH: 1.6 },
-    palm: { trunk: new THREE11.CylinderGeometry(0.09, 0.13, 1, 6), canopy: new THREE11.SphereGeometry(1, 8, 5).scale(1.5, 0.42, 1.5), canopyColor: "#4f7a34", trunkH: 4.6 },
-    acacia: { trunk: new THREE11.CylinderGeometry(0.1, 0.15, 1, 6), canopy: new THREE11.SphereGeometry(1, 8, 5).scale(1.7, 0.55, 1.7), canopyColor: "#5c7540", trunkH: 3 }
-  };
-}
-function buildTrees(trees, ctx) {
-  const group = new THREE11.Group();
-  group.name = `Street trees (${trees.length})`;
-  group.userData.objectId = "veg_trees";
-  if (!trees.length) return group;
-  const treePlacements = trees.filter((t) => ctx.landCoverAt(t.position) !== "water").map((t) => ({
-    seed: t.id,
-    x: t.position.x,
-    z: t.position.z,
-    rotY: hash01(t.id) * Math.PI * 2,
-    scale: resolveTree(t.id, ctx).scale
-  }));
-  const treeMeshes = instanceKindVaried("tree", treePlacements, "veg_trees");
-  if (treeMeshes) {
-    group.add(...treeMeshes);
-    group.userData.librarySource = "library trees";
-    return group;
-  }
-  const geos = speciesGeometry();
-  const bySpecies = /* @__PURE__ */ new Map();
-  for (const t of trees) {
-    if (ctx.landCoverAt(t.position) === "water") continue;
-    const res = resolveTree(t.id, ctx);
-    if (!bySpecies.has(res.species)) bySpecies.set(res.species, []);
-    bySpecies.get(res.species).push({ t, scale: res.scale, tint: res.tint });
-  }
-  const m = new THREE11.Matrix4();
-  const q3 = new THREE11.Quaternion();
-  const s = new THREE11.Vector3();
-  const v = new THREE11.Vector3();
-  const c = new THREE11.Color();
-  for (const [species, list2] of bySpecies) {
-    const geo = geos[species];
-    const trunks = new THREE11.InstancedMesh(geo.trunk, mats.treeTrunk, list2.length);
-    const canopyMat = new THREE11.MeshStandardMaterial({ color: geo.canopyColor, roughness: 1 });
-    const canopies = new THREE11.InstancedMesh(geo.canopy, canopyMat, list2.length);
-    trunks.castShadow = true;
-    canopies.castShadow = true;
-    list2.forEach((e, i) => {
-      const trunkH = geo.trunkH * e.scale;
-      const cs = e.scale * (species === "broadleaf" ? 1.9 : 1.15);
-      const ty = sampleTerrain(e.t.position.x, e.t.position.z);
-      s.set(e.scale, trunkH, e.scale);
-      v.set(e.t.position.x, ty + trunkH / 2, e.t.position.z);
-      m.compose(v, q3, s);
-      trunks.setMatrixAt(i, m);
-      s.set(cs, cs, cs);
-      v.set(e.t.position.x, ty + trunkH + cs * (species === "columnar" || species === "conifer" ? 1.1 : 0.45), e.t.position.z);
-      m.compose(v, q3, s);
-      canopies.setMatrixAt(i, m);
-      c.set(geo.canopyColor).offsetHSL(e.tint * 0.03, e.tint * 0.06, e.tint * 0.045);
-      canopies.setColorAt(i, c);
-    });
-    trunks.instanceMatrix.needsUpdate = true;
-    canopies.instanceMatrix.needsUpdate = true;
-    if (canopies.instanceColor) canopies.instanceColor.needsUpdate = true;
-    trunks.computeBoundingSphere();
-    canopies.computeBoundingSphere();
-    trunks.userData.objectId = "veg_trees";
-    canopies.userData.objectId = "veg_trees";
-    group.add(trunks, canopies);
-  }
-  return group;
-}
-var FURNITURE_ROADS = /* @__PURE__ */ new Set(["primary", "secondary", "tertiary", "residential", "unclassified", "living_street", "trunk"]);
-function lampGeometry(style) {
-  const parts = [];
-  const pole = new THREE11.CylinderGeometry(0.07, 0.1, 7.4, 8);
-  pole.translate(0, 3.7, 0);
-  parts.push(pole);
-  if (style === "cobra") {
-    const arm = new THREE11.CylinderGeometry(0.05, 0.05, 2.2, 6);
-    arm.rotateZ(Math.PI / 2);
-    arm.translate(1, 7.3, 0);
-    parts.push(arm);
-    const head = new THREE11.BoxGeometry(0.85, 0.16, 0.3);
-    head.translate(2, 7.28, 0);
-    parts.push(head);
-  } else {
-    const lantern = new THREE11.CylinderGeometry(0.16, 0.22, 0.55, 8);
-    lantern.translate(0, 7.6, 0);
-    parts.push(lantern);
-  }
-  return mergeGeometries(parts);
-}
-function benchGeometry() {
-  const parts = [];
-  const seat = new THREE11.BoxGeometry(1.7, 0.07, 0.5);
-  seat.translate(0, 0.45, 0);
-  parts.push(seat);
-  const back = new THREE11.BoxGeometry(1.7, 0.45, 0.06);
-  back.translate(0, 0.75, -0.24);
-  parts.push(back);
-  for (const x of [-0.7, 0.7]) {
-    const leg = new THREE11.BoxGeometry(0.08, 0.45, 0.45);
-    leg.translate(x, 0.22, 0);
-    parts.push(leg);
-  }
-  return mergeGeometries(parts);
-}
-function binGeometry() {
-  const g = new THREE11.CylinderGeometry(0.28, 0.24, 0.85, 10);
-  g.translate(0, 0.42, 0);
-  return g;
-}
-function signGeometry(shape) {
-  const parts = [];
-  const pole = new THREE11.CylinderGeometry(0.045, 0.055, 2.6, 6);
-  pole.translate(0, 1.3, 0);
-  parts.push(pole);
-  const plate = shape === "us-rect" ? new THREE11.BoxGeometry(0.6, 0.75, 0.04) : new THREE11.CylinderGeometry(0.38, 0.38, 0.04, 16).rotateX(Math.PI / 2);
-  plate.translate(0, 2.6, 0);
-  parts.push(plate);
-  return parts.length > 1 ? mergeGeometries(parts) : parts[0];
-}
-var CarriagewayIndex = class _CarriagewayIndex {
-  cells = /* @__PURE__ */ new Map();
-  static CELL = 24;
-  constructor(roads) {
-    for (const r of roads) {
-      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
-      const half = r.widthM / 2;
-      for (let i = 1; i < r.points.length; i++) {
-        const a = r.points[i - 1];
-        const b = r.points[i];
-        const pad = half + 1;
-        const minX = Math.min(a.x, b.x) - pad;
-        const maxX = Math.max(a.x, b.x) + pad;
-        const minZ = Math.min(a.z, b.z) - pad;
-        const maxZ = Math.max(a.z, b.z) + pad;
-        const C = _CarriagewayIndex.CELL;
-        for (let cx = Math.floor(minX / C); cx <= Math.floor(maxX / C); cx++) {
-          for (let cz = Math.floor(minZ / C); cz <= Math.floor(maxZ / C); cz++) {
-            const key = `${cx},${cz}`;
-            let list2 = this.cells.get(key);
-            if (!list2) this.cells.set(key, list2 = []);
-            list2.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half, id: r.id });
-          }
-        }
-      }
-    }
-  }
-  /** True when p is inside any carriageway (+margin), optionally ignoring one road. */
-  insideCarriageway(p, margin, excludeId) {
-    const C = _CarriagewayIndex.CELL;
-    const key = `${Math.floor(p.x / C)},${Math.floor(p.z / C)}`;
-    const list2 = this.cells.get(key);
-    if (!list2) return false;
-    for (const s of list2) {
-      if (excludeId && s.id === excludeId) continue;
-      const dx = s.bx - s.ax;
-      const dz = s.bz - s.az;
-      const len2 = dx * dx + dz * dz;
-      let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0;
-      t = t < 0 ? 0 : t > 1 ? 1 : t;
-      const px = s.ax + dx * t;
-      const pz = s.az + dz * t;
-      const d = Math.hypot(p.x - px, p.z - pz);
-      if (d < s.half + margin) return true;
-    }
-    return false;
-  }
-};
-var furniturePlacements = { current: null };
-function buildFurniture(graph, ctx) {
-  const group = new THREE11.Group();
-  group.name = "Street furniture";
-  const elevation = buildRoadElevation(graph.roads);
-  const index = new CarriagewayIndex(graph.roads);
-  const elevAt = (r, station) => {
-    const e = elevation.profileFor(r, [station])[0] ?? 0;
-    return Math.abs(e) > 1e-6 ? e : 0;
-  };
-  const CURB_H = 0.22;
-  const sidewalkCurb = (r) => !NON_DRIVABLE.has(r.roadClass) && r.roadClass !== "service" && r.roadClass !== "motorway" && !r.bridge ? CURB_H : 0;
-  const raiseAt = (r, station, at) => elevAt(r, station) - sampleTerrain(at.x, at.z);
-  const placeOsm = (p, rotY) => {
-    const near = nearestRoadInfo(p.position, graph.roads, true);
-    if (!near?.road || near.dist > near.road.widthM / 2 + 8)
-      return { p: p.position, rotY, y: sampleTerrain(p.position.x, p.position.z) };
-    const e = elevAt(near.road, near.station ?? 0);
-    if (!near.road.bridge && raiseAt(near.road, near.station ?? 0, p.position) < 0.5)
-      return { p: p.position, rotY, y: e };
-    const deck = nearestRoadInfo(p.position, graph.roads, false);
-    if (deck?.road && deck.point && deck.dist <= deck.road.widthM / 2 + 6 && (deck.road.bridge || raiseAt(deck.road, deck.station ?? 0, deck.point) > 0.5)) {
-      const halfD = deck.road.widthM / 2;
-      const yDeck = elevAt(deck.road, deck.station ?? 0);
-      if (deck.dist > halfD - 0.55) {
-        const n = { x: -deck.dir.z, z: deck.dir.x };
-        const side = n.x * (p.position.x - deck.point.x) + n.z * (p.position.z - deck.point.z) >= 0 ? 1 : -1;
-        const pos = {
-          x: deck.point.x + n.x * side * (halfD - 0.55),
-          z: deck.point.z + n.z * side * (halfD - 0.55)
-        };
-        return { p: pos, rotY, y: yDeck };
-      }
-      return { p: p.position, rotY, y: yDeck };
-    }
-    return { p: p.position, rotY, y: e };
-  };
-  const osmLamps = graph.points.filter((p) => p.kind === "street_lamp");
-  const osmBenches = graph.points.filter((p) => p.kind === "bench");
-  const osmBins = graph.points.filter((p) => p.kind === "waste_basket");
-  const lamps = osmLamps.map((p) => placeOsm(p, hash01(p.id) * Math.PI * 2));
-  const benches = osmBenches.map((p) => placeOsm(p, hash01(p.id) * Math.PI * 2));
-  const bins = osmBins.map((p) => placeOsm(p, 0));
-  const signs = [];
-  const nearExistingLamp = (p) => lamps.some((l) => (l.p.x - p.x) ** 2 + (l.p.z - p.z) ** 2 < 64);
-  for (const r of graph.roads) {
-    if (!FURNITURE_ROADS.has(r.roadClass) || r.tunnel || r.points.length < 2) continue;
-    const L = polyLen(r.points);
-    if (L < 20) continue;
-    const mid = r.points[Math.floor(r.points.length / 2)];
-    const zone = ctx.zoneAt(mid);
-    const rules = propRulesFor(zone);
-    const onBridge = r.bridge;
-    if (rules.lampSpacing && (!onBridge || r.widthM >= 8)) {
-      const lampOff = onBridge ? r.widthM / 2 - 0.55 : r.widthM / 2 + 1.1;
-      let side = hash01(r.id + ":side") > 0.5 ? 1 : -1;
-      for (let d = rules.lampSpacing * 0.5; d < L; d += rules.lampSpacing) {
-        const jitter = onBridge ? 0 : (hash01(`${r.id}:lj${d}`) - 0.5) * 6;
-        const station = Math.min(Math.max(d + jitter, 2), L - 2);
-        const { p, dir } = alongWithDir(r.points, station);
-        const across = { x: -dir.z * side, z: dir.x * side };
-        const lp = { x: p.x + across.x * lampOff, z: p.z + across.z * lampOff };
-        const clearOfRoads = onBridge ? !index.insideCarriageway(lp, 0.35, r.id) : !index.insideCarriageway(lp, 0.35);
-        if ((onBridge || ctx.landCoverAt(lp) !== "water") && clearOfRoads && !nearExistingLamp(lp)) {
-          lamps.push({ p: lp, rotY: Math.atan2(-across.x, -across.z), y: elevAt(r, station) + sidewalkCurb(r) });
-        }
-        side = -side;
-      }
-    }
-    if (onBridge) continue;
-    if (rules.benchDensity > 0) {
-      const count = Math.floor(rules.benchDensity * L / 100 + hash01(r.id + ":bseed") * 0.8);
-      for (let i = 0; i < count; i++) {
-        const d = (0.15 + 0.7 * hash01(`${r.id}:b${i}`)) * L;
-        const side = hash01(`${r.id}:bs${i}`) > 0.5 ? 1 : -1;
-        const { p, dir } = alongWithDir(r.points, d);
-        const across = { x: -dir.z * side, z: dir.x * side };
-        const bp = { x: p.x + across.x * (r.widthM / 2 + 1.6), z: p.z + across.z * (r.widthM / 2 + 1.6) };
-        if (ctx.landCoverAt(bp) !== "water" && !index.insideCarriageway(bp, 0.3)) {
-          benches.push({ p: bp, rotY: Math.atan2(-across.x, -across.z) + Math.PI, y: elevAt(r, d) + sidewalkCurb(r) });
-        }
-      }
-    }
-    if (rules.binDensity > 0) {
-      const count = Math.floor(rules.binDensity * L / 100 + hash01(r.id + ":binseed") * 0.6);
-      for (let i = 0; i < count; i++) {
-        const d = (0.1 + 0.8 * hash01(`${r.id}:bin${i}`)) * L;
-        const side = hash01(`${r.id}:bins${i}`) > 0.5 ? 1 : -1;
-        const { p, dir } = alongWithDir(r.points, d);
-        const across = { x: -dir.z * side, z: dir.x * side };
-        const bp = { x: p.x + across.x * (r.widthM / 2 + 0.9), z: p.z + across.z * (r.widthM / 2 + 0.9) };
-        if (ctx.landCoverAt(bp) !== "water" && !index.insideCarriageway(bp, 0.3)) {
-          bins.push({ p: bp, rotY: 0, y: elevAt(r, d) + sidewalkCurb(r) });
-        }
-      }
-    }
-    for (const atEnd of [false, true]) {
-      if (hash01(`${r.id}:sign${atEnd}`) > 0.35) continue;
-      const d = atEnd ? Math.max(L - 6, 2) : Math.min(6, L - 2);
-      const { p, dir } = alongWithDir(r.points, d);
-      const side = ctx.region.drivingSide === "right" ? -1 : 1;
-      const across = { x: -dir.z * side, z: dir.x * side };
-      const sp = { x: p.x + across.x * (r.widthM / 2 + 0.8), z: p.z + across.z * (r.widthM / 2 + 0.8) };
-      if (ctx.landCoverAt(sp) !== "water" && !index.insideCarriageway(sp, 0.3)) {
-        signs.push({ p: sp, rotY: Math.atan2(dir.x, dir.z), y: elevAt(r, d) });
-      }
-    }
-  }
-  const poleMat = mats.signalPole;
-  const woodMat = new THREE11.MeshStandardMaterial({ color: "#6b5138", roughness: 0.9 });
-  const binMat = new THREE11.MeshStandardMaterial({ color: "#3a4a3d", roughness: 0.8, metalness: 0.3 });
-  const signMat = new THREE11.MeshStandardMaterial({ color: "#c8cccf", roughness: 0.5, metalness: 0.4 });
-  const addInstanced = (geo, mat, list2, name) => {
-    if (!list2.length) return;
-    const im = new THREE11.InstancedMesh(geo, mat, list2.length);
-    const m = new THREE11.Matrix4();
-    const q3 = new THREE11.Quaternion();
-    const up = new THREE11.Vector3(0, 1, 0);
-    const s = new THREE11.Vector3(1, 1, 1);
-    const v = new THREE11.Vector3();
-    list2.forEach((e, i) => {
-      q3.setFromAxisAngle(up, e.rotY);
-      v.set(e.p.x, e.y ?? 0, e.p.z);
-      m.compose(v, q3, s);
-      im.setMatrixAt(i, m);
-    });
-    im.instanceMatrix.needsUpdate = true;
-    im.computeBoundingSphere();
-    im.castShadow = true;
-    im.name = name;
-    im.userData.objectId = "furn_all";
-    group.add(im);
-  };
-  const addKind = (kind, geo, mat, list2, name) => {
-    if (!list2.length) return;
-    const placements = list2.map((e) => ({
-      seed: `${kind}:${e.p.x.toFixed(1)},${e.p.z.toFixed(1)}`,
-      x: e.p.x,
-      y: e.y,
-      z: e.p.z,
-      rotY: e.rotY
-    }));
-    const meshes = instanceKindVaried(kind, placements, "furn_all");
-    if (meshes) {
-      meshes.forEach((mesh2, i) => {
-        mesh2.name = i === 0 ? name : `${name} #${i}`;
-      });
-      group.add(...meshes);
-    } else {
-      addInstanced(geo, mat, list2, name);
-    }
-  };
-  addKind("street_lamp", lampGeometry(ctx.region.lampStyle), poleMat, lamps, `Streetlights (${lamps.length})`);
-  addKind("bench", benchGeometry(), woodMat, benches, `Benches (${benches.length})`);
-  addKind("waste_basket", binGeometry(), binMat, bins, `Bins (${bins.length})`);
-  addInstanced(signGeometry(ctx.region.signShape), signMat, signs, `Signs (${signs.length})`);
-  group.userData.objectId = "furn_all";
-  group.userData.counts = { lamps: lamps.length, benches: benches.length, bins: bins.length, signs: signs.length };
-  furniturePlacements.current = { lamps, benches, bins, signs };
-  return group;
-}
-function polyLen(pts) {
-  let l = 0;
-  for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
-  return l;
-}
-function alongWithDir(pts, dist) {
-  let acc = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
-    if (acc + seg >= dist && seg > 0) {
-      const t = (dist - acc) / seg;
-      return {
-        p: { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, z: pts[i - 1].z + (pts[i].z - pts[i - 1].z) * t },
-        dir: { x: (pts[i].x - pts[i - 1].x) / seg, z: (pts[i].z - pts[i - 1].z) / seg }
-      };
-    }
-    acc += seg;
-  }
-  const n = pts.length;
-  const dx = pts[n - 1].x - pts[n - 2].x;
-  const dz = pts[n - 1].z - pts[n - 2].z;
-  const l = Math.hypot(dx, dz) || 1;
-  return { p: pts[n - 1], dir: { x: dx / l, z: dz / l } };
 }
 
 // src/procgen/vegetation.ts
@@ -27087,6 +27478,9 @@ function buildScene(graph, ctx) {
   const networkParts = [
     ["net_intersections", "Intersections", "markings", roadResult.intersections],
     ["net_sidewalks", "Sidewalks & curbs", "sidewalks", roadResult.sidewalks],
+    ["net_road_frames", "Road curb frame", "sidewalks", roadResult.frames],
+    ["net_framed_walks", "Framed footpaths", "sidewalks", roadResult.framedWalks],
+    ["net_framed_verge", "Framed verges", "sidewalks", roadResult.framedVerge],
     ["net_markings", "Lane markings (white)", "markings", roadResult.markings],
     ["net_markings_yellow", "Lane markings (yellow)", "markings", roadResult.markingsYellow],
     ["net_decals", "Surface decals", "markings", roadResult.decals],
@@ -27481,6 +27875,9 @@ var useEditor = create((set, get) => ({
   // carriageways. OFF by default (flat carriageways); module flag also defaults
   // off. Synced in generateScene + rebuildWithRoadCrown.
   roadCrown: false,
+  // "Framed roads" clean curb/footpath cross-section — off by default (geometry
+  // change, flag-gated like roadCrown). Synced in generateScene + rebuildWithFramedRoads.
+  framedRoads: false,
   // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
   // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
   roadsideGreenery: true,
@@ -27558,6 +27955,10 @@ var useEditor = create((set, get) => ({
   setRoadCrown: (v) => {
     setCrossSectionEnabled(v);
     set({ roadCrown: v });
+  },
+  setFramedRoads: (v) => {
+    setFramedRoadsEnabled(v);
+    set({ framedRoads: v });
   },
   setRoadsideGreenery: (v) => {
     setGreeneryEnabled(v);
@@ -27913,12 +28314,13 @@ function buildColliders(graph, roadResolutions2, opts = {}) {
   }
   const pad = 120;
   const bounds = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
+  const lanes = new LaneGrid(graph.roads);
   roadColliders(graph, roadResolutions2, elevation, colliders);
   intersectionColliders(nodes, elevation, colliders);
   sidewalkColliders(graph, roadResolutions2, nodes, colliders);
   bridgeRailColliders(graph, elevation, colliders);
   portalColliders(graph, nodes, colliders);
-  buildingColliders(graph, opts, excluded, colliders);
+  const roadClearedBuildings = buildingColliders(graph, opts, excluded, lanes, colliders);
   terrainCollider(bounds, colliders);
   waterSensors(graph, bounds, colliders);
   barrierColliders(graph, excluded, colliders);
@@ -27929,7 +28331,7 @@ function buildColliders(graph, roadResolutions2, opts = {}) {
     )
   );
   for (const c of colliders) stats[c.semantics.class]++;
-  return { colliders, bounds, stats };
+  return { colliders, bounds, stats, roadClearedBuildings };
 }
 function roadColliders(graph, resolutions, elevation, out) {
   const siblings = elevation.stats ? siblingFootwayBridgeIds(graph.roads) : /* @__PURE__ */ new Set();
@@ -28087,7 +28489,8 @@ function portalColliders(graph, nodes, out) {
     }
   }
 }
-function buildingColliders(graph, opts, excluded, out) {
+function buildingColliders(graph, opts, excluded, lanes, out) {
+  let roadCleared = 0;
   for (const b of graph.buildings) {
     if (excluded.has(b.id)) continue;
     const fp = b.footprint;
@@ -28099,11 +28502,38 @@ function buildingColliders(graph, opts, excluded, out) {
     }
     cx /= fp.length;
     cz /= fp.length;
-    const pts2 = fp.map((p) => new THREE16.Vector2(p.x - cx, -(p.z - cz)));
+    const live = opts.placements?.get(b.id);
+    let ring = fp;
+    if (!lanes.empty) {
+      const ox = live ? live.position[0] - cx : 0;
+      const oz = live ? live.position[2] - cz : 0;
+      const worldFp = ox || oz ? fp.map((p) => ({ x: p.x + ox, z: p.z + oz })) : fp;
+      let bMinX = Infinity, bMaxX = -Infinity, bMinZ = Infinity, bMaxZ = -Infinity;
+      for (const p of worldFp) {
+        if (p.x < bMinX) bMinX = p.x;
+        if (p.x > bMaxX) bMaxX = p.x;
+        if (p.z < bMinZ) bMinZ = p.z;
+        if (p.z > bMaxZ) bMaxZ = p.z;
+      }
+      const pen = lanes.anyNear(bMinX, bMinZ, bMaxX, bMaxZ) ? laneMaxPenetration(worldFp, lanes) : 0;
+      if (pen > LANE_CLEAR_MARGIN) {
+        roadCleared++;
+        if (!live) {
+          const carved = fp.map((p) => lanes.pushToKerb(p, KERB_CARVE_CLEAR) ?? p);
+          if (ringIsSimple(carved) && ringAreaM2(carved) >= 1 && laneMaxPenetration(carved, lanes) <= LANE_CLEAR_MARGIN) {
+            ring = carved;
+          } else {
+            continue;
+          }
+        } else {
+          continue;
+        }
+      }
+    }
+    const pts2 = ring.map((p) => new THREE16.Vector2(p.x - cx, -(p.z - cz)));
     if (THREE16.ShapeUtils.isClockWise(pts2)) pts2.reverse();
     const geo = new THREE16.ExtrudeGeometry(new THREE16.Shape(pts2), { depth: b.heightM, bevelEnabled: false });
     geo.rotateX(-Math.PI / 2);
-    const live = opts.placements?.get(b.id);
     const position = live ? [...live.position] : [cx, sampleTerrain(cx, cz), cz];
     const quaternion = live && live.rotation[1] !== 0 ? yawQuaternion(live.rotation[1]) : IDENTITY_Q;
     out.push({
@@ -28115,6 +28545,7 @@ function buildingColliders(graph, opts, excluded, out) {
       material: { ...CLASS_PHYSICS.building }
     });
   }
+  return roadCleared;
 }
 function terrainCollider(bounds, out) {
   if (isTerrainEnabled()) {
@@ -28199,6 +28630,120 @@ function insideAnyLane(q3, graph) {
     }
   }
   return false;
+}
+var LaneGrid = class _LaneGrid {
+  cells = /* @__PURE__ */ new Map();
+  static CELL = 24;
+  empty = true;
+  constructor(roads) {
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge || r.points.length < 2 || !(r.widthM > 0)) continue;
+      const half = r.widthM / 2;
+      for (let i = 1; i < r.points.length; i++) this.insert(r.points[i - 1], r.points[i], half);
+    }
+  }
+  insert(a, b, half) {
+    this.empty = false;
+    const C = _LaneGrid.CELL;
+    const pad = half + 1;
+    for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / C); cx <= Math.floor((Math.max(a.x, b.x) + pad) / C); cx++) {
+      for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / C); cz <= Math.floor((Math.max(a.z, b.z) + pad) / C); cz++) {
+        const key = `${cx},${cz}`;
+        let list2 = this.cells.get(key);
+        if (!list2) this.cells.set(key, list2 = []);
+        list2.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half });
+      }
+    }
+  }
+  /** Cheap gate: any lane segment within the given bbox (segments are padded into
+   *  neighbouring cells on insert, so a non-empty overlapping cell means a nearby
+   *  lane). Skips the expensive footprint sampling for interior buildings. */
+  anyNear(minX, minZ, maxX, maxZ) {
+    const C = _LaneGrid.CELL;
+    for (let cx = Math.floor(minX / C); cx <= Math.floor(maxX / C); cx++)
+      for (let cz = Math.floor(minZ / C); cz <= Math.floor(maxZ / C); cz++)
+        if (this.cells.has(`${cx},${cz}`)) return true;
+    return false;
+  }
+  /** Deepest penetration of q into any drivable, at-grade carriageway — how far
+   *  past the kerb toward a centerline; ≤0 when q is clear of every lane. */
+  penetration(q3) {
+    const C = _LaneGrid.CELL;
+    const list2 = this.cells.get(`${Math.floor(q3.x / C)},${Math.floor(q3.z / C)}`);
+    if (!list2) return 0;
+    let best = 0;
+    for (const s of list2) {
+      const p = this.pen(q3, s);
+      if (p > best) best = p;
+    }
+    return best;
+  }
+  /** Penetration depth of q into lane segment s (>0 when inside), else ≤0. */
+  pen(q3, s) {
+    const dx = s.bx - s.ax, dz = s.bz - s.az;
+    const len2 = dx * dx + dz * dz;
+    let t = len2 > 1e-9 ? ((q3.x - s.ax) * dx + (q3.z - s.az) * dz) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return s.half - Math.hypot(q3.x - (s.ax + dx * t), q3.z - (s.az + dz * t));
+  }
+  /** If q is inside a lane, return the point pushed just past that kerb (outward
+   *  from the deepest-penetrating carriageway); otherwise null (q already clear). */
+  pushToKerb(q3, clear) {
+    const C = _LaneGrid.CELL;
+    let best = null;
+    for (let ox = -1; ox <= 1; ox++)
+      for (let oz = -1; oz <= 1; oz++) {
+        const list2 = this.cells.get(`${Math.floor(q3.x / C) + ox},${Math.floor(q3.z / C) + oz}`);
+        if (!list2) continue;
+        for (const s of list2) {
+          const dx = s.bx - s.ax, dz = s.bz - s.az;
+          const len2 = dx * dx + dz * dz;
+          let t = len2 > 1e-9 ? ((q3.x - s.ax) * dx + (q3.z - s.az) * dz) / len2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const px = s.ax + dx * t, pz = s.az + dz * t;
+          const pen = s.half - Math.hypot(q3.x - px, q3.z - pz);
+          if (pen > 0 && (!best || pen > best.pen)) best = { px, pz, half: s.half, pen };
+        }
+      }
+    if (!best) return null;
+    let nx = q3.x - best.px, nz = q3.z - best.pz;
+    const nl = Math.hypot(nx, nz);
+    if (nl < 1e-6) {
+      nx = 1;
+      nz = 0;
+    } else {
+      nx /= nl;
+      nz /= nl;
+    }
+    return { x: best.px + nx * (best.half + clear), z: best.pz + nz * (best.half + clear) };
+  }
+};
+var LANE_CLEAR_MARGIN = 0.6;
+var KERB_CARVE_CLEAR = 0.7;
+function laneMaxPenetration(fp, lanes) {
+  let mp = 0;
+  for (const p of fp) {
+    const d = lanes.penetration(p);
+    if (d > mp) mp = d;
+  }
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of fp) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+  const step = Math.min(3, Math.max(0.75, Math.max(maxX - minX, maxZ - minZ) / 16));
+  for (let x = minX + step / 2; x < maxX; x += step) {
+    for (let z = minZ + step / 2; z < maxZ; z += step) {
+      const q3 = { x, z };
+      if (pointInRing(q3, fp)) {
+        const d = lanes.penetration(q3);
+        if (d > mp) mp = d;
+      }
+    }
+  }
+  return mp;
 }
 function clearDevicePosition(p, graph, drivingSide) {
   const near = nearestRoadInfo(p, graph.roads);
@@ -28481,14 +29026,21 @@ function colliderLint(graph, set) {
   const lanes = new DrivableLaneSet(graph.roads, analyzeRoadNodes(graph.roads));
   const intruders = [];
   for (const c of set.colliders) {
-    if (c.semantics.sensor || c.semantics.class !== "prop") continue;
+    if (c.semantics.sensor) continue;
+    if (c.semantics.class !== "prop" && c.semantics.class !== "building") continue;
     const [x, , z] = c.transform.position;
-    if (lanes.intrudes({ x, z })) intruders.push(c.semantics.featureId ?? c.id);
+    if (lanes.intrudes({ x, z })) intruders.push(`${c.semantics.class}:${c.semantics.featureId ?? c.id}`);
   }
   if (intruders.length) {
     warn(
-      `Collider: ${intruders.length} solid prop collider(s) intrude into a driving lane (e.g. ${intruders[0]}) \u2014 obstacle on the drivable surface`
+      `Collider: ${intruders.length} solid collider(s) intrude into a driving lane (e.g. ${intruders[0]}) \u2014 obstacle on the drivable surface`
     );
+  }
+  if (set.roadClearedBuildings) {
+    warnings.push({
+      severity: "info",
+      message: `Collider: ${set.roadClearedBuildings} building(s) on the carriageway cleared/carved off the road`
+    });
   }
   const steps = seamSteps(graph.roads);
   if (steps.count) {
@@ -29656,6 +30208,7 @@ async function generateCity(opts) {
   s.setUseCorridorElevation(opts.corridorElevation ?? true);
   s.setUseTerrain(opts.terrain ?? false);
   setCrossSectionEnabled(false);
+  setFramedRoadsEnabled(opts.framedRoads ?? true);
   const roadScale = clampRoadScale(opts.roadScale ?? 1);
   s.setRoadScale(roadScale);
   progress("Generating roads, buildings & props\u2026");
@@ -29667,7 +30220,7 @@ async function generateCity(opts) {
 // src/server/world.ts
 import { list, put } from "@vercel/blob";
 import { createHash } from "node:crypto";
-var CONTRACT = "w1.s3.c2.a1";
+var CONTRACT = "w1.s3.c2.a2";
 var MANIFEST_VERSION = 1;
 var JOB_STALE_MS = 15 * 60 * 1e3;
 var DEFAULT_OPTIONS = {
@@ -29675,6 +30228,7 @@ var DEFAULT_OPTIONS = {
   signals: true,
   roadScale: 1,
   corridorElevation: true,
+  framedRoads: true,
   bake: true
 };
 function normalizeRequest(body) {
@@ -29687,6 +30241,7 @@ function normalizeRequest(body) {
     signals: o.signals ?? DEFAULT_OPTIONS.signals,
     roadScale: Number.isFinite(+o.roadScale) ? +o.roadScale : DEFAULT_OPTIONS.roadScale,
     corridorElevation: o.corridorElevation ?? DEFAULT_OPTIONS.corridorElevation,
+    framedRoads: o.framedRoads ?? DEFAULT_OPTIONS.framedRoads,
     bake: o.bake ?? DEFAULT_OPTIONS.bake
   };
   const name = typeof body?.name === "string" && body.name.trim() ? body.name.trim() : void 0;
@@ -29829,6 +30384,7 @@ async function generateAndUpload(id, req) {
     signals: req.options.signals,
     roadScale: req.options.roadScale,
     corridorElevation: req.options.corridorElevation,
+    framedRoads: req.options.framedRoads,
     onProgress: (m) => console.log(`[world-api ${id}] ${m}`)
   });
   if (req.options.bake) {

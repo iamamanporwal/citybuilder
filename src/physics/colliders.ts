@@ -6,6 +6,7 @@ import {
   crownedRibbonGeometry,
   offsetPolyline,
   pointAlong,
+  pointInRing,
   polylineLength,
   ribbonGeometry,
   raisedRibbonGeometry,
@@ -124,12 +125,15 @@ export function buildColliders(
   const pad = 120
   const bounds: Rect = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad }
 
+  // shared drivable-lane oracle: buildings that overlap it are cleared off the road
+  const lanes = new LaneGrid(graph.roads)
+
   roadColliders(graph, roadResolutions, elevation, colliders)
   intersectionColliders(nodes, elevation, colliders)
   sidewalkColliders(graph, roadResolutions, nodes, colliders)
   bridgeRailColliders(graph, elevation, colliders)
   portalColliders(graph, nodes, colliders)
-  buildingColliders(graph, opts, excluded, colliders)
+  const roadClearedBuildings = buildingColliders(graph, opts, excluded, lanes, colliders)
   terrainCollider(bounds, colliders)
   waterSensors(graph, bounds, colliders)
   barrierColliders(graph, excluded, colliders)
@@ -141,7 +145,7 @@ export function buildColliders(
     ),
   ) as Record<ColliderClass, number>
   for (const c of colliders) stats[c.semantics.class]++
-  return { colliders, bounds, stats }
+  return { colliders, bounds, stats, roadClearedBuildings }
 }
 
 // ---------------------------------------------------------------------------
@@ -349,22 +353,64 @@ function buildingColliders(
   graph: CityGraph,
   opts: BuildCollidersOptions,
   excluded: Set<string>,
+  lanes: LaneGrid,
   out: ColliderDescriptor[],
-) {
+): number {
+  let roadCleared = 0
   for (const b of graph.buildings) {
     if (excluded.has(b.id)) continue
     const fp = b.footprint
     if (fp.length < 3 || !ringIsSimple(fp) || ringAreaM2(fp) < 1) continue // lint reports the count
-    // centroid-local extrusion, same (x, -z) shape space as procgen/buildings.ts
     let cx = 0, cz = 0
     for (const p of fp) { cx += p.x; cz += p.z }
     cx /= fp.length; cz /= fp.length
-    const pts2 = fp.map((p) => new THREE.Vector2(p.x - cx, -(p.z - cz)))
+
+    const live = opts.placements?.get(b.id)
+
+    // Road clearance: a building's solid collider must never sit on the drivable
+    // surface, or the car slams into an invisible wall. Test the WORLD footprint
+    // (an un-moved building's is its OSM ring; a live move shifts it — yaw is
+    // ignored, buildings are rarely rotated and this only gates the clearance).
+    let ring: Vec2[] = fp
+    if (!lanes.empty) {
+      const ox = live ? live.position[0] - cx : 0
+      const oz = live ? live.position[2] - cz : 0
+      const worldFp = ox || oz ? fp.map((p) => ({ x: p.x + ox, z: p.z + oz })) : fp
+      let bMinX = Infinity, bMaxX = -Infinity, bMinZ = Infinity, bMaxZ = -Infinity
+      for (const p of worldFp) {
+        if (p.x < bMinX) bMinX = p.x
+        if (p.x > bMaxX) bMaxX = p.x
+        if (p.z < bMinZ) bMinZ = p.z
+        if (p.z > bMaxZ) bMaxZ = p.z
+      }
+      const pen = lanes.anyNear(bMinX, bMinZ, bMaxX, bMaxZ) ? laneMaxPenetration(worldFp, lanes) : 0
+      if (pen > LANE_CLEAR_MARGIN) {
+        roadCleared++
+        // Carve the offending edge vertices back to the kerb, keeping the rest of
+        // the building solid. Bail to a full drop (no collider — building stays
+        // visible, car passes) when carving can't clear it: a road runs THROUGH
+        // the interior, or the push would fold the ring. Live-moved buildings are
+        // user-placed, so they're dropped rather than reshaped.
+        if (!live) {
+          const carved = fp.map((p) => lanes.pushToKerb(p, KERB_CARVE_CLEAR) ?? p)
+          if (ringIsSimple(carved) && ringAreaM2(carved) >= 1 && laneMaxPenetration(carved, lanes) <= LANE_CLEAR_MARGIN) {
+            ring = carved
+          } else {
+            continue
+          }
+        } else {
+          continue
+        }
+      }
+    }
+
+    // centroid-local extrusion, same (x, -z) shape space as procgen/buildings.ts
+    // (cx,cz stays the local origin even after a carve — world = local + position)
+    const pts2 = ring.map((p) => new THREE.Vector2(p.x - cx, -(p.z - cz)))
     if (THREE.ShapeUtils.isClockWise(pts2)) pts2.reverse()
     const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts2), { depth: b.heightM, bevelEnabled: false })
     geo.rotateX(-Math.PI / 2) // extrusion +z -> +y; base at y=0
 
-    const live = opts.placements?.get(b.id)
     const position: [number, number, number] = live ? [...live.position] : [cx, sampleTerrain(cx, cz), cz]
     // yaw-only rotation: buildings are edited with a Y gizmo; other axes ignored
     const quaternion = live && live.rotation[1] !== 0 ? yawQuaternion(live.rotation[1]) : IDENTITY_Q
@@ -377,6 +423,7 @@ function buildingColliders(
       material: { ...CLASS_PHYSICS.building },
     })
   }
+  return roadCleared
 }
 
 function terrainCollider(bounds: Rect, out: ColliderDescriptor[]) {
@@ -488,6 +535,147 @@ function insideAnyLane(q: Vec2, graph: CityGraph): boolean {
     }
   }
   return false
+}
+
+// ---------------------------------------------------------------------------
+// Drivable-lane grid — same membership rule as insideAnyLane (at-grade drivable
+// carriageway, centerline ± half) but spatially indexed for O(1) queries, so it
+// can be sampled across every building footprint without going quadratic. Used to
+// keep BUILDING colliders off the road: an OSM building whose footprint overlaps
+// a carriageway becomes an invisible obstacle the car slams into, since buildings
+// (unlike props) have no clearance/relocation step. sanitizeCity would drop such
+// buildings but is not wired into the production build, so we clear them here — at
+// the single collider producer that feeds both the drive preview and the export.
+// ---------------------------------------------------------------------------
+interface LaneCell { ax: number; az: number; bx: number; bz: number; half: number }
+
+class LaneGrid {
+  private cells = new Map<string, LaneCell[]>()
+  private static CELL = 24
+  empty = true
+
+  constructor(roads: RoadSegment[]) {
+    for (const r of roads) {
+      if (NON_DRIVABLE.has(r.roadClass) || r.tunnel || r.bridge || r.points.length < 2 || !(r.widthM > 0)) continue
+      const half = r.widthM / 2
+      for (let i = 1; i < r.points.length; i++) this.insert(r.points[i - 1], r.points[i], half)
+    }
+  }
+
+  private insert(a: Vec2, b: Vec2, half: number): void {
+    this.empty = false
+    const C = LaneGrid.CELL
+    const pad = half + 1
+    for (let cx = Math.floor((Math.min(a.x, b.x) - pad) / C); cx <= Math.floor((Math.max(a.x, b.x) + pad) / C); cx++) {
+      for (let cz = Math.floor((Math.min(a.z, b.z) - pad) / C); cz <= Math.floor((Math.max(a.z, b.z) + pad) / C); cz++) {
+        const key = `${cx},${cz}`
+        let list = this.cells.get(key)
+        if (!list) this.cells.set(key, (list = []))
+        list.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, half })
+      }
+    }
+  }
+
+  /** Cheap gate: any lane segment within the given bbox (segments are padded into
+   *  neighbouring cells on insert, so a non-empty overlapping cell means a nearby
+   *  lane). Skips the expensive footprint sampling for interior buildings. */
+  anyNear(minX: number, minZ: number, maxX: number, maxZ: number): boolean {
+    const C = LaneGrid.CELL
+    for (let cx = Math.floor(minX / C); cx <= Math.floor(maxX / C); cx++)
+      for (let cz = Math.floor(minZ / C); cz <= Math.floor(maxZ / C); cz++)
+        if (this.cells.has(`${cx},${cz}`)) return true
+    return false
+  }
+
+  /** Deepest penetration of q into any drivable, at-grade carriageway — how far
+   *  past the kerb toward a centerline; ≤0 when q is clear of every lane. */
+  penetration(q: Vec2): number {
+    const C = LaneGrid.CELL
+    const list = this.cells.get(`${Math.floor(q.x / C)},${Math.floor(q.z / C)}`)
+    if (!list) return 0
+    let best = 0
+    for (const s of list) {
+      const p = this.pen(q, s)
+      if (p > best) best = p
+    }
+    return best
+  }
+
+  /** Penetration depth of q into lane segment s (>0 when inside), else ≤0. */
+  private pen(q: Vec2, s: LaneCell): number {
+    const dx = s.bx - s.ax, dz = s.bz - s.az
+    const len2 = dx * dx + dz * dz
+    let t = len2 > 1e-9 ? ((q.x - s.ax) * dx + (q.z - s.az) * dz) / len2 : 0
+    t = t < 0 ? 0 : t > 1 ? 1 : t
+    return s.half - Math.hypot(q.x - (s.ax + dx * t), q.z - (s.az + dz * t))
+  }
+
+  /** If q is inside a lane, return the point pushed just past that kerb (outward
+   *  from the deepest-penetrating carriageway); otherwise null (q already clear). */
+  pushToKerb(q: Vec2, clear: number): Vec2 | null {
+    const C = LaneGrid.CELL
+    let best: { px: number; pz: number; half: number; pen: number } | null = null
+    for (let ox = -1; ox <= 1; ox++)
+      for (let oz = -1; oz <= 1; oz++) {
+        const list = this.cells.get(`${Math.floor(q.x / C) + ox},${Math.floor(q.z / C) + oz}`)
+        if (!list) continue
+        for (const s of list) {
+          const dx = s.bx - s.ax, dz = s.bz - s.az
+          const len2 = dx * dx + dz * dz
+          let t = len2 > 1e-9 ? ((q.x - s.ax) * dx + (q.z - s.az) * dz) / len2 : 0
+          t = t < 0 ? 0 : t > 1 ? 1 : t
+          const px = s.ax + dx * t, pz = s.az + dz * t
+          const pen = s.half - Math.hypot(q.x - px, q.z - pz)
+          if (pen > 0 && (!best || pen > best.pen)) best = { px, pz, half: s.half, pen }
+        }
+      }
+    if (!best) return null
+    let nx = q.x - best.px, nz = q.z - best.pz
+    const nl = Math.hypot(nx, nz)
+    if (nl < 1e-6) { nx = 1; nz = 0 } else { nx /= nl; nz /= nl }
+    return { x: best.px + nx * (best.half + clear), z: best.pz + nz * (best.half + clear) }
+  }
+}
+
+// A building "blocks" a lane only when it reaches deeper than this past the kerb;
+// matches colliderLint's LANE_INTRUSION_MARGIN so any building we keep also passes
+// the audit. A shallow edge clip (the car still has clear lane) keeps its full
+// collider. Above it, the footprint is carved back to the kerb, or dropped when a
+// road runs through the interior and carving can't clear it.
+const LANE_CLEAR_MARGIN = 0.6
+const KERB_CARVE_CLEAR = 0.7
+
+/**
+ * Deepest penetration of a footprint into any drivable lane — how far the building
+ * reaches past a kerb toward a centerline. Samples the perimeter vertices AND a
+ * coarse interior grid: the interior catch is essential, since a road passing
+ * THROUGH a building leaves no vertex inside the lane yet the carriageway crosses
+ * the footprint (that collider would block the road). 0 when the footprint is clear.
+ */
+function laneMaxPenetration(fp: Vec2[], lanes: LaneGrid): number {
+  let mp = 0
+  for (const p of fp) {
+    const d = lanes.penetration(p)
+    if (d > mp) mp = d
+  }
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const p of fp) {
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.z < minZ) minZ = p.z
+    if (p.z > maxZ) maxZ = p.z
+  }
+  const step = Math.min(3, Math.max(0.75, Math.max(maxX - minX, maxZ - minZ) / 16))
+  for (let x = minX + step / 2; x < maxX; x += step) {
+    for (let z = minZ + step / 2; z < maxZ; z += step) {
+      const q = { x, z }
+      if (pointInRing(q, fp)) {
+        const d = lanes.penetration(q)
+        if (d > mp) mp = d
+      }
+    }
+  }
+  return mp
 }
 
 /**

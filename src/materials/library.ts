@@ -319,6 +319,20 @@ export const sidewalkMaterial = std({
 })
 for (const t of [sidewalkMaterial.map!, sidewalkMaterial.normalMap!]) t.repeat.set(1 / 2.4, 1 / 2.4)
 
+// ---- "Framed roads" style (procgen/framedRoads.ts): a bright smooth concrete
+// curb strip that frames the carriageway, plus its footpath. Both DoubleSide so
+// the split cross-section (top ribbons + skirts built by hand in roads.ts) reads
+// from every angle regardless of triangle winding — the framed slabs are only
+// emitted behind the flag, so this never touches the default single-sided path.
+// Uniform flat concrete — no slab-grout texture (that read as "dark and white"
+// patches on the footpath). Curb strip a hair lighter than the footpath so the
+// frame still reads, but both are a single clean tone.
+export const curbFrameMaterial = std({ color: '#cfccc1', roughness: 0.78, metalness: 0, side: THREE.DoubleSide })
+export const framedWalkMaterial = std({ color: '#c6c3b8', roughness: 0.85, metalness: 0, side: THREE.DoubleSide })
+// Tree-lawn verge for framed roads — matches the land grass tone so it reads as
+// one continuous green, raised into its own trough so it never fights the ground.
+export const framedVergeMaterial = std({ color: '#5d7050', roughness: 1, metalness: 0, side: THREE.DoubleSide })
+
 // ---------- building facades (per-instance tint + seeded UV offset) ----------
 
 const FACADE_GLASSINESS: Record<FacadeSet, { rough: number; metal: number }> = {

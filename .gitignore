@@ -19,3 +19,6 @@ dist/
 npm-debug.log*
 .vercel
 .env*
+
+# Generated framed-road kit output (npm run experiment:roads)
+experiment-roads/

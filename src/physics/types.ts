@@ -56,4 +56,7 @@ export interface ColliderSet {
   colliders: ColliderDescriptor[]
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number }
   stats: Record<ColliderClass, number>
+  /** Buildings whose footprint sat on a drivable lane: collider dropped or carved
+   *  back to the kerb so the car can't hit an invisible obstacle on the road. */
+  roadClearedBuildings?: number
 }

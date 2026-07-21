@@ -17,6 +17,7 @@
 //   --no-trees / --no-signals      skip those OSM layers
 //   --no-elevation                 disable the network elevation solve
 //   --terrain                      enable terrain relief (off by default → flat world)
+//   --no-framed-roads              disable the framed road cross-section (on by default)
 //   --bake                         Draco-compress GLBs in-process
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -40,11 +41,12 @@ interface Args {
   signals: boolean
   elevation: boolean
   terrain: boolean
+  framedRoads: boolean
   bake: boolean
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { trees: true, signals: true, elevation: true, terrain: false, bake: false }
+  const a: Args = { trees: true, signals: true, elevation: true, terrain: false, framedRoads: true, bake: false }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     switch (flag) {
@@ -65,6 +67,8 @@ function parseArgs(argv: string[]): Args {
       case '--no-elevation': a.elevation = false; break
       case '--terrain': a.terrain = true; break
       case '--no-terrain': a.terrain = false; break
+      case '--framed-roads': a.framedRoads = true; break
+      case '--no-framed-roads': a.framedRoads = false; break
       case '--bake': a.bake = true; break
       default: throw new Error(`Unknown flag: ${flag}`)
     }
@@ -102,6 +106,7 @@ async function main() {
     roadScale: args.roadScale,
     corridorElevation: args.elevation,
     terrain: args.terrain,
+    framedRoads: args.framedRoads,
     onProgress: (m) => console.log(`  ${m}`),
   })
 

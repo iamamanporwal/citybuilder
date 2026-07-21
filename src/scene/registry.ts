@@ -295,6 +295,9 @@ export function buildScene(graph: CityGraph, ctx: ResolvedContext): SceneObject[
   const networkParts: [string, string, SceneObject['type'], THREE.Object3D | null][] = [
     ['net_intersections', 'Intersections', 'markings', roadResult.intersections],
     ['net_sidewalks', 'Sidewalks & curbs', 'sidewalks', roadResult.sidewalks],
+    ['net_road_frames', 'Road curb frame', 'sidewalks', roadResult.frames],
+    ['net_framed_walks', 'Framed footpaths', 'sidewalks', roadResult.framedWalks],
+    ['net_framed_verge', 'Framed verges', 'sidewalks', roadResult.framedVerge],
     ['net_markings', 'Lane markings (white)', 'markings', roadResult.markings],
     ['net_markings_yellow', 'Lane markings (yellow)', 'markings', roadResult.markingsYellow],
     ['net_decals', 'Surface decals', 'markings', roadResult.decals],

@@ -14,6 +14,7 @@ import { cityGraph, sceneContext } from '../scene/registry'
 import { scaleRoadNetwork } from '../procgen/roadScale'
 import { setTerrainEnabled } from '../procgen/terrain/config'
 import { setCrossSectionEnabled } from '../procgen/crossSection'
+import { setFramedRoadsEnabled } from '../procgen/framedRoads'
 import { setWetness } from '../materials/library'
 import type { CityGraph } from '../types'
 import {
@@ -75,6 +76,7 @@ async function generateScene(raw: any, name: string) {
   // off for unit-test isolation; the app default is on via the store).
   setTerrainEnabled(s.useTerrain)
   setCrossSectionEnabled(s.roadCrown)
+  setFramedRoadsEnabled(s.framedRoads)
   // Weather is a live shader uniform (no rebuild); sync it to the store default
   // so a fresh load matches the "wet" default without needing a toolbar click.
   setWetness(s.weather === 'wet' ? 1 : 0)
@@ -239,6 +241,17 @@ export async function rebuildWithRoadCrown(enabled: boolean): Promise<void> {
   s.initScene(graph, sceneContext)
   s.setLintReport(buildGateLints())
   s.showToast(enabled ? 'Road crown + banking on' : 'Flat carriageways')
+}
+
+export async function rebuildWithFramedRoads(enabled: boolean): Promise<void> {
+  const s = useEditor.getState()
+  s.setFramedRoads(enabled)
+  setFramedRoadsEnabled(enabled)
+  const graph = workingGraph()
+  if (!graph || !sceneContext) return
+  s.initScene(graph, sceneContext)
+  s.setLintReport(buildGateLints())
+  s.showToast(enabled ? 'Framed roads on — clean curbs + footpaths' : 'Framed roads off')
 }
 
 export async function rebuildWithGreenery(enabled: boolean): Promise<void> {

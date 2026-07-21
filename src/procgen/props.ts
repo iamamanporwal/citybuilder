@@ -250,6 +250,35 @@ export class CarriagewayIndex {
     }
   }
 
+  /** Distance from p to the nearest OTHER carriageway's EDGE (distance to its
+   *  centerline minus its half-width; ≤0 = inside it). Searches the 3×3 cell
+   *  neighbourhood so nearby parallel roads are found even across a cell seam.
+   *  Returns null when nothing is within `cap` metres. Used by framed roads to
+   *  detect dual-carriageway/median sides. */
+  edgeGapTo(p: Vec2, excludeId: string, cap = 8): number | null {
+    const C = CarriagewayIndex.CELL
+    const cx = Math.floor(p.x / C)
+    const cz = Math.floor(p.z / C)
+    let best: number | null = null
+    for (let ix = cx - 1; ix <= cx + 1; ix++) {
+      for (let iz = cz - 1; iz <= cz + 1; iz++) {
+        const list = this.cells.get(`${ix},${iz}`)
+        if (!list) continue
+        for (const s of list) {
+          if (s.id === excludeId) continue
+          const dx = s.bx - s.ax
+          const dz = s.bz - s.az
+          const len2 = dx * dx + dz * dz
+          let t = len2 > 1e-9 ? ((p.x - s.ax) * dx + (p.z - s.az) * dz) / len2 : 0
+          t = t < 0 ? 0 : t > 1 ? 1 : t
+          const gap = Math.hypot(p.x - (s.ax + dx * t), p.z - (s.az + dz * t)) - s.half
+          if (gap < cap && (best === null || gap < best)) best = gap
+        }
+      }
+    }
+    return best
+  }
+
   /** True when p is inside any carriageway (+margin), optionally ignoring one road. */
   insideCarriageway(p: Vec2, margin: number, excludeId?: string): boolean {
     const C = CarriagewayIndex.CELL

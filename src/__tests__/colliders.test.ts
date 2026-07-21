@@ -55,7 +55,7 @@ describe('collider generation (Lower Manhattan fixture)', () => {
     }
   })
 
-  it('covers every valid building footprint', () => {
+  it('covers every valid building footprint except those cleared off the carriageway', () => {
     const buildingIds = new Set(
       set.colliders.filter((c) => c.semantics.class === 'building').map((c) => c.semantics.featureId),
     )
@@ -63,7 +63,14 @@ describe('collider generation (Lower Manhattan fixture)', () => {
       (b) => b.footprint.length >= 3 && ringIsSimple(b.footprint) && ringAreaM2(b.footprint) >= 1,
     )
     expect(valid.length).toBeGreaterThan(100)
-    for (const b of valid) expect(buildingIds.has(b.id), `building ${b.id} missing collider`).toBe(true)
+    // Buildings whose footprint sits on — or is crossed by — a drivable lane are
+    // intentionally cleared (kept visible, collider dropped) so the car can't hit
+    // an invisible obstacle on the road. Every other valid building keeps a collider.
+    const missing = valid.filter((b) => !buildingIds.has(b.id))
+    expect(missing.length).toBeLessThanOrEqual(set.roadClearedBuildings ?? 0)
+    // clearance must stay surgical: a regression that nukes buildings wholesale
+    // would slip past a bare "some may be missing" check.
+    expect(missing.length).toBeLessThan(valid.length * 0.05)
   })
 
   it('emits exactly one terrain box and water sensors', () => {

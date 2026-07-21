@@ -36,6 +36,7 @@ async function generateAndUpload(id: string, req: MapRequest): Promise<void> {
     signals: req.options.signals,
     roadScale: req.options.roadScale,
     corridorElevation: req.options.corridorElevation,
+    framedRoads: req.options.framedRoads,
     onProgress: (m) => console.log(`[world-api ${id}] ${m}`),
   })
   if (req.options.bake) {

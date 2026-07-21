@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
 import { exportCity, exportDesignerGlb } from '../export/exporter'
-import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle, rebuildWithTerrain, rebuildWithGreenery, rebuildWithRoadCrown } from '../app/buildCity'
+import { rebuildWithLibraryAssets, rebuildWithCorridorElevation, rebuildWithRoadScale, rebuildWithRoadStyle, rebuildWithTerrain, rebuildWithGreenery, rebuildWithRoadCrown, rebuildWithFramedRoads } from '../app/buildCity'
 
 export function Toolbar() {
   const cameraMode = useEditor((s) => s.cameraMode)
@@ -158,6 +158,7 @@ function SettingsMenu() {
   const useCorridorElevation = useEditor((s) => s.useCorridorElevation)
   const useTerrain = useEditor((s) => s.useTerrain)
   const roadCrown = useEditor((s) => s.roadCrown)
+  const framedRoads = useEditor((s) => s.framedRoads)
   const roadsideGreenery = useEditor((s) => s.roadsideGreenery)
   const weather = useEditor((s) => s.weather)
   const roadStyle = useEditor((s) => s.roadStyle)
@@ -186,7 +187,7 @@ function SettingsMenu() {
     }
   }, [open])
 
-  const activeCount = (fxPreview ? 1 : 0) + (useLibraryAssets ? 1 : 0) + (useCorridorElevation ? 1 : 0) + (useTerrain ? 1 : 0) + (roadsideGreenery ? 1 : 0)
+  const activeCount = (fxPreview ? 1 : 0) + (useLibraryAssets ? 1 : 0) + (useCorridorElevation ? 1 : 0) + (useTerrain ? 1 : 0) + (roadsideGreenery ? 1 : 0) + (roadCrown ? 1 : 0) + (framedRoads ? 1 : 0)
 
   return (
     <div className="tb-settings-wrap" ref={wrap}>
@@ -253,6 +254,14 @@ function SettingsMenu() {
             <span>
               <b>🛣️ Road crown &amp; banking</b>
               <em>Crowned carriageways that shed water + superelevated curves. Rebuilds.</em>
+            </span>
+          </label>
+
+          <label className="tb-setting-row">
+            <input type="checkbox" checked={framedRoads} onChange={() => rebuildWithFramedRoads(!framedRoads)} />
+            <span>
+              <b>🧱 Framed roads</b>
+              <em>Bright concrete curb frame + footpath on every road for a clean look. Rebuilds.</em>
             </span>
           </label>
 

@@ -19,6 +19,9 @@ vi.mock('../materials/library', () => {
   const mat = () => new THREE.MeshBasicMaterial()
   return {
     roadMaterial: mat,
+    curbFrameMaterial: mat(),
+    framedWalkMaterial: mat(),
+    framedVergeMaterial: mat(),
     sidewalkMaterial: mat(),
     facadeMaterial: mat,
     roofMaterial: mat,

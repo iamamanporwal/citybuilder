@@ -19,7 +19,8 @@ import type { BBox } from '../ingest/overpassFetch'
 // w = world-api manifest, s = semanticsVersion, c = collider formatVersion,
 // a = visual asset revision (baked textures/materials in the exported GLBs).
 // a1: domed cobble/paver albedo + stronger stone normals.
-export const CONTRACT = 'w1.s3.c2.a1'
+// a2: framed road cross-section (raised curb-frame + footpath) default on.
+export const CONTRACT = 'w1.s3.c2.a2'
 export const MANIFEST_VERSION = 1
 
 /** How long a running job may go without finishing before a re-POST restarts it. */
@@ -30,6 +31,7 @@ export interface MapOptions {
   signals: boolean
   roadScale: number
   corridorElevation: boolean
+  framedRoads: boolean
   bake: boolean
 }
 
@@ -44,6 +46,7 @@ export const DEFAULT_OPTIONS: MapOptions = {
   signals: true,
   roadScale: 1,
   corridorElevation: true,
+  framedRoads: true,
   bake: true,
 }
 
@@ -57,6 +60,7 @@ export function normalizeRequest(body: any): MapRequest | { error: string } {
     signals: o.signals ?? DEFAULT_OPTIONS.signals,
     roadScale: Number.isFinite(+o.roadScale) ? +o.roadScale : DEFAULT_OPTIONS.roadScale,
     corridorElevation: o.corridorElevation ?? DEFAULT_OPTIONS.corridorElevation,
+    framedRoads: o.framedRoads ?? DEFAULT_OPTIONS.framedRoads,
     bake: o.bake ?? DEFAULT_OPTIONS.bake,
   }
   const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : undefined

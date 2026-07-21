@@ -17,6 +17,7 @@ import { setCorridorElevationEnabled } from '../procgen/corridor'
 import { setTerrainEnabled } from '../procgen/terrain/config'
 import { setGreeneryEnabled } from '../procgen/vegetation'
 import { setCrossSectionEnabled } from '../procgen/crossSection'
+import { setFramedRoadsEnabled } from '../procgen/framedRoads'
 import { setRoadStyle, setWetness, type RoadStyle } from '../materials/library'
 import { setPaintWear } from '../procgen/materials'
 import { clampRoadScale } from '../procgen/roadScale'
@@ -66,6 +67,7 @@ interface EditorState {
   useCorridorElevation: boolean
   useTerrain: boolean
   roadCrown: boolean
+  framedRoads: boolean
   roadsideGreenery: boolean
   weather: 'dry' | 'wet'
   roadStyle: RoadStyle
@@ -92,6 +94,7 @@ interface EditorState {
   setUseCorridorElevation: (v: boolean) => void
   setUseTerrain: (v: boolean) => void
   setRoadCrown: (v: boolean) => void
+  setFramedRoads: (v: boolean) => void
   setRoadsideGreenery: (v: boolean) => void
   setWeather: (v: 'dry' | 'wet') => void
   setRoadStyle: (v: RoadStyle) => void
@@ -202,6 +205,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   // carriageways. OFF by default (flat carriageways); module flag also defaults
   // off. Synced in generateScene + rebuildWithRoadCrown.
   roadCrown: false,
+  // "Framed roads" clean curb/footpath cross-section — off by default (geometry
+  // change, flag-gated like roadCrown). Synced in generateScene + rebuildWithFramedRoads.
+  framedRoads: false,
   // Roadside greenery (procgen/vegetation) — grass tufts + shrubs on verges,
   // ON by default. Kept in sync with the module flag; toolbar toggle flips both.
   roadsideGreenery: true,
@@ -279,6 +285,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   setRoadCrown: (v) => {
     setCrossSectionEnabled(v)
     set({ roadCrown: v })
+  },
+  setFramedRoads: (v) => {
+    setFramedRoadsEnabled(v)
+    set({ framedRoads: v })
   },
   setRoadsideGreenery: (v) => {
     setGreeneryEnabled(v)

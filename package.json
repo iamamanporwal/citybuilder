@@ -13,7 +13,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "bake": "node tools/bake-glb.mjs",
-    "generate": "tsx tools/generate-city.ts"
+    "generate": "tsx tools/generate-city.ts",
+    "experiment:roads": "tsx tools/experiment-roads.ts && node tools/experiment-roads-check.mjs && node tools/experiment-roads-preview.mjs",
+    "framed-kit": "tsx tools/framed-kit.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
