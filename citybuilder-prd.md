@@ -1,10 +1,10 @@
 # CityBuilder — Product Requirements Document
 
-**Status:** Draft v0.2 — MVP (P0) implemented client-side; server-side pipeline still vision
+**Status:** Draft v0.3 — MVP (P0) implemented client-side; headless World API live (CLI + Vercel); server-side bake pipeline still vision
 **Owner:** (you)
-**Last updated:** 14 July 2026
+**Last updated:** 21 July 2026
 
-> **How to read this doc.** Sections tagged *(implemented in MVP)* describe code that exists and is tested today (§7A–§7F, §14A). Everything else is the target architecture. §19 is the authoritative **PRD-vs-codebase gap map** — read it to know exactly what is real versus aspirational before planning work. §20 is the **repository & file structure map** — a one-line description of every source file, for locating a subsystem in the tree.
+> **How to read this doc.** Sections tagged *(implemented in MVP)* describe code that exists and is tested today (§7A–§7H, §8.5–§8.8, §14A–§14B). Everything else is the target architecture. §19 is the authoritative **PRD-vs-codebase gap map** — read it to know exactly what is real versus aspirational before planning work. §20 is the **repository & file structure map** — a one-line description of every source file, for locating a subsystem in the tree.
 
 ---
 
@@ -214,7 +214,7 @@ All output materials are **PBR metallic-roughness, authored unlit** — no baked
 
 ## 7C. Robustness: Roads, Water, Flicker, Props *(implemented in MVP)*
 
-Four content-correctness guarantees, each enforced by generation rules **and** an automatic linter. All output stays geometry + textures; rendering remains the engine's job.
+Five content-correctness guarantees, each enforced by generation rules **and** an automatic linter. All output stays geometry + textures; rendering remains the engine's job.
 
 **1 — Zero z-fighting.**
 - Everything lives in a **local ENU meter frame** (small coordinates, tight camera depth range).
@@ -230,12 +230,18 @@ Four content-correctness guarantees, each enforced by generation rules **and** a
 
 **3 — Water.**
 - Lakes from `natural=water` polygons; **rivers/canals/streams from buffered `waterway` centerlines** (tagged width or class defaults); **sea assembled from `natural=coastline` ways** using the OSM water-on-the-right convention — chains are stitched, closed around the data bounds both ways, and the closure containing the fewest buildings is kept (buildings are land). ESA WorldCover remains the supplementary source in the bake service, as does OSMCoastline/osmdata prebuilt polygons for whole-coast fidelity.
-- Water renders as a **tagged flat water surface at sea level** with a water material, placed on its own layer below roads and slightly overlapping shore seams; terrain carving is a bake-service boolean (layer convention prevents coplanarity in-editor).
+- Water renders as a **tagged flat water surface at sea level** with a water material, placed on its own layer below roads and slightly overlapping shore seams; terrain carving is a bake-service boolean (layer convention prevents coplanarity in-editor). Multipolygon water relations are assembled with proper holes.
+- **Waterfront buildings are reseated, not deleted.** A building with ≥ 50 % of its footprint *vertices* over water (a vertex-fraction test — a centroid test misclassifies long piers) is reseated to grade and given a **concrete pier deck** under its footprint (all decks merge into one draw call); `historic=ship` features are dropped entirely — a boat is not a building.
 
 **4 — Common props.**
 - A **prop library mapped by OSM tag through the Context Resolver**: fountains (`amenity=fountain`), statues/memorials (`historic=memorial|monument`, `tourism=artwork`), bus stops (`highway=bus_stop`), benches, bins, lamps, playgrounds, and fences/walls (`barrier=*`) — all with **seeded per-instance variety** (variant choice, proportions, rotation).
 - Ships with procedural CC0-style stand-ins; real **CC0 packs (Kenney / Quaternius / Poly Pizza)** drop into `/public/props/` and take precedence per kind. Surface materials follow the §7B library (ambientCG/Poly Haven swap-ins at bake), packaged per the KTX2 manifest.
 - **Wikidata-linked props route to AI generation**: statues/fountains carrying a `wikidata` tag register a generation slot in the gateway — the same replace/approve/cache flow buildings use.
+
+**5 — Prop & building placement engine.**
+- Every street prop (lamps, signals, signs, benches, bins, bus stops, curbside devices) obeys shared **curbside placement rules**: offset outside the carriageway with per-kind clearance, snapped to the road's solved elevation, and **deck-riding on bridges** (props on a bridge sit on the deck, not the water below). Rails and fences render DoubleSide so they never vanish from behind.
+- A **penetration-based road-clearance test** keeps building geometry out of the carriageway (offenders are nudged or culled) — penetration depth, not centroid distance, is what catches long thin footprints.
+- **QA loop:** a `__cb` debug bridge exposes build/lint/camera state to Playwright, so headless **screenshot audits** can drive the camera to any coordinate and visually verify placements (used by the project's verify skill).
 
 ## 7D. Asset Library & Labeling *(implemented in MVP)*
 
@@ -277,6 +283,8 @@ The asset library is not limited to bundled packs — it plugs into **Sketchfab'
 
 Both text `.gltf` (Quaternius, with sibling `.bin`/textures) and self-contained `.glb` (Sketchfab) load directly: `GLTFLoader` resolves relative resources against the `.gltf` URL, which the `/assetlib/**` dev middleware serves — so no offline GLB-packing step is needed. Library files are served from the repo at `/assetlib/**` (kept out of `/public` to avoid duplicating ~250 MB); a static production build must publish `assets/library` alongside `dist`.
 
+**In-app Curation Studio *(implemented in MVP)*.** Curation is no longer only an offline script: a visual **Curate Asset Library** studio (`src/ui/CurationStudio.tsx`) lets the user hand-pick the model variants used per kind (tree, lamp, bench, signal, …) from live 3D previews. Picks persist in a zustand store (`src/state/curation.ts`) that the build path reads directly — no JSON download/re-import round-trip — and a baked selection (33 hand-picked models) ships as the default. The **Kenney City Kit Roads** pack was added alongside the Quaternius MegaKit (road tiles remain reference-only; roads stay procedural).
+
 A **Library assets** toolbar toggle rebuilds the current scene in place (`rebuildWithLibraryAssets`, reusing the cached City Graph + context) so procedural and library looks can be compared instantly. **As of §7F it defaults OFF** — the Building Recognizer drives appearance by default, and the local library is one (opt-in) branch of its fallback chain. The toggle and every function above stay intact for re-enabling and improving later. Any feature with no pooled asset (or a load error) falls back to procedural per-kind — the scene never breaks.
 
 ## 7F. Building Recognizer & Appearance Pipeline *(implemented in MVP)*
@@ -304,6 +312,22 @@ A **Library assets** toolbar toggle rebuilds the current scene in place (`rebuil
 **Tests.** `src/__tests__/recognizer.test.ts` pins the contract: roof:shape normalization, deterministic per-building descriptors that vary between buildings, style inference from `building:architecture` / Wikidata style / structure, valid `FacadeSet`/`RoofSet` mapping, the fallback-chain path selection (library-vs-descriptor, tall-building exclusion, photo-vs-no-photo upgrade), per-building plan caching, and the library flag defaulting off.
 
 **Roadmap.** (1) Wire a real VLM endpoint (`VITE_VLM_ENDPOINT`) and a street-level photo source (**Mapillary**, aerial tiles) so `hasPhoto` extends past Wikidata landmarks; (2) LoD2/GlobalBuildingAtlas massing in the bake service to replace flat extrusions where available; (3) neighborhood-level style smoothing so a recognized block reads as a coherent street, not independent guesses.
+
+## 7G. Terrain relief system *(implemented in MVP)*
+
+Ground is no longer an implicit flat plane: a **deterministic, hydrology-aware terrain height field** (`src/procgen/terrain/field.ts`) is the single elevation authority that every consumer samples — visual ground mesh, physics collider, building seating, prop grounding, vegetation roots, and the road corridor solve's `baseHeight` (§8.5) all read the same field, so nothing floats or sinks.
+
+- **One field, many consumers.** `sampleTerrain(x, z)` is pure and seeded; the visual terrain and the physics collider are built from the *same* geometry (`terrain/mesh.ts`), so the car always drives the ground it sees.
+- **Hydrology-aware.** Water bodies depress the field (riverbed depressions), so rivers sit in real channels rather than being painted on a plane; `conformTerrainToRoads` blends the ground to meet road corridors (this satisfies the terrain-skirt requirement from the §8.6 roadmap).
+- **Flag-gated.** The "⛰️ Terrain relief" toolbar toggle flips it for instant A/B; the module flag (`terrain/config.ts`) defaults **OFF** (flat world) so every parity/flicker/collider test stays byte-identical.
+- Tests: `terrainField`, `terrainCarve`, `terrainIntegration`.
+
+## 7H. Landmark catalog *(implemented in MVP)*
+
+Named / wikidata-tagged OSM features route through a **landmark catalog** (`src/scene/landmarks.ts`) that maps recognizable real-world structures to bespoke procedural (or glTF) treatments instead of generic extrusions:
+
+- **Procedural bridge superstructures** (`src/procgen/bridges.ts`): suspension / cable-stayed (towers, catenary main cables, hangers, girder — the Golden Gate class) and **stone-arch** (the Charles Bridge class), built over the same road-deck corridor the traffic drives on.
+- A prefetched **Prague Staré Město** sample (`public/data/prague_osm.json`) ships as the landmark/bridge showcase alongside Lower Manhattan; the `pragueBuild` and `landmarkBridge` tests pin it.
 
 ---
 
@@ -337,6 +361,39 @@ Build a road graph from the data → clean topology (merge nodes, resolve grade 
 ### 8.4 Regional rule packs
 
 Road markings, sign shapes/colors, driving side, and furniture spacing differ by country. A per-region rule pack drives these. Building a handful (≈15–30) covers most target cities and is what makes each city feel locally correct rather than generically American.
+
+### 8.5 Road geometry system *(implemented in MVP)*
+
+The in-browser road engine solves true 3D geometry, not draped 2D ribbons:
+
+- **Network elevation solve (default ON).** A corridor graph (`src/procgen/corridor/`) runs a Gauss-Seidel node relaxation with grade-limited edges over the whole network, giving every road a continuous, drivable vertical profile; bridges ramp to their `layer` height and back. Renderer, colliders, markings, and semantics all read the road y-channel through one seam (`corridor/index.ts`).
+- **Junction consolidation — one junction, one height.** Osm2streets-style clustering contracts dense node piles (dual carriageways, slip lanes, bridgeheads) into single junctions before the solve, killing the "pancake pile" artifact (`corridor/cluster.ts`).
+- **Polygonal junction surfaces.** Intersections are dedicated polygon pads with rounded, flared arm-hulls (no circle-union blobs). Pedestrian plazas are raised onto a real curb slab, not flush paint.
+- **Crown, camber & superelevation (flag, OFF by default).** `crossSection.ts` crowns the carriageway (2 % centre-raise, kerbs stay at grade) and banks curves up to 6 %, fading to flat near junctions so a crowned mid-block meets a flat junction disc with no seam step. The surface mesh, the marking/decal elevation sampler, and the physics collider share the same offset function — the car rides exactly what it sees.
+- **Framed roads (flag; default ON for World API/headless, OFF in the editor toggle).** `framedRoads.ts` + the band-based `framedKit/` engine wrap the carriageway in a raised concrete curb-frame → grass verge → footpath cross-section with per-road-class presets (motorway/trunk stay frameless — expressways have shoulders, not sidewalks). Bands *partition* the width with exact shared seams, so coplanar z-fighting is structurally impossible. Opt-out per API request (`framedRoads: false`) or CLI (`--no-framed-roads`); the GLB kit + `npm run experiment:roads` harness remain the design reference.
+- **osm2streets spike (GO).** Lane-level geometry from our OSM via osm2streets-js (WASM) is proven feasible (`docs/osm2streets-spike.md`) — the planned path to true per-lane rendering.
+
+### 8.6 Road surface, weather & look-dev fidelity *(implemented in MVP)*
+
+Executed from a deep-research **Top-25 road visual-techniques roadmap** (`docs/road-visual-techniques-research.md`); Phases 1–3 and part of Phase 5 are shipped:
+
+- **Anti-tiling asphalt:** hex-tiling of the albedo fetch (Mikkelsen, JCGT 2022) plus world-position macro variation kill the visible texture repeat; **detail normals** add meso-scale aggregate; **height-blend** transitions between asphalt wear states with real contrast.
+- **Driven-in wear:** a splat/wear-mask darkens wheel paths; a **worn-paint** world-position shader ages lane lines and crosswalks; wear decals (cracks, patches, manholes) carry **normal maps** so they catch light.
+- **Weather (live uniform, no rebuild):** a wet/dry toggle darkens the asphalt, drops roughness so the sun glints off it, and pools near-mirror **puddles** in a world-space mask — no SSR or env map needed. Default wet.
+- **Stone relief** for cobble/pavers: domed albedo + stronger stone normals (hex-tiling is deliberately *not* applied to structured patterns — it breaks them).
+- **Road-kit A/B:** a "realistic" (textured aggregate) vs "arcade" (clean kit look) surface-style toggle.
+- **FX-preview post stack:** N8AO ambient occlusion (log-depth- and fog-aware) + exponential aerial fog + bloom / grade / vignette / SMAA — strictly look-dev, never exported (`GLTFExporter` ignores scene fog; materials stay clean unlit-authored PBR).
+
+### 8.7 Roadside vegetation *(implemented in MVP)*
+
+Slow-Roads / ETS2-style verges (`src/procgen/vegetation.ts`): instanced **grass tufts + low shrubs** scattered along the strip beside the carriageway wherever the land cover is grass/bare. Deterministic (seeded by road id + station), land-cover- and zoning-aware, rooted on the terrain field (§7G), GPU-instanced (one `InstancedMesh` per kind) with distance-dither LOD and per-instance hue/scale jitter (drier and yellower on bare ground). The planner is pure geometry — no THREE, no canvas — so it is unit-testable (`roadsideVegetation` test); the canvas-touching mesh builder loads lazily. "🌿 Roadside greenery" toggle, ON by default.
+
+### 8.8 Traffic core & road semantics *(implemented in MVP)*
+
+A faithful traffic layer generated from data and exported for the game's traffic AI:
+
+- **Speed limits** (tagged or class-default, region-correct units), **traffic signals**, **region-keyed signs** (procedural pole + canvas plate face), **stop lines**, and **turn-lane arrows** — all placed by the §7C placement rules, with pure shared math (`signMath.ts`) so the renderer and the export always agree on orientation and effective limits.
+- Everything lands in **`city_semantics.json` v3** (3-component centerlines in true meters + per-device records) — the same data that built the city drives runtime traffic (§14). Gated by the `trafficIngest` / `trafficSemantics` / `signPlacement` tests.
 
 ---
 
@@ -388,9 +445,10 @@ Every replacement stamps `provider`, `license`, and `approved`. The scene can be
 A real 3D scene editor, in the browser. Required capabilities:
 
 ### 10.1 Viewport & camera
-- Orbit camera for overview; **WASD/fly camera** for mid-level navigation.
+- Orbit camera for overview; **fly camera with CS-style noclip controls** *(implemented in MVP)* — pointer lock, smooth acceleration, scroll-wheel speed.
 - **Drive preview mode** *(implemented in MVP)* — one key spawns a physics car (Rapier `DynamicRayCastVehicleController`, raycast wheels) at the nearest road point and drops the camera to a chase view, so the user validates the city *from the road* (directly serves the #1 requirement). Deliberately **arcade**: chassis pitch and roll are locked (`enabledRotations` = yaw only) so the car can never flip on braking, cornering, or collisions; braking is gentled and damping tuned so stops don't pitch the body. The car is a procedural silhouette (lower body + cabin + slanted windshield + four wheels that **roll with speed and steer up front**). Not the full game — a validation camera on a real collider.
-- Grid, ground plane, adjustable sun/time-of-day for lighting checks.
+- **Camera coordinate HUD** *(implemented in MVP)* — a live XYZ (local ENU meters) + lat/lon readout in every mode (orbit / fly / drive), so any spot can be cited, screenshotted, and revisited exactly.
+- Grid, ground plane, adjustable sun/time-of-day for lighting checks. Quality presets drive shadow resolution, and the **shadow frustum follows the view and scales with zoom** *(implemented in MVP)* so large cities stay sharp without one giant static shadow map.
 
 ### 10.2 Selection & transforms
 - Click-select, box-select, multi-select, select-by-type (e.g. "all billboards").
@@ -535,7 +593,7 @@ Optimization is **built into the pipeline**, not a manual cleanup pass. The city
 
 **Export deliverable (target):** a 3D Tiles quadtree of compressed GLB + KTX2 textures + a separate collision layer + the semantic lane/rules data + a license/provenance report.
 
-**Export deliverable (MVP today, §14A):** a flat (un-tiled) **6-file set** — `city_scene.glb` (draw-call-optimized visual), `city_collision.glb` (pre-merged trimesh colliders), `citymap_minimap.glb` (roads-only top-down mesh), `city_semantics.json` (lane graph + per-object provenance), `citymap_spawn.json` (auto drivable spawn), `textures_manifest.json` (KTX2 packaging spec). A separate `npm run bake` step Draco-compresses the GLBs; KTX2 texture encode is still deferred to the bake service.
+**Export deliverable (MVP today, §14A):** a flat (un-tiled) **7-file set** — `city_scene.glb` (draw-call-optimized visual), `city_collision.glb` (pre-merged trimesh colliders), `city_surface.glb` (the drivable-only collider subset the game raycasts for wheel contact/grip), `citymap_minimap.glb` (roads-only top-down mesh), `city_semantics.json` (lane graph + traffic devices + per-object provenance, v3), `citymap_spawn.json` (auto drivable spawn), `textures_manifest.json` (KTX2 packaging spec). An alternate one-click export builds a single self-contained **`city_designer.glb`** (visual + textures + collider collection in one file) for hand-off to a 3D designer in Blender/Maya. A separate `npm run bake` step Draco-compresses the GLBs; KTX2 texture encode is still deferred to the bake service.
 
 ---
 
@@ -553,9 +611,20 @@ The car-game engine team consumed a real CityBuilder export and returned six con
 
 **5 — Draco bake step (`tools/bake-glb.mjs`, `npm run bake`).** The browser's `GLTFExporter` can't emit Draco or KTX2 (native encoders). A Node post-export step using **`@gltf-transform`** runs `weld → dedup → prune → join` then Draco-compresses geometry (`join` is skipped on the collider so per-node physics extras survive); registers `ALL_EXTENSIONS` so `KHR_texture_transform`/unlit round-trip cleanly. Typical 4–8× smaller. **KTX2/Basis texture encode** (via `toktx` + `textures_manifest.json`) remains the downstream bake-service step.
 
-**6 — Semantics v2 + environment.** `city_semantics.json` bumps to `semanticsVersion: 2` — road centerlines are now `[x, y, z]` with `y` = true elevation in meters (breaking vs v1). The toolchain is pinned to **Node ≥ 22.12** (`package.json` `engines` + `.nvmrc`) because Vite 8's dev server crashes on Node 20 serving large GLBs.
+**6 — Semantics v2→v3 + environment.** `city_semantics.json` bumped to `semanticsVersion: 2` — road centerlines became `[x, y, z]` with `y` = true elevation in meters (breaking vs v1) — and has since bumped to **v3** with the traffic core (§8.8): per-road speed limits plus signal / sign / turn-arrow device records. The toolchain is pinned to **Node ≥ 22.12** (`package.json` `engines` + `.nvmrc`) because Vite 8's dev server crashes on Node 20 serving large GLBs.
 
 **Still deferred (bake service):** 3D-Tiles quadtree tiling/streaming, native KTX2/Basis encode, per-object auto-LOD chains, per-tile budget auto-simplification, and texture atlasing beyond material dedup. See §19.
+
+---
+
+## 14B. World API — headless generation service *(implemented in MVP)*
+
+The same pipeline that powers the editor runs **without a browser**: `src/headless/generate.ts` mirrors `buildCity.ts` (with minimal DOM/canvas shims) and produces the full §14A export bundle in-process, including the Draco bake. Two consumption paths:
+
+- **CLI:** `npm run generate` (`tools/generate-city.ts`) — bbox in, 7-file export out, written locally.
+- **REST (Vercel):** `POST /api/v1/maps` requests a map for a bbox and returns a deterministic cache-keyed job id; `GET /api/v1/maps/:id` polls until ready. Artifacts and the manifest live in **Vercel Blob** — the manifest is written last, so job status is derived from which blobs exist (no separate job DB); stale jobs restart after 15 minutes. Built so the car game fetches cities on demand.
+- **Deterministic contract & cache.** The job key folds in an output-contract version — currently **`w1.s3.c2.a2`** (world-api manifest v1 · semantics v3 · collider format v2 · visual asset revision a2) — so bumping any part invalidates cached maps when the output changes (a1: stone relief for cobble/pavers; a2: framed roads default-ON). Per-request options: `trees`, `signals`, `roadScale`, `corridorElevation`, `framedRoads`, `bake`.
+- Endpoints are esbuild-pre-bundled into `api/` (`npm run build:api`, Draco wasm included) and sized to fit Vercel Hobby limits. KTX2 encode and 3D-Tiles tiling remain bake-service milestones (§19.2).
 
 ---
 
@@ -573,14 +642,15 @@ The car-game engine team consumed a real CityBuilder export and returned six con
 ## 16. Phased roadmap
 
 ### P0 — Prove the core loop (MVP) — ✅ *substantially implemented client-side*
-- ✅ Ingest a well-mapped city — but via **OSM/Overpass live fetch + a Leaflet area picker** (Nominatim search + draggable ≤4 km² rectangle), not the Overture GeoParquet adapter. A prefetched Lower Manhattan sample ships in `public/data/`.
-- ✅ Procedural roads (smoothed centerlines, curbs, sidewalks, intersections, bridges), generic buildings, terrain, water, props — all separated tagged objects, driven by the Context Resolver (§7A).
+- ✅ Ingest a well-mapped city — but via **OSM/Overpass live fetch + a Leaflet area picker** (Nominatim search + draggable rectangle, **≤12 km²**; large areas fetch as a few big Overpass tiles at low concurrency and merge), not the Overture GeoParquet adapter. Prefetched Lower Manhattan + Prague Staré Město samples ship in `public/data/`.
+- ✅ Procedural roads (smoothed centerlines, curbs, sidewalks, intersections, bridges), generic buildings, terrain, water, props — all separated tagged objects, driven by the Context Resolver (§7A) — plus the road geometry system (§8.5: corridor elevation solve, junction consolidation, crown/superelevation, framed roads), road surface/weather fidelity (§8.6), roadside vegetation (§8.7), the traffic core (§8.8), terrain relief (§7G), and the landmark catalog (§7H).
 - ✅ Web editor: viewport, selection, transform gizmos, hierarchy, inspector, undo/redo, locked roads, first-run help overlay.
 - ✅ **Drive preview mode** — Rapier physics car (§10.1).
 - ⚠️ Click-to-replace with keep-procedural + generate + Sketchfab-search + upload, fit-to-slot, cached — but **AI generation is *simulated*** (`runGeneration()` returns a deterministic procedural variant; the job queue / progress / cache / review UI is real and ready for a live endpoint). See §19.
 - ✅ Reference photo (Wikidata P18) + map/Street-View link per building; Building Recognizer descriptors (§7F).
-- ✅ Export: 6-file GLB/JSON set + Draco bake (§14A) — **flat, not 3D-Tiles-tiled**.
-- **Success criterion status:** load a city, drive it, replace landmarks (procedural/library/upload; AI simulated), export, verified end-to-end headlessly (`.claude/skills/verify`; ~90 tests across 9 files). Not yet met: *cheap real AI upgrade* and *tiled streaming*.
+- ✅ Export: 7-file GLB/JSON set (+ single designer GLB) + Draco bake (§14A) — **flat, not 3D-Tiles-tiled**.
+- ✅ **World API** (§14B): the same pipeline headless — `npm run generate` CLI + Vercel `/api/v1/maps` endpoints — so the car game fetches cities without the editor.
+- **Success criterion status:** load a city, drive it, replace landmarks (procedural/library/upload; AI simulated), export, verified end-to-end headlessly (`.claude/skills/verify`; 238 tests across 27 files). Not yet met: *cheap real AI upgrade* and *tiled streaming*.
 
 ### P1 — Make it good and cheap at scale
 - Add providers: **Meshy/Rodin (paid, opt-in)** and **Sketchfab library**; **upload custom**.
@@ -645,16 +715,22 @@ This section is the single source of truth for **what is real in the codebase to
 
 ### 19.1 What is built and real (in the codebase)
 
-- **Ingestion:** live **OSM/Overpass** fetch with a Leaflet **area picker** (Nominatim search, draggable ≤4 km² rectangle, mirror fallback, localStorage cache) + a prefetched sample city. `src/ingest/`.
+- **Ingestion:** live **OSM/Overpass** fetch with a Leaflet **area picker** (Nominatim search, draggable **≤12 km²** rectangle — large areas split into a few big tiles fetched at low concurrency and merged; mirror fallback, localStorage cache) + prefetched Lower Manhattan and Prague samples. `src/ingest/`.
 - **Procedural engine (in-browser TypeScript, not Houdini):** roads with smoothed Catmull-Rom centerlines, curbs, sidewalks, intersections, bridges/tunnels from OSM `layer`; generic building extrusion; water (lakes/rivers/coastline-assembled sea); terrain; props. `src/procgen/`.
+- **Road geometry system** (§8.5): corridor elevation solve (default ON) + junction consolidation; crown/superelevation and framed-road cross-sections behind flags. `src/procgen/corridor/`, `crossSection.ts`, `framedRoads.ts`, `framedKit/`.
+- **Road look & weather** (§8.6): hex-tiled / detail-normal / height-blend / wear-mask asphalt, worn paint, normal-mapped decals, live wet/puddle uniform, stone relief for cobble/pavers; N8AO + aerial-fog FX preview. `src/materials/`, `src/editor/Viewport.tsx`.
+- **Terrain relief** (§7G, flag OFF by default) and **roadside vegetation** (§8.7, ON by default). `src/procgen/terrain/`, `src/procgen/vegetation.ts`.
+- **Traffic core** (§8.8): speed limits, signals, region-keyed signs, stop lines, turn arrows → `city_semantics.json` v3. `src/procgen/signs.ts`, `signMath.ts`, `src/export/semantics.ts`.
+- **Landmark catalog** (§7H): procedural suspension + stone-arch bridge superstructures; Prague showcase sample. `src/scene/landmarks.ts`, `src/procgen/bridges.ts`.
+- **World API** (§14B): headless pipeline (CLI + Vercel `/api/v1/maps`), deterministic contract-keyed cache (`w1.s3.c2.a2`). `src/headless/`, `src/server/`, `api/`.
 - **Context Resolver + content matrix** (§7A), **material/texture system** (§7B), **robustness linters** (§7C) — all real, versioned, tested.
 - **Asset library pipeline** (§7D/§7E): manifest scanner, weighted deterministic pools, Quaternius MegaKit, Sketchfab **curation/fetch tools + in-editor search-replace** (via Vite dev proxy). *Library assets default OFF* (§7F).
 - **Building Recognizer** (§7F): structured-prior descriptor fallback chain, Wikidata P149/P18 prepass, descriptor-driven procedural facades/roofs.
-- **Editor:** viewport, selection, transform gizmos, hierarchy, inspector, undo/redo, locked roads, help overlay, FX-preview toggle. `src/editor/`, `src/ui/`.
+- **Editor:** viewport, selection, transform gizmos, hierarchy, inspector, undo/redo, locked roads, help overlay, FX-preview toggle (N8AO + fog + bloom/grade), CS-style noclip fly mode, camera coordinate HUD (XYZ + lat/lon in all modes), in-app Curation Studio, and the rebuild-toggle set (library assets · corridor elevation · terrain relief · framed roads · greenery · crown · weather wet/dry · road style realistic/arcade · road scale). `src/editor/`, `src/ui/`.
 - **Drive preview:** Rapier physics car, arcade-locked (§10.1).
 - **Physics colliders:** descriptor pipeline + collider lint + GLB export with per-node `extras`. `src/physics/`.
-- **Export:** the 6-file set + draw-call optimizer + pre-merged colliders + auto spawn/minimap + Draco bake (§14A).
-- **Tests:** ~90 cases across 9 files gating the invariants above (`npm test`).
+- **Export:** the 7-file set (+ single designer GLB) + draw-call optimizer + pre-merged colliders + auto spawn/minimap + Draco bake (§14A).
+- **Tests:** 238 cases across 27 files gating the invariants above (`npm test`).
 
 ### 19.2 Documented in the PRD but NOT in the codebase (the gap)
 
@@ -751,6 +827,11 @@ citybuilder/
 - `roads.ts` — the deterministic procedural road system (surfaces, markings, wear, bridges/tunnels); locked in the editor.
 - `roadNetwork.ts` — shared road-network + bridge-elevation math (true-meter profiles) used by renderer, colliders, semantics.
 - `roadScale.ts` — the "stretch roads" transform: widen carriageways + displace non-road features, deterministically.
+- `crossSection.ts` — crown/camber + superelevation vertical profile shared by surface mesh, marking sampler, and colliders (flag, §8.5).
+- `framedRoads.ts` — framed-road flag + per-class cross-section presets (curb-frame / grass verge / footpath; §8.5).
+- `framedKit/kit.ts` — band-based cross-section engine: ordered surface bands partition the width with exact shared seams (zero coplanar overlap), material-agnostic output.
+- `framedKit/catalog.ts` — the framed-kit band catalog (the design reference the experiment tools render).
+- `vegetation.ts` — roadside vegetation engine: pure seeded planner + lazy instanced-mesh builder (§8.7).
 - `geometry.ts` — polyline/ribbon helpers (XZ-plane, Y-up).
 - `buildings.ts` — footprint→slot building extrusion (position/footprint/height stay stable across providers).
 - `bridges.ts` — procedural suspension/cable-stayed superstructures (towers, catenary cables, girder) for landmark bridges.
@@ -785,7 +866,8 @@ citybuilder/
 **`editor/` — the 3D editor (§10)**
 - `Viewport.tsx` — the R3F canvas, look-dev FX-preview composer, and the drive-mode code-split boundary + QA camera bridge.
 - `SceneContent.tsx` — renders scene objects + transform gizmos; handles picking/selection.
-- `CameraRig.tsx` — orbit + fly camera; publishes the orbit target for drive spawn.
+- `CameraRig.tsx` — orbit + fly camera (CS-style noclip: pointer lock, smooth accel, scroll speed); publishes the orbit target for drive spawn.
+- `CoordTracker.tsx` — publishes the live camera position (ENU XYZ + lat/lon) to the HUD store in every mode.
 - `actions.ts` — editor actions (e.g. frame camera on objects).
 - `bus.ts` — tiny event bus for one-shot camera-framing requests.
 - `input.ts` — global key state shared by fly mode + drive sim.
@@ -828,21 +910,23 @@ citybuilder/
 **`state/` — app state (zustand)**
 - `store.ts` — the main editor store (selection, filters, toggles, context info).
 - `driveHud.ts` — drive-preview HUD state (speed etc.).
+- `cameraHud.ts` — camera-position HUD state (XYZ + lat/lon).
 - `curation.ts` — persisted in-app asset-library curation state read live by the build path.
 
 **`ui/` — panels & overlays (§10)**
-- `Toolbar.tsx` — top toolbar (build, toggles, export, drive, library assets).
+- `Toolbar.tsx` — top toolbar (build, export, drive, and the toggle set: FX preview · library assets · corridor elevation · terrain relief · framed roads · greenery · crown · weather · road style · road scale).
 - `Hierarchy.tsx` — outliner grouped by type/tile; double-click to frame.
 - `Inspector.tsx` — property inspector + live procedural facade/roof/tint re-skinner.
 - `ReplacePanel.tsx` — the object replacement panel (§9): keep/generate/Sketchfab-search/upload + recognizer block.
-- `AreaPicker.tsx` — full-screen Leaflet location picker (search + draggable ≤4 km² rectangle).
+- `AreaPicker.tsx` — full-screen Leaflet location picker (search + draggable ≤12 km² rectangle; large areas fetch as tiled Overpass queries).
 - `CurationStudio.tsx` — visual studio to hand-pick library model variants per kind.
 - `LoadingScreen.tsx` — watchable build loader (animated skyline + real-phase checklist + timer).
 - `HelpOverlay.tsx` — first-run help/controls overlay.
 - `StatusBar.tsx` — bottom status/info bar.
+- `CoordHud.tsx` — always-on camera coordinate readout (XYZ + lat/lon, every mode).
 
-**`__tests__/` — ~90 cases across the invariant suite (`npm test`)**
-- Correctness gates including: `flickerInvariants` / `coplanarOverdraw` / `geometryLint` (z-fighting + visibility), `roadElevation` / `corridorElevation` / `junctionConsolidation` / `roadGrounding` / `roadScale` (roads), `terrainField` / `terrainCarve` / `terrainIntegration` (terrain), `waterClassification` (water), `colliders` / `colliderAudit` (physics), `recognizer` (appearance), `assetManifest` (library pools), `signMath` / `signPlacement` (signs), `trafficIngest` / `trafficSemantics` (semantics), `exportOptimize` (export), `landmarkBridge`, `sanity`, plus `pragueBuild` / `headlessExport` integration tests.
+**`__tests__/` — 238 cases across 27 files (`npm test`)**
+- Correctness gates including: `flickerInvariants` / `coplanarOverdraw` / `geometryLint` (z-fighting + visibility), `roadElevation` / `corridorElevation` / `junctionConsolidation` / `roadGrounding` / `roadScale` / `crossSection` (roads), `terrainField` / `terrainCarve` / `terrainIntegration` (terrain), `roadsideVegetation` (vegetation), `waterClassification` (water), `colliders` / `colliderAudit` (physics), `recognizer` (appearance), `assetManifest` (library pools), `signMath` / `signPlacement` (signs), `trafficIngest` / `trafficSemantics` (semantics), `exportOptimize` (export), `landmarkBridge`, `sanity`, plus `pragueBuild` / `headlessExport` integration tests.
 
 ### 20.3 `tools/` — Node/CLI scripts
 
@@ -856,6 +940,9 @@ citybuilder/
 - `curate-kenney-roads.mjs` — catalog the Kenney City-Kit road tiles as **reference-only** (roads stay procedural/locked).
 - `curate-toxsam.mjs` — curate the ToxSam/Polygonal Mind CC0 pack into the library format.
 - `osm2streets-spike.mjs` — feasibility spike proving lane-accurate geometry from our OSM via osm2streets-js (WASM).
+- `experiment-roads.ts` / `experiment-roads-check.mjs` / `experiment-roads-preview.mjs` — the framed-road GLB experiment kit (`npm run experiment:roads`): build → invariant check → preview render.
+- `framed-kit.ts` — renders the whole framed-kit catalog to standalone GLBs + a preview contact sheet (`npm run framed-kit`).
+- `framed-network.ts` — Lego-connected framed-road network experiment: proves the shared-pad-radius connection rule (segment ↔ junction seams register with no gap).
 
 ### 20.4 `api/` — generated Vercel functions
 
@@ -880,6 +967,9 @@ citybuilder/
 - `docs/osm2streets-spike.md` (+ `osm2streets-preview.png`) — the lane-level geometry spike writeup.
 - `docs/world-api.md` — the headless World API design.
 - `docs/aaa-improvements-plan.md` — road/ground fidelity improvement plan.
+- `docs/road-visual-techniques-research.md` — deep-research report: the Top-25 road visual-quality techniques driving §8.6.
+- `docs/roadside-vegetation-engine.md` — roadside vegetation engine design + CC0 vegetation-asset research.
+- `docs/asset-library-evaluation.md` — external asset-pack/repo evaluation (ToxSam CC0, 3DStreet, CARLA, PLATEAU, OSM2World).
 - `docs/asset-viewer-plan.md` — asset viewer/catalog plan.
 - `docs/screenshots/` — reference/QA screenshots.
 - `public/data/raw_osm.json` — prefetched Lower Manhattan sample city.
