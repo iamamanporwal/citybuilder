@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+
+id = "citybuilder_osm"
+version = "0.1.0"
+name = "CityBuilder OSM"
+tagline = "Build real 3D cities from OpenStreetMap data"
+maintainer = "Aman Porwal <aman@aganastudios.com>"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["3D View", "Import-Export"]
+
+[permissions]
+network = "Fetches OpenStreetMap data from the Overpass API"
