@@ -1,145 +1,113 @@
-# CityBuilder → Blender Add-on: Technical Plan
+# CityBuilder → Blender Add-on: Production Plan (v2)
 
-**Goal.** Port the CityBuilder pipeline (OSM → real 3D city) into a Blender add-on so cities can be
-finished with *real* modelling operations — booleans, bevels, swept profiles, PBR materials,
-Cycles renders — that a browser app cannot offer, and then exported back into the game.
+**Goal (sharpened).** Not a digital twin — a *plausible, AAA-looking game city*, judged from
+the **driver's camera**. Roads are the hero: curbs, sidewalks, junctions, markings, camber,
+elevation. Everything else (buildings, terrain, props, landmarks) supports that read.
+Output feeds the car game via the app's own export contract (`unity_city.json` + GLBs).
 
-**Context.** The game launches next week. The browser app (this repo) already solves ingest,
-semantics and layout: Overpass fetch, water whitelist, road class widths, building heights,
-framed-road cross-sections, terrain, landmarks. The Blender add-on should *reuse those exact
-semantics* (ported to Python) and swap the rendering layer from three.js to native Blender
-geometry, where every object stays editable.
+Status: **v0.1 MVP shipped** (flat extrusions, ribbon roads — commit 394d03f).
+**v0.5 "production" in progress** — this document is its blueprint.
+Detailed engineering specs extracted from the app source live in [specs/](specs/):
+[framed-roads.md](specs/framed-roads.md) · [elevation-terrain.md](specs/elevation-terrain.md) ·
+[export-landmarks-props.md](specs/export-landmarks-props.md). Module interfaces: [SPEC.md](SPEC.md).
 
 ---
 
-## 1. Why Blender (what the browser can't do)
+## 1. Research outcome — what we adopt from the ecosystem (licenses verified)
 
-| Need | Browser app today | Blender |
+| Source | License | How we use it |
 |---|---|---|
-| Road surfaces with real curbs/verges | Procedural ribbon meshes, shader tricks | Curve + swept profile (Geometry Nodes "Curve to Mesh"), real curb bevels |
-| Clean junctions | Polygonal junction pads | Boolean union of carriageways + limited-dissolve → one watertight surface |
-| Roofs | Flat / simple caps | Roof solver, inset/bevel, `building:part` assembly |
-| Manual fixes | None (regenerate only) | Grab/extrude/boolean any single building or road by hand |
-| Materials | Canvas textures | Full PBR + displacement, Cycles/EEVEE preview renders |
-| Export | GLB via headless bake | GLB/FBX/USD with per-object control, bake-to-texture |
+| **blosm** (github.com/vvoovv/blosm) | GPL-3 | Same license as us — port code/ideas freely (roof shapes, cladding tints, window-emission ColorRamp). Richest prior art. |
+| **bpypolyskel** (prochitecture) | GPL-3 | Vendor later for true straight-skeleton hipped roofs (99.99% success on 320k roofs). v0.5 ships our ridge-approximation; vendor in v0.6. API: `polygonize(verts, firstVertIndex, numVerts, holesInfo, height, tan, faces)`; wrap in try/except (can raise on spikes). |
+| **osm2streets** (A/B Street) | Apache-2.0 | Port the trim-back junction algorithm (§3 below) — v0.6 upgrade over our convex-hull pads. |
+| **building_tools** (ranjian0) | MIT | Mine parametric facade/balcony ops later. |
+| **AWS Terrain Tiles** (terrarium) | open data, attribution req. | Real DEM: `s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`, decode `R·256+G+B/256−32768`, z13–14, disk cache. Attribution: "Terrain tiles: Mapzen/Tilezen via AWS Open Data; SRTM/3DEP courtesy USGS". Optional (flat/hills modes work offline — extension ToS requires no mandatory downloads). |
+| **ambientCG** | **CC0** | PBR textures (asphalt/paving/facade/roof) fetched at runtime + cached; explicitly OK to bundle and ship in commercial games. API: `ambientcg.com/api/v2/full_json?q=...&include=downloadData`; get: `ambientcg.com/get?file={AssetID}_{Res}-{Fmt}.zip`. |
+| **Poly Haven** | CC0 (via API only) | Secondary texture source; resolve URLs via `api.polyhaven.com/files/{id}`, unique User-Agent. |
+| **KayKit City Builder Bits** | CC0 | Street props (streetlight, traffic light, hydrant, bench) + 5 cars — bundleable GLBs, stable raw.githubusercontent URLs. v0.6: replace our parametric props where the kit looks better. |
+| **Kenney city kits / Quaternius** | CC0 | Bundle-only (no stable URLs). Extra buildings/props variety. |
+| **MUTCD / UK TSM Ch.5** | public domain / OGL | Marking dimension tables embedded (see checklist §4). |
+| Buildify | free but NOT redistributable | **Avoid** the asset; the collection-instancing *technique* is reimplemented with CC0 kits. |
+| SceneCity, 3DStreet | closed / NC | Avoid. |
 
-## 2. Prior art (evaluated, not chosen)
+Packaging policy from research: geometry-node groups (when we add them) ship as a bundled
+`.blend` appended via `bpy.data.libraries.load` — never Python-generated (API churn).
+Pure-Python wheels only. Network use declared in manifest; every network feature optional.
 
-- **blosm (Blender-OSM)** — mature OSM importer, but its semantics differ from our game
-  (no water whitelist, different widths/heights, no framed-road contract) and the premium tier
-  is paid/closed. We need parity with `unity_city.json` and our CityGraph, so a thin custom
-  add-on that mirrors *our* ingest is the shorter path.
-- **BlenderGIS** — great for terrain/basemaps; candidate helper for the terrain phase, not the core.
-
-## 3. Architecture
-
-Mirror the app's layering exactly — one adapter, one graph, many builders:
+## 2. Architecture (v0.5)
 
 ```
-citybuilder_osm/            (Blender extension, pure-stdlib Python)
-  blender_manifest.toml     extension manifest (Blender 4.2+ / 5.x)
-  __init__.py               UI panel, operators, property group, register()
-  overpass.py               ingest: query builder + mirror-failover fetch + tag→graph parse
-  geom.py                   projection, ring stitching, polyline offset, shoelace area
-  build.py                  builders: bmesh/mesh construction, materials, collections
+citybuilder_osm/
+  geom.py           shared pure geometry: MeshData, tessellate(+holes), SpatialGrid, offsets
+  overpass.py       ingest → Graph v2 (holes, roof tags, props, rails, maxspeed, structure)
+  elevation.py      terrain field (flat/hills/DEM terrarium) + corridor solve (Gauss-Seidel,
+                    grade caps, junction clustering §15, cosine bridge ramps) — app parity
+  roadnet.py        junction detection/cluster → trimmed+densified SegDescs + JunctionDescs
+  profile.py        framed cross-section sweep (curb .16/lawn .04/footpath .16/skirt −.35,
+                    crown 2%, superelevation, 6 m fades) + markings + bridge decks/piers
+  junctions.py      pad polygon (hull+fillet), corner curb/sidewalk arcs, crosswalks, stop lines
+  terrain.py        conformed ground grid (roads burn in, 14 m shoulders), rock splat attr
+  roofs.py          buildings v2: courtyard holes, gabled/hipped/pyramidal/flat+parapet/cornice
+  props_gen.py      parametric lamp/signal/signs/bench/bus stop/tree + placement rules
+  landmarks_gen.py  suspension + stone-arch bridges (catalog: wikidata/name/structure)
+  matlib.py         procedural PBR node materials incl. facade window-grid + lit windows
+  build.py          orchestrator (bpy): MeshData→meshes, collections, cb_export scene data
+  export_game.py    unity_city.json + citymap_spawn.json + city_scene.glb (app contract v1)
+  __init__.py       UI v2: presets, terrain mode, quality, toggles, Build/Clear/Export
 ```
 
-**Data flow:** `bbox → Overpass JSON → parse() → graph dict → build_scene()`.
-The intermediate **graph dict** is a Python port of `CityGraph`
-(`buildings / roads / areas / trees`) so future features port 1:1 from `src/`.
+Rule: only build/matlib/export/__init__ import bpy; everything else is python3-testable
+with inline self-tests. All numeric constants ported 1:1 from the app (specs/).
 
-**Parity with the app (ported verbatim):**
+## 3. The junction upgrade path (v0.6)
 
-| Semantic | Source of truth in repo | Ported |
-|---|---|---|
-| Road classes, widths, lanes | `src/ingest/overpass.ts` `CLASS_WIDTH`/`CLASS_LANES` | v0.1 |
-| Water whitelist (positive evidence only) | `waterProvenance()` + `MIN_WATER_AREA_M2` | v0.1 |
-| Waterway buffering (river 30 m, canal 14 m) | `WATERWAY_WIDTH` | v0.1 |
-| Multipolygon stitching (rivers/parks) | `assembleMemberRings()` | v0.1 (outer rings) |
-| Building heights (`height` → `levels`×3.2 → hashed 9–25 m) | `overpass.ts:678` | v0.1 |
-| Equirectangular projection (111.32·cos lat) | `overpassFetch.ts:143` | v0.1 |
-| Framed roads (curb/verge/footpath cross-section) | `src/procgen/framedRoads.ts`, contract a2 | v0.2 |
-| Junction consolidation, corridor elevation | `src/procgen/corridor`, §15 | v0.3 |
-| Terrain field | `src/procgen/terrain` | v0.3 |
-| Landmark catalog / bridges | `src/scene/landmarks.ts`, `procgen/bridges.ts` | v0.4 |
+Port osm2streets exactly (Apache-2.0, ~300 lines): thicken incident centerlines ±w/2 →
+intersect adjacent edge pairs across each wedge → corner points → trim each centerline by
+the MAX perpendicular-line intersection → pad ring = walk [right-end, corner, left-end]
+around the node. Pre-pass: collapse degree-2 nodes, two-pass merge of <15 m interior links.
+Invariant: roads meet the pad at right angles — perfect stop lines, zero overlap.
 
-**Axes:** app is Y-up (x east, z south); Blender is Z-up. Convention here: **X = east,
-Y = north, Z = up**, 1 unit = 1 m. Export back to the game flips to Y-up (GLB exporter does this).
+## 4. Road-realism checklist (embedded numbers, MUTCD/EN-1436-anchored)
 
-## 4. Phased roadmap
+- Crown 2% each side, 0 at kerbs; superelevation up to 6% on curves; fades 6 m at ends.
+- Curb 15–16 cm vertical face; gutter shadow line; sidewalk 1.8–2.4 m at +16 cm, 1.5 m score joints (texture).
+- Lines: 10 cm urban/15 cm highway; US broken 3.05/9.14 m; UK 2/7 m; stop bar 45 cm deep;
+  continental crosswalk bars 40 cm/gap 60 cm, 2.4–3 m long.
+- **Worn white** sRGB ≈ (150,148,140) rough 0.75 — never pure white. Worn yellow ≈ (190,150,45).
+- New asphalt sRGB ≈ (52,52,54) rough 0.9; aged ≈ (95–110) — asphalt lightens, paint darkens.
+- Wheel-path wear bands ±0.9 m from lane centre (+10% luminance), oil band at lane centre
+  (−20%), intensified near stop bars (shader layer, v0.6 with ambientCG textures).
 
-### v0.1 — MVP (built in this folder)
-- N-panel UI: lat/lon/radius, feature toggles, Build / Clear buttons.
-- Overpass fetch with 3 mirror failover + client timeout (port of `overpassFetch.ts`).
-- **Buildings**: closed-way footprints → extruded solids (bottom + walls + top; correct normals),
-  real heights, merged into one mesh (fast) or optional one-object-per-building (editable).
-- **Roads**: class-width ribbon meshes with mitred joins, per-class z-layering, tunnels skipped.
-- **Water/green/sand areas**: whitelisted polygons incl. multipolygon relation outer rings,
-  buffered rivers/canals; min-area filter.
-- **Trees**: `natural=tree` nodes → linked-duplicate instances (real Blender instancing).
-- Materials: named Principled BSDF materials + viewport solid colors; everything in a
-  `CityBuilder` collection tree.
-- Headless test harness (`test_headless.py`) proving fetch→build→render works with no GUI.
+## 5. Delivery phases
 
-### v0.2 — Real roads (the reason to be in Blender)
-- Roads become **curves** with a Geometry-Nodes modifier: Curve-to-Mesh sweep of the
-  **framed-kit cross-section** (asphalt + curb + verge + footpath), i.e. the a2 contract done
-  with real geometry. Parameters (curb height, verge width) exposed on the modifier.
-- Junctions: boolean-union carriageway polygons, limited-dissolve, then re-skin — one
-  continuous asphalt surface, no z-fighting ribbons.
-- Lane markings via UV strip along curve length (Follow-Path UVs from the sweep).
+### v0.5 (NOW — this build)
+Everything in §2: framed roads + junctions + markings + elevation/terrain/DEM + buildings v2
++ props + landmarks + procedural materials + game export + UI v2 + headless test matrix
+(Prague flat · Golden Gate DEM/suspension · hills mode · road-level render).
 
-### v0.3 — Elevation & terrain
-- Terrain grid from AWS Terrain Tiles / SRTM (same source strategy as `procgen/terrain`),
-  displaced plane; roads/buildings sample the field (port of corridor elevation solve,
-  default-ON, one junction = one height).
-- Bridges: deck + parapet sweep; simple pier placement (landmark bridges in v0.4).
+### v0.6 (quality pass)
+- ambientCG texture pipeline (fetch+cache+material upgrade), wheel-wear shader layer.
+- osm2streets junction port (§3); roundabout + cul-de-sac specials.
+- bpypolyskel vendored → true hipped/complex roofs; building_tools facade details.
+- KayKit prop GLBs bundled; cars as set dressing.
+- Modal (non-blocking) build with progress bar; tiled fetch for >1.5 km radius.
 
-### v0.4 — Buildings v2 + landmarks
-- `roof:shape` (gabled/hipped/pyramidal) via straight-skeleton or bmesh inset+peak.
-- `building:part` assembly; facade PBR material library keyed by the Building-Recognizer
-  signal chain (port `src/recognizer`).
-- Landmark catalog port: parametric Golden-Gate/stone-arch bridges as Geometry-Node groups.
+### v0.7 (game bridge complete)
+- city_collision.glb (collider extras contract v2) + citymap_minimap.glb + semantics v3 JSON.
+- Chunked exports for streaming; Draco; KTX2 bake via Cycles.
+- Import an existing World-API export for touch-up → re-export.
 
-### v0.5 — Game export bridge
-- One-click "Export for game": GLB per chunk + `unity_city.json`-compatible manifest
-  (reuse the versioned contract from `src/export`), collider meshes tagged, Draco optional.
-- Round-trip: import an existing World-API export into Blender for touch-up, re-export.
+## 6. Risks
 
-## 5. Key technical decisions
+- **Junction visual quality** is the make-or-break; convex-hull pads may look blobby on
+  skewed crossings → v0.6 osm2streets port is the insurance.
+- Overpass variability (missing lanes/height tags) — all fallbacks deterministic via hash01.
+- Perf at radius 1500 m: merged meshes per category keep object counts low; terrain grid
+  capped by quality setting; caps on props.
+- Blender API churn — extension targets 4.2+; CI smoke test pinned to installed version.
 
-1. **Pure stdlib Python, no wheels.** Overpass via `urllib`; all geometry via `bmesh`/
-   `from_pydata`. Install stays a single zip, works offline-of-pip.
-2. **Extension format (`blender_manifest.toml`), Blender 4.2+.** Legacy `bl_info` is gone in
-   5.x; the manifest declares the `network` permission so the fetch is honest. The operator
-   checks `bpy.app.online_access` and tells the user to enable *Allow Online Access*.
-3. **Merged meshes by default.** One mesh per category (buildings / road class / area kind)
-   → thousands of features build in seconds and the outliner stays sane. A toggle emits
-   separate building objects when hand-editing is the goal (or use `P → Separate by Loose Parts`).
-4. **Blocking fetch in the operator (MVP).** Overpass takes 5–30 s; acceptable for v0.1.
-   v0.2 moves to a modal operator with a progress bar and the app's tiled fetch for large areas
-   (12 km² cap, dedupe by element id — port `overpassFetch.ts`).
-5. **Geometry Nodes for anything swept or repeated** (roads v0.2, fences, lamps): parametric,
-   non-destructive, editable by the artist after generation.
+## 7. Attribution shipped in UI/docs
 
-## 6. Testing
-
-- `blender --background --factory-startup --online-mode --python test_headless.py`
-  registers the extension from source, builds a real city (Prague Staré Město, 300 m), asserts
-  object/vert counts > 0, saves a `.blend`, and renders a Workbench PNG — CI-able smoke test.
-- Golden-count regression: fixed bbox + recorded Overpass JSON fixture (offline replay) once the
-  parser stabilises, mirroring the app's `npm test` water invariants.
-
-## 7. Risks
-
-- **Overpass rate limits / downtime** — mitigated by mirror failover; add local JSON cache in v0.2.
-- **Self-intersecting / degenerate OSM rings** — dedupe + `try/except` per face; bad rings are
-  skipped, never crash the build (same "positive evidence" spirit as water).
-- **Relation holes (courtyards)** — MVP renders outer rings only; v0.2 adds inner rings via
-  boolean or `holes_fill`.
-- **Huge areas** — MVP caps radius at 1500 m; the app's tiling strategy ports in v0.2.
-- **Blender API churn** — extension targets 4.2+; CI smoke test on the installed version.
-
-## 8. Install & usage
-
-See [README.md](README.md) — beginner-level steps (user hasn't used Blender before).
+OSM (ODbL) in every export (`attribution` field, app parity) · Mapzen/Tilezen+USGS for DEM ·
+"Assets from ambientCG/Poly Haven (CC0)" when textures fetched. All embedded license notices
+kept in vendored files.

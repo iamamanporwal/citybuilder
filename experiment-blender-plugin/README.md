@@ -1,80 +1,84 @@
-# CityBuilder OSM — Blender add-on (MVP v0.1)
+# CityBuilder OSM — Blender add-on (v0.5 "production")
 
-Build a real, editable 3D city in Blender from OpenStreetMap data, using the same
-semantics as the CityBuilder web app (road widths, water whitelist, building heights).
+Build a game-ready 3D city in Blender from OpenStreetMap: **framed roads** (curbs,
+sidewalks, grass verges, lane markings, crosswalks, junction pads), **elevation**
+(corridor solve + flat/hills/real-DEM terrain), **buildings v2** (courtyard holes, gabled/
+hipped/pyramidal roofs, procedural facade shaders with lit windows), **landmark bridges**
+(suspension + stone arch), **street props** (lamps, signals, signs), and **one-click game
+export** (`unity_city.json` + `city_scene.glb`, matching the CityBuilder app contract).
 
-See [PLAN.md](PLAN.md) for the full technical plan and roadmap (framed roads via
-Geometry Nodes, terrain, landmarks, game-export bridge).
+Docs: [PLAN.md](PLAN.md) (roadmap) · [SPEC.md](SPEC.md) (module contracts) ·
+[specs/](specs/) (engineering specs ported from the app).
 
 ```
-citybuilder_osm/            the add-on source (Blender extension)
-citybuilder_osm-0.1.0.zip   ready-to-install package
-test_headless.py            no-GUI smoke test (fetch → build → render)
+citybuilder_osm/            add-on source (Blender extension, pure stdlib)
+citybuilder_osm-0.5.0.zip   ready-to-install package
+test_headless.py            integration matrix (quick | prague | goldengate)
+test_matlib.py/test_export.py  Blender-side module tests
+showcase.py                 Cycles beauty renders from a saved .blend
 ```
 
-## Install (never used Blender before? start here)
+## Install / upgrade
 
-> **Already done on this Mac** — the extension was installed and enabled via CLI.
-> Skip to **First build**. On another machine, follow the steps below.
+> If v0.1 is already installed, installing the new zip over it upgrades in place
+> (same extension id). Restart Blender afterwards.
 
-1. Install Blender 4.2 or newer (this was tested on 5.1): https://www.blender.org/download/
-   or `brew install --cask blender`.
-2. Open Blender. Go to **Edit ▸ Preferences ▸ Get Extensions**, click the **˅** dropdown
-   arrow in the top-right corner, choose **Install from Disk…**, and pick
-   `citybuilder_osm-0.1.0.zip`.
-3. Still in Preferences, go to **System ▸ Network** and make sure
-   **Allow Online Access** is enabled (the add-on downloads map data from the internet).
-4. Close Preferences.
+1. Blender 4.2+ (tested on 5.1): https://www.blender.org/download/ or `brew install --cask blender`.
+2. **Edit ▸ Preferences ▸ Get Extensions ▸ ˅ (top-right) ▸ Install from Disk…** → pick
+   `citybuilder_osm-0.5.0.zip`.
+3. **Preferences ▸ System ▸ Network → enable "Allow Online Access"** (OSM fetch; the DEM
+   terrain mode also downloads elevation tiles).
 
-Re-installing an updated zip over the old one just works (same id = upgrade).
+## Use
 
-## First build
+1. 3D viewport → press **N** → **CityBuilder** tab.
+2. Pick a **Location preset** (Prague, Golden Gate, Manhattan, London, Tokyo) or enter
+   lat/lon (Google Maps right-click copies coordinates).
+3. Choose **Terrain**: Flat / Gentle hills / Real elevation (AWS Terrain Tiles).
+4. **Build City** — blocks 10–60 s depending on radius (progress in the cursor).
+5. **See the materials: press Z → Material Preview** (Solid mode shows flat colors only).
+   Best quality: switch render engine to Cycles and use Z → Rendered.
+6. **Export for game**: the panel's *Export Game Bundle* writes `unity_city.json`,
+   `citymap_spawn.json`, and `city_scene.glb` (glTF is Y-up; Unity X-flip handled like the
+   app's exporter).
 
-1. In the 3D viewport, press **N** (or click the tiny `<` arrow at the top-right of the
-   viewport) to open the sidebar. Click the **CityBuilder** tab.
-2. Enter a latitude/longitude (defaults are Prague Staré Město; grab coordinates from
-   Google Maps with right-click ▸ "50.08700, 14.42080") and a radius (400 m is a good start).
-3. Click **Build City**. The Overpass fetch takes 5–30 s and Blender will freeze during it —
-   that's normal for v0.1. A status line at the bottom reports what was built.
-4. Navigate: orbit with middle-mouse drag (or two-finger drag on a trackpad), zoom with
-   scroll, `Home` key frames everything. Press **Z** and pick *Rendered* or *Material
-   Preview* for shaded colors.
-
-Everything lands in a `CityBuilder` collection (top-right Outliner). **Clear City**
-removes it all; **Build City** on new coordinates replaces the old city.
-
-## Editing tips (the point of being in Blender)
-
-- Tick **Separate building objects** before building to get one object per building —
-  click any building, press `Tab` to edit its verts, extrude roofs, bevel edges.
-- With the default merged mesh: select the Buildings object, `Tab`, hover a building,
-  press `L` to select just it (linked), then edit — or `P ▸ By Loose Parts` to split all.
-- Materials are plain Principled BSDF (`CB Building`, `CB Water`, …) — recolor once,
-  everything updates.
-- Export for the game: **File ▸ Export ▸ glTF 2.0 (.glb)** — glTF is Y-up like the app.
-
-## Headless smoke test (CI-able)
+## Headless test matrix (CI-able)
 
 ```sh
-blender --background --factory-startup --online-mode \
-        --python test_headless.py -- /path/to/outdir
+blender --background --factory-startup --online-mode --python test_headless.py -- quick outdir
+blender --background --factory-startup --online-mode --python test_headless.py -- prague outdir
+blender --background --factory-startup --online-mode --python test_headless.py -- goldengate outdir
+# beauty renders from a saved matrix .blend:
+blender --background outdir/prague.blend --python showcase.py -- outdir/prague_beauty [bridge]
 ```
 
-Fetches Prague (300 m), asserts non-trivial geometry, writes `test_city.blend` and
-`test_render.png` to the outdir.
+Each scenario asserts geometry counts and renders an overview + a **driver-camera** shot.
+Every pure module also self-tests: `cd citybuilder_osm && python3 <module>.py`.
 
-## Rebuild the zip after code changes
+## Rebuild the zip
 
 ```sh
 blender --command extension build --source-dir citybuilder_osm \
-        --output-filepath citybuilder_osm-0.1.0.zip
-# optional: install straight into your Blender
-blender --command extension install-file --repo user_default --enable citybuilder_osm-0.1.0.zip
+        --output-filepath citybuilder_osm-0.5.0.zip
+blender --command extension install-file --repo user_default --enable citybuilder_osm-0.5.0.zip
 ```
 
-## Known MVP limits (see PLAN.md roadmap)
+## Attribution (ship with your game)
 
-- Flat world: no terrain, bridges at grade, tunnels skipped.
-- Roads are flat ribbons (real curb/verge cross-sections are v0.2, via Geometry Nodes).
-- Building courtyards (multipolygon holes) not carved yet; flat roofs only.
-- UI blocks during the fetch; radius capped at 1.5 km.
+- Map data: **© OpenStreetMap contributors (ODbL 1.0)** — embedded in every export.
+- DEM terrain: Terrain tiles by Mapzen/Tilezen via AWS Open Data; SRTM/3DEP courtesy USGS.
+
+## Known limits (v0.5 → see PLAN.md)
+
+- Procedural materials only — photographic PBR textures (ambientCG, CC0) are v0.6.
+- Junction pads are convex hulls + corner arcs; the osm2streets trim-back port lands v0.6.
+- Hipped roofs are ridge approximations (bpypolyskel vendoring is v0.6); complex/concave
+  footprints fall back to flat.
+- Tree-lawn does not yet taper at junction mouths; tunnels are skipped, not rendered.
+- UI blocks during fetch; radius capped at 1.5 km (tiled fetch is v0.6).
+- Parallel-mapped ways (dual carriageways, segregated cycle tracks) are swept
+  independently and overlap instead of merging into one cross-section — the
+  osm2streets pre-pass (v0.6) merges them. Paths/cycleways already follow terrain.
+- Heavy Overpass boxes (giant park relations, e.g. Golden Gate/Presidio) can 504;
+  the fetch degrades gracefully (relations dropped) but may still fail under
+  mirror load — retry, shrink radius, or use the tiled fetch when it lands.

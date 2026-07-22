@@ -1,33 +1,68 @@
-"""CityBuilder OSM — build real 3D cities from OpenStreetMap data.
+"""CityBuilder OSM — build real, game-ready 3D cities from OpenStreetMap data.
 
-Blender extension (4.2+/5.x). UI lives in the 3D-viewport N-panel, tab "CityBuilder".
+Blender extension (4.2+/5.x). UI: 3D-viewport N-panel, tab "CityBuilder".
+v0.5: framed roads (curbs/sidewalks/markings), junction pads + crosswalks,
+elevation solve + terrain (flat/hills/real DEM), buildings v2 (roofs/courtyards),
+landmark bridges, street props, game export (unity_city.json + GLB).
 """
+import time
 import traceback
 
 import bpy
 
-from . import build, geom, overpass
+from . import build, export_game, geom, overpass
+
+PRESETS = [
+    ("PRAGUE", "Prague — Staré Město", 50.0870, 14.4208, 500),
+    ("SF_GG", "San Francisco — Golden Gate", 37.8199, -122.4783, 900),
+    ("MANHATTAN", "New York — Midtown", 40.7580, -73.9855, 600),
+    ("LONDON", "London — Tower Bridge", 51.5055, -0.0754, 700),
+    ("TOKYO", "Tokyo — Shibuya", 35.6595, 139.7005, 600),
+]
+PRESET_ITEMS = [(p[0], p[1], "") for p in PRESETS] + [("CUSTOM", "Custom", "")]
+
+
+def _apply_preset(self, context):
+    for pid, label, lat, lon, radius in PRESETS:
+        if self.preset == pid:
+            self.lat, self.lon, self.radius = lat, lon, radius
+            self.city_name = label
+            break
 
 
 class CityBuilderProps(bpy.types.PropertyGroup):
-    lat: bpy.props.FloatProperty(
-        name="Latitude", default=50.0870, min=-85.0, max=85.0, precision=6,
-        description="Scene center latitude (default: Prague Staré Město)")
-    lon: bpy.props.FloatProperty(
-        name="Longitude", default=14.4208, min=-180.0, max=180.0, precision=6,
-        description="Scene center longitude")
+    preset: bpy.props.EnumProperty(
+        name="Location", items=PRESET_ITEMS, default="PRAGUE", update=_apply_preset)
+    city_name: bpy.props.StringProperty(name="City name", default="Prague — Staré Město")
+    lat: bpy.props.FloatProperty(name="Latitude", default=50.0870, min=-85, max=85, precision=6)
+    lon: bpy.props.FloatProperty(name="Longitude", default=14.4208, min=-180, max=180, precision=6)
     radius: bpy.props.IntProperty(
-        name="Radius (m)", default=400, min=100, max=1500,
-        description="Half-size of the fetched square, in metres")
+        name="Radius (m)", default=500, min=100, max=1500,
+        description="Half-size of the fetched square")
+    terrain_mode: bpy.props.EnumProperty(
+        name="Terrain", default="HILLS",
+        items=[("FLAT", "Flat", "No relief (fastest, offline-safe)"),
+               ("HILLS", "Gentle hills", "Procedural relief, riverbeds carved"),
+               ("DEM", "Real elevation", "AWS Terrain Tiles (network; falls back to hills)")])
+    quality: bpy.props.EnumProperty(
+        name="Quality", default="MED",
+        items=[("LOW", "Low", "Coarse terrain, fast"),
+               ("MED", "Medium", "Balanced"),
+               ("HIGH", "High", "Dense terrain grid")])
+    framed: bpy.props.BoolProperty(
+        name="Framed roads (curbs + sidewalks)", default=True)
+    do_buildings: bpy.props.BoolProperty(name="Buildings", default=True)
+    do_props: bpy.props.BoolProperty(name="Street props", default=True)
     do_trees: bpy.props.BoolProperty(name="Trees", default=True)
+    do_landmarks: bpy.props.BoolProperty(name="Landmark bridges", default=True)
     separate_buildings: bpy.props.BoolProperty(
         name="Separate building objects", default=False,
-        description="One object per building (editable one-by-one, slower) "
-                    "instead of a single merged mesh")
+        description="One object per building (hand-editable, slower)")
+    seed: bpy.props.IntProperty(name="Seed", default=0, min=0)
 
 
 class CITYBUILDER_OT_build(bpy.types.Operator):
-    """Fetch OpenStreetMap data around the given point and build the city"""
+    """Fetch OpenStreetMap data and build the city (blocks for 10-60 s)"""
     bl_idname = "citybuilder.build"
     bl_label = "Build City"
     bl_options = {"REGISTER", "UNDO"}
@@ -35,27 +70,45 @@ class CITYBUILDER_OT_build(bpy.types.Operator):
     def execute(self, context):
         p = context.scene.citybuilder
         if not bpy.app.online_access:
-            self.report({"ERROR"},
-                        "Online access is disabled. Enable it in "
-                        "Preferences > System > Network > Allow Online Access.")
+            self.report({"ERROR"}, "Enable Preferences > System > Network > Allow Online Access")
             return {"CANCELLED"}
-
+        wm = context.window_manager
+        t0 = time.time()
+        wm.progress_begin(0, 100)
         try:
             south, west, north, east = geom.bbox_around(p.lat, p.lon, p.radius)
-            elements = overpass.fetch(south, west, north, east, trees=p.do_trees)
+            wm.progress_update(2)
+            elements = overpass.fetch(south, west, north, east,
+                                      trees=p.do_trees, props=p.do_props)
             to_xy = geom.make_projector(p.lat, p.lon)
-            graph = overpass.parse(elements, to_xy)
+            graph = overpass.parse(elements, to_xy,
+                                   center={"lat": p.lat, "lon": p.lon,
+                                           "radius": p.radius, "name": p.city_name})
             build.clear_city(context)
             counts = build.build_scene(
-                context, graph, p.radius, separate_buildings=p.separate_buildings)
+                context, graph,
+                {"radius": p.radius,
+                 "terrain_mode": p.terrain_mode.lower(),
+                 "quality": p.quality.lower(),
+                 "seed": p.seed,
+                 "framed": p.framed,
+                 "do_buildings": p.do_buildings,
+                 "do_props": p.do_props,
+                 "do_trees": p.do_trees,
+                 "do_landmarks": p.do_landmarks,
+                 "separate_buildings": p.separate_buildings},
+                progress=lambda pct, label: wm.progress_update(int(pct)))
         except Exception as e:
             traceback.print_exc()
             self.report({"ERROR"}, f"Build failed: {e}")
             return {"CANCELLED"}
-
-        self.report({"INFO"},
-                    f"Built {counts['buildings']} buildings, {counts['roads']} roads, "
-                    f"{counts['areas']} areas, {counts['trees']} trees")
+        finally:
+            wm.progress_end()
+        self.report(
+            {"INFO"},
+            f"Built {counts.get('buildings', 0)} buildings, {counts.get('roads', 0)} roads, "
+            f"{counts.get('junctions', 0)} junctions, {counts.get('props', 0)} props, "
+            f"{counts.get('landmarks', 0)} landmarks in {time.time() - t0:.0f} s")
         return {"FINISHED"}
 
 
@@ -79,15 +132,27 @@ class CITYBUILDER_PT_panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         p = context.scene.citybuilder
+        layout.prop(p, "preset")
         col = layout.column(align=True)
         col.prop(p, "lat")
         col.prop(p, "lon")
         col.prop(p, "radius")
-        layout.prop(p, "do_trees")
-        layout.prop(p, "separate_buildings")
+        layout.prop(p, "terrain_mode")
+        layout.prop(p, "quality")
+        box = layout.box()
+        box.prop(p, "framed")
+        row = box.row()
+        row.prop(p, "do_buildings")
+        row.prop(p, "do_trees")
+        row = box.row()
+        row.prop(p, "do_props")
+        row.prop(p, "do_landmarks")
+        box.prop(p, "separate_buildings")
         layout.operator("citybuilder.build", icon="MOD_BUILD")
         layout.operator("citybuilder.clear", icon="TRASH")
-        layout.label(text="Fetch takes 5-30 s (Overpass API)", icon="INFO")
+        layout.separator()
+        layout.operator("citybuilder.export_game", icon="EXPORT")
+        layout.label(text="Fetch + build takes 10-60 s", icon="INFO")
 
 
 classes = (
@@ -101,10 +166,12 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    export_game.register()
     bpy.types.Scene.citybuilder = bpy.props.PointerProperty(type=CityBuilderProps)
 
 
 def unregister():
     del bpy.types.Scene.citybuilder
+    export_game.unregister()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
