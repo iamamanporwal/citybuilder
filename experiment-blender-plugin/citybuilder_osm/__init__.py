@@ -121,7 +121,8 @@ class CITYBUILDER_OT_build(bpy.types.Operator):
             {"INFO"},
             f"Built {counts.get('buildings', 0)} buildings, {counts.get('roads', 0)} roads, "
             f"{counts.get('junctions', 0)} junctions, {counts.get('props', 0)} props, "
-            f"{counts.get('landmarks', 0)} landmarks in {time.time() - t0:.0f} s")
+            f"{counts.get('landmarks', 0)} landmarks, {counts.get('grass_tufts', 0)} tufts, "
+            f"{counts.get('spires', 0)} spires in {time.time() - t0:.0f} s")
         return {"FINISHED"}
 
 
