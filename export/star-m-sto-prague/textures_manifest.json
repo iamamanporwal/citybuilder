@@ -1,0 +1,521 @@
+{
+  "policy": {
+    "texelDensityTargets": {
+      "lod0": 72,
+      "lod1": 36,
+      "lod2": 18
+    },
+    "perTileBudgetMB": {
+      "lod0": 24,
+      "lod1": 8,
+      "lod2": 2
+    },
+    "note": "Editor runs raw canvas textures; bake service encodes to KTX2/Basis per this manifest. Facade tiles pack into a trim-sheet atlas at bake."
+  },
+  "textures": [
+    {
+      "name": "asphalt_new",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "asphalt_new_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "asphalt_new_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "asphalt_worn",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "asphalt_worn_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "asphalt_worn_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "asphalt_patched",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "asphalt_patched_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "asphalt_patched_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "cobble_albedo",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "cobble_normal",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "cobble_height",
+      "kind": "height",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "cobble_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "pavers_albedo",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "pavers_normal",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "pavers_height",
+      "kind": "height",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "pavers_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "gravel_albedo",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "gravel_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "sidewalk_albedo",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "sidewalk_normal",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "sidewalk_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "asphalt_arcade",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "asphalt_arcade_n",
+      "kind": "normal",
+      "sizePx": 256,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "asphalt_arcade_mr",
+      "kind": "metallicRoughness",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (linear)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "facade_brick_red",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_brick_brown",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_stucco_warm",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_stucco_cool",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_concrete",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_office",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_curtainwall",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "facade_storefront",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 71,
+      "mipLevels": 9
+    },
+    {
+      "name": "roof_bitumen",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "roof_tile",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "roof_metal",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "roof_concrete",
+      "kind": "albedo",
+      "sizePx": 256,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "decal_crack",
+      "kind": "decal-albedo",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (sRGB, alpha)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_crack_n",
+      "kind": "normal",
+      "sizePx": 128,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_stain",
+      "kind": "decal-albedo",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (sRGB, alpha)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_stain_n",
+      "kind": "normal",
+      "sizePx": 128,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_patch",
+      "kind": "decal-albedo",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (sRGB, alpha)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_patch_n",
+      "kind": "normal",
+      "sizePx": 128,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_manhole",
+      "kind": "decal-albedo",
+      "sizePx": 128,
+      "ktx2Codec": "ETC1S (sRGB, alpha)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "decal_manhole_n",
+      "kind": "normal",
+      "sizePx": 128,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 21,
+      "mipLevels": 8
+    },
+    {
+      "name": "asphalt_detail_normal",
+      "kind": "normal",
+      "sizePx": 256,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 43,
+      "mipLevels": 9
+    },
+    {
+      "name": "grass",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "grass_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "park",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "park_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "forest",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "forest_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "ground",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "ground_n",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "sand_albedo",
+      "kind": "albedo",
+      "sizePx": 512,
+      "ktx2Codec": "ETC1S (sRGB)",
+      "colorSpace": "srgb",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    },
+    {
+      "name": "sand_normal",
+      "kind": "normal",
+      "sizePx": 512,
+      "ktx2Codec": "UASTC (linear, RG)",
+      "colorSpace": "linear",
+      "texelDensityPxPerM": 85,
+      "mipLevels": 10
+    }
+  ]
+}

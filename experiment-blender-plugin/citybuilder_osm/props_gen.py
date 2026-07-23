@@ -285,6 +285,24 @@ def _tpl_shrub():
     return md
 
 
+def _tpl_tree_columnar():
+    """Cypress/poplar: short trunk + one tall narrow ellipsoid + tip."""
+    md = geom.new_meshdata()
+    _ring_stack(md, [(0.0, 0.13), (1.2, 0.10)], "bark")
+    _sphere(md, 0.0, 0.0, 4.0, 0.85, 0.85, 2.9, "leaves")
+    _sphere(md, 0.0, 0.0, 7.1, 0.42, 0.42, 0.85, "leaves")
+    return md
+
+
+def _tpl_tree_broad():
+    """Plane/oak: thicker trunk + wide flattened crown."""
+    md = geom.new_meshdata()
+    _ring_stack(md, [(0.0, 0.24), (2.6, 0.15)], "bark")
+    _sphere(md, 0.0, 0.0, 3.7, 2.4, 2.4, 1.35, "leaves")
+    _sphere(md, 0.7, 0.4, 4.5, 1.5, 1.5, 0.95, "leaves")
+    return md
+
+
 TEMPLATES = {
     "lamp": _tpl_lamp,
     "signal": _tpl_signal,
@@ -294,6 +312,8 @@ TEMPLATES = {
     "bus_stop": _tpl_bus_stop,
     "bench": _tpl_bench,
     "tree": _tpl_tree,
+    "tree_columnar": _tpl_tree_columnar,
+    "tree_broad": _tpl_tree_broad,
     "shrub": _tpl_shrub,
 }
 
@@ -414,7 +434,7 @@ def _cat(template):
     """Cap category for a template."""
     if template in _SIGN_TEMPLATES:
         return "sign"
-    if template in ("tree", "shrub"):
+    if template in ("tree", "tree_columnar", "tree_broad", "shrub"):
         return "tree"
     return template  # lamp, bus_stop, bench
 
@@ -601,6 +621,18 @@ if __name__ == "__main__":
     _tree = TEMPLATES["tree"]()
     assert "bark" in _tree["mats"] and "leaves" in _tree["mats"]
     assert abs(min(v[2] for v in TEMPLATES["shrub"]()["verts"])) < 1e-9
+    # species silhouettes: columnar is tall+narrow, broad is short+wide
+    _col = TEMPLATES["tree_columnar"]()
+    _brd = TEMPLATES["tree_broad"]()
+    for _t in (_col, _brd):
+        assert "bark" in _t["mats"] and "leaves" in _t["mats"]
+    _col_h = max(v[2] for v in _col["verts"])
+    _col_r = max(math.hypot(v[0], v[1]) for v in _col["verts"])
+    _brd_h = max(v[2] for v in _brd["verts"])
+    _brd_r = max(math.hypot(v[0], v[1]) for v in _brd["verts"])
+    assert _col_h > 7.0 and _col_r < 1.0, (_col_h, _col_r)
+    assert _brd_h < 6.0 and _brd_r > 2.0, (_brd_h, _brd_r)
+    assert _cat("tree_columnar") == _cat("tree_broad") == "tree"
     # sign plates confront −Y
     for _tpl in ("stop_sign", "give_way", "speed_sign"):
         _md = TEMPLATES[_tpl]()

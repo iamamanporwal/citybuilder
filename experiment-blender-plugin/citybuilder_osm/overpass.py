@@ -67,6 +67,17 @@ NODE_PROP_KINDS = {
     ("highway", "crossing"): "crossing",
 }
 
+# landuse polygons kept as ZONES (recognizer + vegetation), never rendered
+ZONE_KINDS = frozenset(("residential", "commercial", "retail", "industrial"))
+
+# man_made features built as parametric structures (landmarks_gen)
+STRUCTURE_KINDS = frozenset(("water_tower", "chimney"))
+
+
+def zone_kind(tags):
+    lu = tags.get("landuse")
+    return lu if lu in ZONE_KINDS else None
+
 
 def water_provenance(tags):
     """Whitelist rule admitting these tags as a water AREA, or None (= land)."""
@@ -115,13 +126,17 @@ def build_query_ways(south, west, north, east, trees=True, props=True):
     hw = "|".join(ROAD_CLASSES)
     parts = [
         f'way["building"]{bbox};',
+        f'way["building:part"]{bbox};',
         f'way["highway"~"^({hw})$"]{bbox};',
         f'way["railway"="rail"]{bbox};',
         f'way["natural"~"^(water|wood|grassland|wetland|beach|sand)$"]{bbox};',
         f'way["waterway"~"^(riverbank|river|canal)$"]{bbox};',
-        f'way["landuse"~"^(grass|meadow|forest|reservoir|village_green)$"]{bbox};',
+        f'way["landuse"~"^(grass|meadow|forest|reservoir|village_green'
+        f'|residential|commercial|retail|industrial)$"]{bbox};',
         f'way["leisure"~"^(park|garden|playground|pitch)$"]{bbox};',
         f'way["place"="square"]{bbox};',
+        f'way["man_made"~"^(water_tower|chimney)$"]{bbox};',
+        f'node["man_made"~"^(water_tower|chimney)$"]{bbox};',
     ]
     if trees:
         parts.append(f'node["natural"="tree"]{bbox};')
@@ -204,8 +219,10 @@ def building_height(tags, oid):
     return 9.0 + round(geom.hash01(oid) * 5) * LEVEL_M
 
 
-def _building_rec(tags, oid, ring, holes):
-    b_tag = tags.get("building", "yes")
+def _building_rec(tags, oid, ring, holes, part=False):
+    b_tag = tags.get("building") or tags.get("building:part") or "yes"
+    if b_tag == "yes" and part:
+        b_tag = tags.get("building:part", "yes")
     shape = tags.get("roof:shape", "auto")
     if shape not in ROOF_SHAPES:
         shape = "auto"
@@ -224,6 +241,15 @@ def _building_rec(tags, oid, ring, holes):
         "kind": BUILDING_KIND.get(b_tag, "auto"),
         "id": oid,
         "name": tags.get("name"),
+        # Buildings v3 recognizer signals
+        "part": part,
+        "btype": b_tag,
+        "architecture": tags.get("building:architecture"),
+        "material": (tags.get("building:material")
+                     or tags.get("building:facade:material") or tags.get("material")),
+        "wikidata": tags.get("wikidata"),
+        "height_tagged": bool(tags.get("height") or tags.get("building:height")
+                              or tags.get("building:levels")),
     }
 
 
@@ -295,7 +321,8 @@ def _assign_holes(outers, inners):
 def parse(elements, to_xy, center=None):
     """Raw Overpass elements → Graph v2 dict (see SPEC.md)."""
     graph = {"buildings": [], "roads": [], "rails": [], "areas": [],
-             "trees": [], "props": [], "center": center or {}}
+             "trees": [], "props": [], "zones": [], "structures": [],
+             "center": center or {}}
 
     def project_ring(latlon_ring):
         ring = geom.dedupe_ring([to_xy(g["lat"], g["lon"]) for g in latlon_ring])
@@ -310,6 +337,11 @@ def parse(elements, to_xy, center=None):
                 continue
             if tags.get("natural") == "tree":
                 graph["trees"].append({"pos": to_xy(el["lat"], el["lon"]), "id": el["id"]})
+                continue
+            if tags.get("man_made") in STRUCTURE_KINDS:
+                graph["structures"].append(
+                    {"kind": tags["man_made"], "pos": to_xy(el["lat"], el["lon"]),
+                     "height": _float_tag(tags.get("height")), "id": el["id"]})
                 continue
             for (k, v), kind in NODE_PROP_KINDS.items():
                 if tags.get(k) == v:
@@ -352,10 +384,27 @@ def parse(elements, to_xy, center=None):
         closed = (pts_geo[0]["lat"] == pts_geo[-1]["lat"]
                   and pts_geo[0]["lon"] == pts_geo[-1]["lon"])
 
+        if tags.get("man_made") in STRUCTURE_KINDS and closed:
+            ring = project_ring(pts_geo)
+            if ring:
+                cx = sum(p[0] for p in ring) / len(ring)
+                cy = sum(p[1] for p in ring) / len(ring)
+                graph["structures"].append(
+                    {"kind": tags["man_made"], "pos": (cx, cy),
+                     "height": _float_tag(tags.get("height")), "id": el["id"]})
+            continue
+
         if "building" in tags and closed:
             ring = project_ring(pts_geo)
             if ring and geom.ring_area_m2(ring) >= 4:
                 graph["buildings"].append(_building_rec(tags, el["id"], ring, []))
+            continue
+
+        if tags.get("building:part", "no") != "no" and closed:
+            ring = project_ring(pts_geo)
+            if ring and geom.ring_area_m2(ring) >= 4:
+                graph["buildings"].append(
+                    _building_rec(tags, el["id"], ring, [], part=True))
             continue
 
         hw = tags.get("highway")
@@ -384,6 +433,13 @@ def parse(elements, to_xy, center=None):
             if kind == "water" and geom.ring_area_m2(ring) < MIN_WATER_AREA_M2:
                 continue
             graph["areas"].append({"kind": kind, "ring": ring, "holes": []})
+            continue
+
+        zk = zone_kind(tags)
+        if zk and closed:
+            ring = project_ring(pts_geo)
+            if ring:
+                graph["zones"].append({"kind": zk, "ring": ring, "holes": []})
             continue
 
         ww = tags.get("waterway")
@@ -418,6 +474,14 @@ if __name__ == "__main__":
          "geometry": g([(0, 0), (0.01, 0), (0.01, 0.01), (0, 0.01), (0, 0)])},
         {"type": "node", "id": 5, "lat": 0.5, "lon": 0.5,
          "tags": {"highway": "street_lamp"}},
+        {"type": "way", "id": 7, "tags": {"landuse": "residential"}, "geometry": g(sq)},
+        {"type": "way", "id": 8,
+         "tags": {"building:part": "yes", "min_height": "12",
+                  "height": "30", "building:material": "glass"},
+         "geometry": g(sq)},
+        {"type": "node", "id": 9, "lat": 0.2, "lon": 0.2,
+         "tags": {"man_made": "chimney", "height": "45"}},
+        {"type": "way", "id": 12, "tags": {"man_made": "water_tower"}, "geometry": g(sq)},
         {"type": "relation", "id": 6, "tags": {"building": "yes"}, "members": [
             {"type": "way", "role": "outer",
              "geometry": g([(0, 0), (0.002, 0), (0.002, 0.002), (0, 0.002), (0, 0)])},
@@ -427,17 +491,31 @@ if __name__ == "__main__":
         ]},
     ]
     gr = parse(elements, xy)
-    assert len(gr["buildings"]) == 2
+    assert len(gr["buildings"]) == 3
     b = gr["buildings"][0]
     assert b["height"] == 5 * LEVEL_M and b["roof_shape"] == "gabled" and b["kind"] == "residential"
-    assert gr["buildings"][1]["holes"] and len(gr["buildings"][1]["holes"]) == 1
+    assert b["btype"] == "apartments" and b["height_tagged"] and not b["part"]
     r = gr["roads"][0]
     assert r["width"] == 12.0 and r["oneway"] and r["bridge"] and r["layer"] == 1 \
         and r["maxspeed"] == 50 and r["lanes"] == 4
     kinds = {a["kind"] for a in gr["areas"]}
     assert kinds == {"water"}, kinds  # pool rejected by whitelist
     assert gr["props"][0]["kind"] == "lamp"
+    # buildings v3: parts, zones, structures
+    part = next(x for x in gr["buildings"] if x["part"])
+    assert part["min_height"] == 12.0 and part["height"] == 30.0 \
+        and part["material"] == "glass" and part["height_tagged"]
+    hole_b = next(x for x in gr["buildings"] if x["holes"])
+    assert len(hole_b["holes"]) == 1
+    assert gr["zones"] == [{"kind": "residential", "ring": gr["zones"][0]["ring"],
+                            "holes": []}]
+    skinds = sorted(s["kind"] for s in gr["structures"])
+    assert skinds == ["chimney", "water_tower"], skinds
+    chim = next(s for s in gr["structures"] if s["kind"] == "chimney")
+    assert chim["height"] == 45.0
     q = build_query_ways(50.0, 14.0, 50.01, 14.01)
     qr = build_query_relations(50.0, 14.0, 50.01, 14.01)
     assert "street_lamp" in q and "railway" in q and 'relation["building"]' in qr
+    assert "building:part" in q and "water_tower|chimney" in q \
+        and "residential|commercial|retail|industrial" in q
     print("overpass v2 self-tests OK")

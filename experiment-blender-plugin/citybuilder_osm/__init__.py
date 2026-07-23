@@ -1,9 +1,12 @@
 """CityBuilder OSM — build real, game-ready 3D cities from OpenStreetMap data.
 
 Blender extension (4.2+/5.x). UI: 3D-viewport N-panel, tab "CityBuilder".
-v0.5: framed roads (curbs/sidewalks/markings), junction pads + crosswalks,
-elevation solve + terrain (flat/hills/real DEM), buildings v2 (roofs/courtyards),
-landmark bridges, street props, game export (unity_city.json + GLB).
+v0.7: photo-PBR textures, roads v2 (parallel-way merge + osm2streets junctions),
+living streets (verge grass/shrubs, forest fill, 3 tree species), buildings v3
+(recognizer looks, straight-skeleton roofs, curtain walls, storefronts,
+balconies, domes, building:part), church spires + water towers + chimneys,
+elevation solve + terrain (flat/hills/real DEM), landmark bridges, street
+props, game export (unity_city.json + GLB).
 """
 import time
 import traceback
@@ -59,6 +62,10 @@ class CityBuilderProps(bpy.types.PropertyGroup):
     do_props: bpy.props.BoolProperty(name="Street props", default=True)
     do_trees: bpy.props.BoolProperty(name="Trees", default=True)
     do_landmarks: bpy.props.BoolProperty(name="Landmark bridges", default=True)
+    do_vegetation: bpy.props.BoolProperty(
+        name="Greenery (verges + forests)", default=True,
+        description="Roadside grass tufts and shrubs on verges, plus tree "
+                    "fill inside forest and park polygons")
     separate_buildings: bpy.props.BoolProperty(
         name="Separate building objects", default=False,
         description="One object per building (hand-editable, slower)")
@@ -101,6 +108,7 @@ class CITYBUILDER_OT_build(bpy.types.Operator):
                  "do_props": p.do_props,
                  "do_trees": p.do_trees,
                  "do_landmarks": p.do_landmarks,
+                 "do_vegetation": p.do_vegetation,
                  "separate_buildings": p.separate_buildings},
                 progress=lambda pct, label: wm.progress_update(int(pct)))
         except Exception as e:
@@ -153,6 +161,7 @@ class CITYBUILDER_PT_panel(bpy.types.Panel):
         row = box.row()
         row.prop(p, "do_props")
         row.prop(p, "do_landmarks")
+        box.prop(p, "do_vegetation")
         box.prop(p, "separate_buildings")
         layout.operator("citybuilder.build", icon="MOD_BUILD")
         layout.operator("citybuilder.clear", icon="TRASH")

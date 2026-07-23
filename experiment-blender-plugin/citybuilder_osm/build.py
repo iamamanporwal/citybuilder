@@ -11,10 +11,12 @@ import bpy
 import os
 
 from . import (elevation, geom, junctions, landmarks_gen, matlib, overpass,
-               profile, props_gen, roadmerge, roadnet, roofs, terrain, texcache)
+               profile, props_gen, recognizer, roadmerge, roadnet, roofs,
+               terrain, texcache, vegetation)
 
 ROOT_NAME = "CityBuilder"
-SUBS = ("Ground", "Roads", "Junctions", "Areas", "Buildings", "Landmarks", "Props", "Trees")
+SUBS = ("Ground", "Roads", "Junctions", "Areas", "Buildings", "Landmarks",
+        "Props", "Trees", "Vegetation")
 
 WATER_SURFACE_Z = -1.2
 AREA_Z = {"sand": 0.037, "grass": 0.022, "park": 0.032, "forest": 0.042}
@@ -187,6 +189,32 @@ def _rail_meshdata(rails, field):
 def _pier_prism(md, ring):
     """Concrete pier for an over-water building: cap at grade 0, skirt to −3."""
     geom.add_prism(md, ring, -3.0, 0.0, "concrete", mat_top="concrete")
+
+
+def _part_covered_outlines(buildings):
+    """building:part assembly: outline buildings whose footprint is ≥ 55%
+    covered by parts (centroid-in-outline test) are suppressed — the parts
+    render the mass. Returns the set of outline ids to skip."""
+    parts = [b for b in buildings if b.get("part")]
+    if not parts:
+        return set()
+    skip = set()
+    for outline in buildings:
+        if outline.get("part"):
+            continue
+        o_ring = outline["ring"]
+        o_area = geom.ring_area_m2(o_ring)
+        if o_area < 4:
+            continue
+        covered = 0.0
+        for p in parts:
+            cx = sum(q[0] for q in p["ring"]) / len(p["ring"])
+            cy = sum(q[1] for q in p["ring"]) / len(p["ring"])
+            if vegetation._in_ring((cx, cy), o_ring):
+                covered += geom.ring_area_m2(p["ring"])
+        if covered >= 0.55 * o_area:
+            skip.add(id(outline))
+    return skip
 
 
 def _water_fraction(ring, water_areas):
@@ -369,13 +397,21 @@ def build_scene(context, graph, params, progress=None):
     meshdata_to_object("Areas", area_md, subs["Areas"])
     meshdata_to_object("Water", water_md, subs["Areas"])
 
-    # 6. buildings
+    # 6. buildings — recognizer-driven looks, part assembly, church spires
     tick(72, "buildings")
-    n_b = 0
+    veg_ctx = vegetation.make_context(graph)   # land cover + zoning samplers
+    region, climate = recognizer.region_climate(graph["center"].get("lat"),
+                                                graph["center"].get("lon"))
+    rec_ctx = {"region": region, "climate": climate,
+               "zone_at": veg_ctx["zone_at"]}
+    n_b = n_spires = 0
     if params.get("do_buildings", True):
         pier_md = geom.new_meshdata()
         merged = geom.new_meshdata()
+        skip_outlines = _part_covered_outlines(graph["buildings"])
         for b in graph["buildings"]:
+            if id(b) in skip_outlines:
+                continue
             cx = sum(p[0] for p in b["ring"]) / len(b["ring"])
             cy = sum(p[1] for p in b["ring"]) / len(b["ring"])
             if _water_fraction(b["ring"], water_areas) >= 0.5:
@@ -384,9 +420,21 @@ def build_scene(context, graph, params, progress=None):
             else:
                 base_z = field.sample(cx, cy)
             try:
+                b["look"] = recognizer.recognize(b, rec_ctx)
                 bmd = roofs.build_building(b, base_z)
             except Exception:
                 continue
+            # named/large churches get a tower + spire + cross (§3.5)
+            if (b.get("kind") == "church" and not b.get("part")
+                    and (b.get("name") or geom.ring_area_m2(b["ring"]) >= 200)):
+                try:
+                    smd = landmarks_gen.build_spire(
+                        b["ring"], base_z, base_z + float(b.get("height") or 8.0))
+                    if smd["faces"]:
+                        geom.merge_meshdata(bmd, smd)
+                        n_spires += 1
+                except Exception:
+                    pass
             if params.get("separate_buildings"):
                 meshdata_to_object(f"Building {b['id']}", bmd, subs["Buildings"])
             else:
@@ -396,6 +444,7 @@ def build_scene(context, graph, params, progress=None):
             meshdata_to_object("Buildings", merged, subs["Buildings"])
         meshdata_to_object("Piers", pier_md, subs["Buildings"])
     counts["buildings"] = n_b
+    counts["spires"] = n_spires
 
     # 7. landmarks
     tick(84, "landmarks")
@@ -427,6 +476,25 @@ def build_scene(context, graph, params, progress=None):
             if md and md["faces"]:
                 meshdata_to_object(f"Landmark {lm['kind']} {n_lm}", md, subs["Landmarks"])
                 n_lm += 1
+        # man_made verticals: water towers + industrial chimneys (§3.5)
+        st_md = geom.new_meshdata()
+        n_st = 0
+        for s in (graph.get("structures") or [])[:200]:
+            x, y = float(s["pos"][0]), float(s["pos"][1])
+            try:
+                if s["kind"] == "water_tower":
+                    smd = landmarks_gen.build_water_tower(
+                        (x, y), conformed_z(x, y), s.get("height"))
+                else:
+                    smd = landmarks_gen.build_chimney(
+                        (x, y), conformed_z(x, y), s.get("height"))
+            except Exception:
+                continue
+            if smd["faces"]:
+                geom.merge_meshdata(st_md, smd)
+                n_st += 1
+        meshdata_to_object("Structures", st_md, subs["Landmarks"])
+        counts["structures"] = n_st
     counts["landmarks"] = n_lm
 
     # 8. props + trees (instanced)
@@ -447,6 +515,21 @@ def build_scene(context, graph, params, progress=None):
         placements = props_gen.place_props(
             graph, network, road_z, field.sample,
             {"props": params.get("do_props", True), "trees": params.get("do_trees", True)})
+        # 3 species picked by hash for surveyed OSM trees (Phase 2 variety)
+        for p in placements:
+            if p["template"] == "tree":
+                key = f"t{round(p['pos'][0] * 10)},{round(p['pos'][1] * 10)}"
+                p["template"] = vegetation.pick_species(vegetation.hash01s(key))
+        # forest/park interior fill (hash scatter, 1/90 m² forest, cap 3000)
+        if params.get("do_vegetation", True):
+            fills = vegetation.plan_area_trees(
+                graph["areas"], veg_ctx, conformed_z, roads=graph["roads"])
+            for f in fills:
+                lift = AREA_Z.get(f["area_kind"], 0.03)
+                placements.append({"template": f["species"],
+                                   "pos": (f["x"], f["y"], f["z"] + lift),
+                                   "rot_z": f["rot"], "scale": f["scale"]})
+            counts["forest_trees"] = len(fills)
         template_meshes = {}
         for p in placements:
             tname = p["template"]
@@ -458,7 +541,9 @@ def build_scene(context, graph, params, progress=None):
                 tobj.hide_viewport = True
                 tobj.hide_render = True
                 template_meshes[tname] = tobj.data
-            coll = subs["Trees"] if tname in ("tree", "shrub") else subs["Props"]
+            coll = (subs["Trees"] if tname in ("tree", "tree_columnar",
+                                               "tree_broad", "shrub")
+                    else subs["Props"])
             obj = bpy.data.objects.new(f"{tname}", template_meshes[tname])
             obj.location = p["pos"]
             obj.rotation_euler = (0, 0, p.get("rot_z", 0.0))
@@ -467,6 +552,21 @@ def build_scene(context, graph, params, progress=None):
             coll.objects.link(obj)
             n_props += 1
     counts["props"] = n_props
+
+    # 8b. roadside vegetation — Slow-Roads-style verges, ONE merged object
+    # per kind (26k tufts as 52k card quads, never 26k objects)
+    tick(94, "vegetation")
+    if params.get("do_vegetation", True):
+        veg_z = lambda x, y: conformed_z(x, y) + 0.04  # ride the lawn band top
+        inst = vegetation.plan_roadside(graph["roads"], veg_ctx, veg_z)
+        grass = [i for i in inst if i["kind"] == "grass"]
+        shrubs = [i for i in inst if i["kind"] == "shrub"]
+        meshdata_to_object("Verge Grass", vegetation.grass_meshdata(grass),
+                           subs["Vegetation"])
+        meshdata_to_object("Verge Shrubs", vegetation.shrub_meshdata(shrubs),
+                           subs["Vegetation"])
+        counts["grass_tufts"] = len(grass)
+        counts["verge_shrubs"] = len(shrubs)
 
     # 9. export payload on the scene
     tick(97, "export data")

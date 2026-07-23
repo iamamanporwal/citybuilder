@@ -397,8 +397,13 @@ def _photo_builder(key, spec):
     return build
 
 
-# Facade palette: 5 plausible wall colours chosen by the per-face "tint" attr.
+# Facade palettes: 5 plausible wall colours chosen by the per-face "tint" attr,
+# one palette per facade family (recognizer: plaster | brick | panel).
 _WALL_PALETTE = ("#b8a488", "#a89179", "#c4b49a", "#9a8a80", "#b0a190")
+_BRICK_PALETTE = ("#9a5040", "#8a4a3a", "#a25b46", "#7e4534", "#96544a")
+_PANEL_PALETTE = ("#b5b3ae", "#a09e98", "#c2c0ba", "#8f8d86", "#adaca6")
+_PALETTES = {"plaster": _WALL_PALETTE, "brick": _BRICK_PALETTE,
+             "panel": _PANEL_PALETTE}
 _GLASS_HEX = "#1c2226"
 _GLOW_HEX = "#ffd9a0"
 
@@ -409,12 +414,16 @@ _COL_W, _WIN_U0, _WIN_U1 = 2.6, 0.27, 0.73
 _LIT_THRESHOLD = 0.82   # white-noise gate → ~18% of window cells glow
 
 
-def _build_wall(mat, photo=None):
+def _build_wall(mat, photo=None, base="plaster"):
     """THE facade: window grid from UV metres + tint palette + lit windows.
 
-    photo = {"plaster": maps, "brick": maps|None} swaps the flat palette for
-    photographic wall textures (palette survives as a 30% multiply tint)."""
-    nt, bsdf = _reset(mat, _WALL_PALETTE[0], 0.8)
+    base = "plaster" | "brick" | "panel" picks the palette and the procedural
+    wall pattern (brick = UV-metre TexBrick rows, panel = joint-line grid).
+    photo = one texcache maps dict for the base texture (palette survives as a
+    multiply tint). v0.7: the recognizer assigns brick/panel per building via
+    dedicated material keys — the old in-shader tint>0.65 brick pick is gone."""
+    palette = _PALETTES.get(base, _WALL_PALETTE)
+    nt, bsdf = _reset(mat, palette[0], 0.8)
     ln = nt.links.new
     bsdf.location = (240, 0)
     for n in nt.nodes:
@@ -452,36 +461,66 @@ def _build_wall(mat, photo=None):
     at.attribute_name = "tint"
     at.attribute_type = "GEOMETRY"
     at.location = (-1560, -420)
-    pal = _ramp(nt, [(i * 0.2, _hex_rgba(h)) for i, h in enumerate(_WALL_PALETTE)],
+    pal = _ramp(nt, [(i * 0.2, _hex_rgba(h)) for i, h in enumerate(palette)],
                 (-1300, -420), interp="CONSTANT")
     pal.label = "facade palette"
     ln(at.outputs["Fac"], pal.inputs["Fac"])
     _frame(nt, "Facade colour (tint attr)", pal)
 
-    # wall colour source: flat palette, or photo wall × palette tint
+    # wall colour source: photo × palette tint, or procedural pattern per base
     wall_col = pal.outputs["Color"]
     if photo:
-        pl = _photo_chain(nt, photo["plaster"], coords="UV", loc=(-2400, 700))
-        if photo.get("brick"):
-            br = _photo_chain(nt, photo["brick"], coords="UV", loc=(-2400, 1150))
-            pick = _math(nt, "GREATER_THAN", at.outputs["Fac"], 0.65, (-1400, 760))
-            pick.label = "brick if tint > 0.65"
-            pmix = _mix(nt, "RGBA", "MIX", (-1180, 820))
-            ln(pick.outputs[0], _in(pmix, "Factor_Float"))
-            ln(pl["color"], _in(pmix, "A_Color"))
-            ln(br["color"], _in(pmix, "B_Color"))
-            photo_col = _outp(pmix, "Result_Color")
-        else:
-            photo_col = pl["color"]
+        pl = _photo_chain(nt, photo, coords="UV", loc=(-2400, 700))
         tintmix = _mix(nt, "RGBA", "MULTIPLY", (-960, 700))
         tintmix.label = "photo × palette (55%)"
         _in(tintmix, "Factor_Float").default_value = 0.55
-        ln(photo_col, _in(tintmix, "A_Color"))
+        ln(pl["color"], _in(tintmix, "A_Color"))
         ln(pal.outputs["Color"], _in(tintmix, "B_Color"))
         wall_col = _outp(tintmix, "Result_Color")
         if pl.get("normal"):
             ln(pl["normal"], bsdf.inputs["Normal"])
         _frame(nt, "Photo wall (ambientCG)", tintmix)
+    elif base == "brick":
+        # UV-metre brick rows (0.083 m courses) multiplied by the tint palette
+        mp = nt.nodes.new("ShaderNodeMapping")
+        mp.location = (-1560, 700)
+        ln(tc.outputs["UV"], mp.inputs["Vector"])
+        br = nt.nodes.new("ShaderNodeTexBrick")
+        br.location = (-1320, 700)
+        br.offset = 0.5
+        br.offset_frequency = 2
+        ln(mp.outputs["Vector"], br.inputs["Vector"])
+        _set(br, "Color1", _hex_rgba("#c9a598"))
+        _set(br, "Color2", _hex_rgba("#b8907f"))
+        _set(br, "Mortar", _hex_rgba("#cfc6b8"))
+        _set(br, "Scale", 1.0)
+        _set(br, "Mortar Size", 0.011)
+        _set(br, "Mortar Smooth", 0.1)
+        _set(br, "Brick Width", 0.21)
+        _set(br, "Row Height", 0.083)
+        bmix = _mix(nt, "RGBA", "MULTIPLY", (-1040, 700))
+        bmix.label = "brick × palette"
+        _in(bmix, "Factor_Float").default_value = 1.0
+        ln(br.outputs["Color"], _in(bmix, "A_Color"))
+        ln(pal.outputs["Color"], _in(bmix, "B_Color"))
+        wall_col = _outp(bmix, "Result_Color")
+        _frame(nt, "Brick courses (UV metres)", mp, br, bmix)
+    elif base == "panel":
+        # concrete panel joints: floor lines every 3.2 m, verticals every 6 m
+        fv2 = _math(nt, "FRACT", dv.outputs[0], None, (-1560, 700))
+        lh = _math(nt, "LESS_THAN", fv2.outputs[0], 0.035, (-1380, 700))
+        du6 = _math(nt, "DIVIDE", u, 6.0, (-1560, 560))
+        fu6 = _math(nt, "FRACT", du6.outputs[0], None, (-1380, 560))
+        lv6 = _math(nt, "LESS_THAN", fu6.outputs[0], 0.014, (-1200, 560))
+        joins = _math(nt, "MAXIMUM", lh.outputs[0], lv6.outputs[0], (-1200, 700))
+        joins.label = "panel joints"
+        dark = _mix(nt, "RGBA", "MULTIPLY", (-1020, 700))
+        dark.label = "joint shadow"
+        ln(joins.outputs[0], _in(dark, "Factor_Float"))
+        ln(pal.outputs["Color"], _in(dark, "A_Color"))
+        _in(dark, "B_Color").default_value = (0.72, 0.72, 0.72, 1.0)
+        wall_col = _outp(dark, "Result_Color")
+        _frame(nt, "Panel joints (UV metres)", fv2, lh, du6, fu6, lv6, joins, dark)
 
     # wall ↔ dark glass by window mask
     colmix = _mix(nt, "RGBA", "MIX", (-560, 40))
@@ -585,6 +624,227 @@ def _build_lamp_head(mat):
     _set(bsdf, "Emission Strength", 3.0)
 
 
+def _build_curtain(mat):
+    """Curtain-wall glass tower (Buildings v3): dark glass panes + mullion grid
+    from UV metres (mullions every 1.5 m, floor lines every 3.2 m), tint-attr
+    glass hue variation, ~14% of cells lit."""
+    nt, bsdf = _reset(mat, "#1c2630", 0.15, metal=0.1)
+    ln = nt.links.new
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc.location = (-1960, 40)
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (-1780, 40)
+    ln(tc.outputs["UV"], sep.inputs["Vector"])
+    u, v = sep.outputs["X"], sep.outputs["Y"]
+
+    du = _math(nt, "DIVIDE", u, 1.5, (-1560, 160))
+    du.label = "u / mullion 1.5m"
+    dv = _math(nt, "DIVIDE", v, _FLOOR_H, (-1560, -60))
+    fu = _math(nt, "FRACT", du.outputs[0], None, (-1380, 160))
+    fv = _math(nt, "FRACT", dv.outputs[0], None, (-1380, -60))
+    mu = _math(nt, "LESS_THAN", fu.outputs[0], 0.05, (-1200, 160))
+    mv = _math(nt, "LESS_THAN", fv.outputs[0], 0.055, (-1200, -60))
+    mull = _math(nt, "MAXIMUM", mu.outputs[0], mv.outputs[0], (-1020, 60))
+    mull.label = "mullion mask"
+    _frame(nt, "Mullion grid (UV metres)", du, dv, fu, fv, mu, mv, mull)
+
+    at = nt.nodes.new("ShaderNodeAttribute")
+    at.attribute_name = "tint"
+    at.attribute_type = "GEOMETRY"
+    at.location = (-1560, -420)
+    glass = _ramp(nt, [(0.0, _hex_rgba("#16222c")), (0.5, _hex_rgba("#182a33")),
+                       (1.0, _hex_rgba("#1d2b26"))], (-1300, -420))
+    glass.label = "glass tints"
+    ln(at.outputs["Fac"], glass.inputs["Fac"])
+
+    colmix = _mix(nt, "RGBA", "MIX", (-560, 40))
+    colmix.label = "glass / mullion"
+    ln(mull.outputs[0], _in(colmix, "Factor_Float"))
+    ln(glass.outputs["Color"], _in(colmix, "A_Color"))
+    _in(colmix, "B_Color").default_value = _hex_rgba("#33383d")
+    ln(_outp(colmix, "Result_Color"), bsdf.inputs["Base Color"])
+    rmix = _mix(nt, "FLOAT", loc=(-560, -220))
+    rmix.label = "rough: glass / mullion"
+    ln(mull.outputs[0], _in(rmix, "Factor_Float"))
+    _in(rmix, "A_Float").default_value = 0.12
+    _in(rmix, "B_Float").default_value = 0.55
+    ln(_outp(rmix, "Result_Float"), bsdf.inputs["Roughness"])
+    mmix = _mix(nt, "FLOAT", loc=(-560, -380))
+    mmix.label = "metal: glass / mullion"
+    ln(mull.outputs[0], _in(mmix, "Factor_Float"))
+    _in(mmix, "A_Float").default_value = 0.1
+    _in(mmix, "B_Float").default_value = 0.8
+    ln(_outp(mmix, "Result_Float"), bsdf.inputs["Metallic"])
+
+    # lit cells (cooler office glow), suppressed on mullions
+    flu = _math(nt, "FLOOR", du.outputs[0], None, (-1380, -640))
+    flv = _math(nt, "FLOOR", dv.outputs[0], None, (-1380, -800))
+    comb = nt.nodes.new("ShaderNodeCombineXYZ")
+    comb.location = (-1200, -700)
+    ln(flu.outputs[0], comb.inputs["X"])
+    ln(flv.outputs[0], comb.inputs["Y"])
+    wn = nt.nodes.new("ShaderNodeTexWhiteNoise")
+    wn.noise_dimensions = "3D"
+    wn.location = (-1020, -700)
+    ln(comb.outputs["Vector"], wn.inputs["Vector"])
+    lit = _math(nt, "GREATER_THAN", wn.outputs["Value"], 0.86, (-840, -700))
+    lit.label = "~14% cells lit"
+    inv = _math(nt, "SUBTRACT", 1.0, None, (-840, -560))
+    ln(mull.outputs[0], inv.inputs[1])
+    gate = _math(nt, "MULTIPLY", lit.outputs[0], inv.outputs[0], (-660, -700))
+    strength = _math(nt, "MULTIPLY", gate.outputs[0], 1.4, (-480, -700))
+    strength.label = "emission strength"
+    _set(bsdf, ("Emission Color", "Emission"), _hex_rgba("#dce8ff"))
+    ln(strength.outputs[0], bsdf.inputs["Emission Strength"])
+    _frame(nt, "Lit cells", flu, flv, comb, wn, lit, inv, gate, strength)
+
+
+def _build_storefront(mat):
+    """Ground-floor storefront band: dark display glass with vertical frame
+    mullions every 2.2 m (UV metres; the band is 4.2 m tall)."""
+    nt, bsdf = _reset(mat, "#10161b", 0.15, metal=0.3)
+    ln = nt.links.new
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc.location = (-1400, 0)
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (-1220, 0)
+    ln(tc.outputs["UV"], sep.inputs["Vector"])
+    du = _math(nt, "DIVIDE", sep.outputs["X"], 2.2, (-1040, 60))
+    fu = _math(nt, "FRACT", du.outputs[0], None, (-860, 60))
+    mull = _math(nt, "LESS_THAN", fu.outputs[0], 0.035, (-680, 60))
+    mull.label = "frame mullions"
+    colmix = _mix(nt, "RGBA", "MIX", (-480, 0))
+    ln(mull.outputs[0], _in(colmix, "Factor_Float"))
+    _in(colmix, "A_Color").default_value = _hex_rgba("#10161b")
+    _in(colmix, "B_Color").default_value = _hex_rgba("#3a3f45")
+    ln(_outp(colmix, "Result_Color"), bsdf.inputs["Base Color"])
+    rmix = _mix(nt, "FLOAT", loc=(-480, -200))
+    ln(mull.outputs[0], _in(rmix, "Factor_Float"))
+    _in(rmix, "A_Float").default_value = 0.15
+    _in(rmix, "B_Float").default_value = 0.5
+    ln(_outp(rmix, "Result_Float"), bsdf.inputs["Roughness"])
+
+
+# ---- grass card (Phase 2) -------------------------------------------------------
+# The alpha blade-fan texture is generated in-process (no downloads): a
+# deterministic LCG paints 15 tapered quadratic-Bézier blades into a 128²
+# RGBA buffer — the port of the app's canvas grassBillboardTexture().
+
+_GRASS_CARD_IMG = "CB grass_card"
+
+
+def _grass_card_image(size=128):
+    img = bpy.data.images.get(_GRASS_CARD_IMG)
+    if img is not None and img.size[0] == size:
+        return img
+    S = size
+    px = [0.0] * (S * S * 4)
+    state = [987654321]
+
+    def rnd():
+        state[0] = (state[0] * 1664525 + 1013904223) & 0xFFFFFFFF
+        return state[0] / 4294967296.0
+
+    def paint(x, y, r, col):
+        for iy in range(max(0, int(y - r)), min(S, int(y + r) + 2)):
+            for ix in range(max(0, int(x - r)), min(S, int(x + r) + 2)):
+                if (ix + 0.5 - x) ** 2 + (iy + 0.5 - y) ** 2 <= r * r:
+                    o = (iy * S + ix) * 4
+                    px[o], px[o + 1], px[o + 2], px[o + 3] = col[0], col[1], col[2], 1.0
+
+    blades = 15
+    for i in range(blades):
+        root_x = S * (0.1 + 0.8 * i / (blades - 1) + (rnd() - 0.5) * 0.06)
+        tip_x = root_x + (rnd() - 0.5) * S * 0.28
+        tip_y = S * (0.08 + rnd() * 0.42)          # canvas-style: small = near top
+        w = S * (0.035 + rnd() * 0.03)
+        lo = 60 + int(rnd() * 24)
+        c0 = ((lo - 14) / 255.0, (lo + 26) / 255.0, lo * 0.5 / 255.0)
+        c1 = ((lo + 40) / 255.0, (lo + 78) / 255.0, lo * 0.6 / 255.0)
+        mid_x = (root_x + tip_x) / 2.0 + (rnd() - 0.5) * S * 0.1
+        steps = 56
+        for k in range(steps + 1):
+            t = k / steps
+            cx = (1 - t) ** 2 * root_x + 2 * (1 - t) * t * mid_x + t * t * tip_x
+            cy = (1 - t) ** 2 * S + 2 * (1 - t) * t * (S + tip_y) / 2.0 + t * t * tip_y
+            col = tuple(c0[j] + (c1[j] - c0[j]) * t for j in range(3))
+            paint(cx, S - 1 - cy, max(0.9, w * (1.0 - t) * 0.55), col)
+
+    img = bpy.data.images.new(_GRASS_CARD_IMG, S, S, alpha=True)
+    img.colorspace_settings.name = "sRGB"
+    try:
+        img.pixels.foreach_set(px)
+    except AttributeError:
+        img.pixels = px
+    try:
+        img.pack()
+    except Exception:
+        pass  # unpacked generated image still renders this session
+    return img
+
+
+def _build_grass_card(mat):
+    """Alpha-clipped grass blade card; per-face attrs: tint (0..1 hue/value
+    jitter), dry (0|1 → yellowed). Double-sided by default."""
+    nt, bsdf = _reset(mat, "#5f8a3e", 1.0)
+    ln = nt.links.new
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = _grass_card_image()
+    tex.extension = "EXTEND"
+    tex.location = (-1200, 60)
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc.location = (-1400, 60)
+    ln(tc.outputs["UV"], tex.inputs["Vector"])
+
+    at = nt.nodes.new("ShaderNodeAttribute")
+    at.attribute_name = "tint"
+    at.attribute_type = "GEOMETRY"
+    at.location = (-1200, -260)
+    ad = nt.nodes.new("ShaderNodeAttribute")
+    ad.attribute_name = "dry"
+    ad.attribute_type = "GEOMETRY"
+    ad.location = (-1200, -460)
+    # instance colour = lush ↔ dry by "dry", value-jittered by "tint"
+    dmix = _mix(nt, "RGBA", "MIX", (-940, -300))
+    dmix.label = "lush / dry"
+    ln(ad.outputs["Fac"], _in(dmix, "Factor_Float"))
+    _in(dmix, "A_Color").default_value = _hex_rgba("#9cc46a")
+    _in(dmix, "B_Color").default_value = _hex_rgba("#d3cc84")
+    jit = nt.nodes.new("ShaderNodeMapRange")
+    jit.location = (-940, -120)
+    _set(jit, "From Min", 0.0)
+    _set(jit, "From Max", 1.0)
+    _set(jit, "To Min", 0.82)
+    _set(jit, "To Max", 1.18)
+    ln(at.outputs["Fac"], _in(jit, "Value"))
+    vmul = _mix(nt, "RGBA", "MULTIPLY", (-700, -220))
+    vmul.label = "tint value jitter"
+    _in(vmul, "Factor_Float").default_value = 1.0
+    ln(_outp(dmix, "Result_Color"), _in(vmul, "A_Color"))
+    gray = nt.nodes.new("ShaderNodeCombineColor")
+    gray.location = (-820, -420)
+    for ch in ("Red", "Green", "Blue"):
+        ln(_outp(jit, "Result"), gray.inputs[ch])
+    ln(gray.outputs["Color"], _in(vmul, "B_Color"))
+    tintmul = _mix(nt, "RGBA", "MULTIPLY", (-460, 40))
+    tintmul.label = "card × instance colour"
+    _in(tintmul, "Factor_Float").default_value = 1.0
+    ln(tex.outputs["Color"], _in(tintmul, "A_Color"))
+    ln(_outp(vmul, "Result_Color"), _in(tintmul, "B_Color"))
+    ln(_outp(tintmul, "Result_Color"), bsdf.inputs["Base Color"])
+
+    # hard alpha cutout (binary works in EEVEE dithered, Cycles and exports)
+    cut = _math(nt, "GREATER_THAN", tex.outputs["Alpha"], 0.4, (-460, -200))
+    cut.label = "alpha clip 0.4"
+    ln(cut.outputs[0], bsdf.inputs["Alpha"])
+    for attr, val in (("blend_method", "CLIP"), ("alpha_threshold", 0.4),
+                      ("surface_render_method", "DITHERED")):
+        try:
+            setattr(mat, attr, val)
+        except (AttributeError, TypeError):
+            pass  # renderer/version-dependent knobs — the Alpha socket rules
+
+
 # ---- registry -----------------------------------------------------------------
 # SPEC.md fixed vocabulary + lamp_head/sign_red/sign_white/landmark_steel.
 
@@ -598,10 +858,15 @@ MATERIALS = {
     "paver":          ("Pavers",          _bricks("#8a857c", "#6e6a62", row=0.45, width=0.9, rough=0.90, offset=0.5)),
     "gravel":         ("Gravel",          _mottled("#8a8478", 0.95, var=0.12, scale=0.5, detail=5)),
     "building_wall":  ("Facade",          _build_wall),
+    "building_wall_brick": ("Facade brick", lambda mat: _build_wall(mat, base="brick")),
+    "building_panel": ("Facade panel",    lambda mat: _build_wall(mat, base="panel")),
+    "curtain_wall":   ("Curtain wall",    _build_curtain),
+    "storefront":     ("Storefront glass", _build_storefront),
     "building_glass": ("Facade glass",    _plain("#22303a", 0.10, metal=0.5)),
     "roof_flat":      ("Roof flat",       _mottled("#4a4a4c", 0.95, var=0.06, scale=0.15, detail=4)),
     "roof_tile":      ("Roof tiles",      _bricks("#9a5843", "#7c4335", row=0.35, width=0.7, rough=0.80, offset=0.5, coords="Object")),
     "roof_metal":     ("Roof metal",      _plain("#6a7075", 0.40, metal=0.6)),
+    "roof_dome":      ("Roof dome",       _plain("#4f7a68", 0.45, metal=0.6)),
     "water":          ("Water",           _build_water),
     "grass":          ("Grass",           _mottled("#46602c", 1.0, var=0.10, scale=0.15, detail=4)),
     "forest_floor":   ("Forest floor",    _mottled("#35471f", 1.0, var=0.10, scale=0.15, detail=4)),
@@ -614,11 +879,12 @@ MATERIALS = {
     "wood":           ("Wood",            _plain("#7a5a38", 0.80)),
     "concrete":       ("Concrete",        _plain("#8f8d88", 0.90)),
     "stone":          ("Stone",           _plain("#b8a883", 0.92)),
-    # beyond the SPEC vocabulary (props + landmarks):
+    # beyond the SPEC vocabulary (props + landmarks + vegetation):
     "lamp_head":      ("Lamp head",       _build_lamp_head),
     "sign_red":       ("Sign red",        _plain("#b71c1c", 0.50)),
     "sign_white":     ("Sign white",      _plain("#f5f5f2", 0.50)),
     "landmark_steel": ("Landmark steel",  _plain("#9a9ea3", 0.55, metal=0.45)),
+    "grass_card":     ("Grass card",      _build_grass_card),
 }
 
 
@@ -650,9 +916,11 @@ def _resolve_builder(key):
     if key in _PHOTO_SPECS and key in _TEXTURES:
         return _photo_builder(key, _PHOTO_SPECS[key]), True
     if key == "building_wall" and "building_wall" in _TEXTURES:
-        photo = {"plaster": _TEXTURES["building_wall"],
-                 "brick": _TEXTURES.get("building_brick")}
-        return (lambda mat: _build_wall(mat, photo=photo)), True
+        photo = _TEXTURES["building_wall"]
+        return (lambda mat: _build_wall(mat, photo=photo, base="plaster")), True
+    if key == "building_wall_brick" and "building_brick" in _TEXTURES:
+        photo = _TEXTURES["building_brick"]
+        return (lambda mat: _build_wall(mat, photo=photo, base="brick")), True
     if key == "terrain" and "terrain" in _TEXTURES:
         photo = {"grass": _TEXTURES["terrain"],
                  "rock": _TEXTURES.get("terrain_rock")}
@@ -692,8 +960,12 @@ if __name__ == "__main__":
         "roof_flat", "roof_tile", "roof_metal", "water", "grass", "forest_floor",
         "sand", "terrain", "bark", "leaves", "metal", "metal_dark", "wood",
         "concrete", "stone",
+        # Buildings v3 facade families + dome
+        "building_wall_brick", "building_panel", "curtain_wall", "storefront",
+        "roof_dome",
     }
-    EXTRA_KEYS = {"lamp_head", "sign_red", "sign_white", "landmark_steel"}
+    EXTRA_KEYS = {"lamp_head", "sign_red", "sign_white", "landmark_steel",
+                  "grass_card"}
     assert set(MATERIALS) == SPEC_KEYS | EXTRA_KEYS, sorted(set(MATERIALS) ^ (SPEC_KEYS | EXTRA_KEYS))
 
     def principled(m):
@@ -725,17 +997,50 @@ if __name__ == "__main__":
     g2 = get("grass")
     assert g2 is g and any(n.type == "BSDF_PRINCIPLED" for n in g2.node_tree.nodes)
 
-    # facade invariants
-    w = get("building_wall")
-    wb = principled(w)
-    attrs = [n for n in w.node_tree.nodes if n.type == "ATTRIBUTE"]
-    assert any(n.attribute_name == "tint" for n in attrs), "facade lacks tint Attribute"
-    assert wb.inputs["Base Color"].is_linked
-    assert wb.inputs["Roughness"].is_linked
-    assert wb.inputs["Emission Strength"].is_linked, "lit windows not wired"
-    assert any(n.type == "TEX_WHITE_NOISE" for n in w.node_tree.nodes)
-    ramps = [n for n in w.node_tree.nodes if n.type == "VALTORGB"]
-    assert any(len(n.color_ramp.elements) == 5 for n in ramps), "5-colour palette missing"
+    # facade invariants (all three wall families share the window-grid core)
+    for wkey in ("building_wall", "building_wall_brick", "building_panel"):
+        w = get(wkey)
+        wb = principled(w)
+        attrs = [n for n in w.node_tree.nodes if n.type == "ATTRIBUTE"]
+        assert any(n.attribute_name == "tint" for n in attrs), f"{wkey} lacks tint"
+        assert wb.inputs["Base Color"].is_linked, wkey
+        assert wb.inputs["Roughness"].is_linked, wkey
+        assert wb.inputs["Emission Strength"].is_linked, f"{wkey} lit windows"
+        assert any(n.type == "TEX_WHITE_NOISE" for n in w.node_tree.nodes), wkey
+        ramps = [n for n in w.node_tree.nodes if n.type == "VALTORGB"]
+        assert any(len(n.color_ramp.elements) == 5 for n in ramps), \
+            f"{wkey}: 5-colour palette missing"
+    # brick family carries metre-true courses (procedural fallback path)
+    wbrick = get("building_wall_brick")
+    if not any(n.type == "TEX_IMAGE" for n in wbrick.node_tree.nodes):
+        br = next(n for n in wbrick.node_tree.nodes if n.type == "TEX_BRICK")
+        assert abs(br.inputs["Row Height"].default_value - 0.083) < 1e-6
+
+    # curtain wall: mullion grid + lit cells, no plaster palette
+    cw = get("curtain_wall")
+    cwb = principled(cw)
+    assert cwb.inputs["Base Color"].is_linked and cwb.inputs["Metallic"].is_linked
+    assert cwb.inputs["Emission Strength"].is_linked, "curtain wall lit cells"
+    assert any(n.type == "TEX_WHITE_NOISE" for n in cw.node_tree.nodes)
+
+    # storefront: mullioned dark glass
+    sf = principled(get("storefront"))
+    assert sf.inputs["Base Color"].is_linked and sf.inputs["Roughness"].is_linked
+
+    # grass card: generated+packed alpha image, Alpha socket driven, attrs wired
+    gc = get("grass_card")
+    gcb = principled(gc)
+    assert gcb.inputs["Alpha"].is_linked, "grass card alpha clip missing"
+    tex_nodes = [n for n in gc.node_tree.nodes if n.type == "TEX_IMAGE"]
+    assert tex_nodes and tex_nodes[0].image.name == "CB grass_card"
+    assert tex_nodes[0].image.size[0] == 128
+    gc_attrs = {n.attribute_name for n in gc.node_tree.nodes if n.type == "ATTRIBUTE"}
+    assert gc_attrs == {"tint", "dry"}, gc_attrs
+    # image really carries painted blades: some pixels opaque, some transparent
+    _px = list(tex_nodes[0].image.pixels)
+    _alpha = _px[3::4]
+    _n_on = sum(1 for a in _alpha if a > 0.5)
+    assert 0.05 * len(_alpha) < _n_on < 0.9 * len(_alpha), _n_on
 
     # brick materials carry metre-true rows
     for key, row in (("sidewalk", 1.2), ("paver", 0.45), ("roof_tile", 0.35)):

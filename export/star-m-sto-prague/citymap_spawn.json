@@ -1,0 +1,22 @@
+{
+  "generator": "CityBuilder MVP",
+  "spawnVersion": 1,
+  "city": "Staré Město, Prague",
+  "spawn": {
+    "position": [
+      68.43,
+      0,
+      -172.77
+    ],
+    "forward": [
+      0.265533700758714,
+      0,
+      -0.9641015785493672
+    ],
+    "heading_rad": 1.3020388734794939,
+    "road_id": "road_165287756",
+    "road_class": "residential",
+    "width_m": 13.2,
+    "note": "Auto-selected: widest drivable non-bridge road nearest the map centre."
+  }
+}

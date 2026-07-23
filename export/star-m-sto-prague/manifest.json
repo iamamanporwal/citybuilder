@@ -1,0 +1,70 @@
+{
+  "manifestVersion": 1,
+  "generator": "CityBuilder World API",
+  "city": "Staré Město, Prague",
+  "attribution": "© OpenStreetMap contributors (ODbL 1.0)",
+  "versions": {
+    "semantics": 3,
+    "collider": 2,
+    "spawn": 1
+  },
+  "bounds": {
+    "minX": -1560.0822780348387,
+    "maxX": 1370.7888033644826,
+    "minZ": -1437.719871038182,
+    "maxZ": 1354.202072961652
+  },
+  "baked": false,
+  "files": {
+    "environment": {
+      "file": "city_scene.glb",
+      "role": "environment",
+      "bytes": 59087824,
+      "contentType": "model/gltf-binary"
+    },
+    "collider": {
+      "file": "city_collision.glb",
+      "role": "collider",
+      "bytes": 18133528,
+      "contentType": "model/gltf-binary"
+    },
+    "surface": {
+      "file": "city_surface.glb",
+      "role": "surface",
+      "bytes": 719404,
+      "contentType": "model/gltf-binary"
+    },
+    "minimap": {
+      "file": "citymap_minimap.glb",
+      "role": "minimap",
+      "bytes": 180164,
+      "contentType": "model/gltf-binary"
+    },
+    "semantics": {
+      "file": "city_semantics.json",
+      "role": "semantics",
+      "bytes": 5322479,
+      "contentType": "application/json"
+    },
+    "spawn": {
+      "file": "citymap_spawn.json",
+      "role": "spawn",
+      "bytes": 466,
+      "contentType": "application/json"
+    },
+    "textures": {
+      "file": "textures_manifest.json",
+      "role": "textures",
+      "bytes": 12144,
+      "contentType": "application/json"
+    }
+  },
+  "warnings": [
+    "116 width jump(s) >60% between connected same-class segments — carriageway will visibly step; needs cross-section blending.",
+    "6 bridge(s) too short for a ≤10% approach ramp at their layer height — deck grade exceeds driving standard.",
+    "Geometry: 17 mesh(es) contain zero-length vertex normals (e.g. Mesh) — will shade black",
+    "Collider coverage: 14 road(s) missing colliders (e.g. road_141493866)",
+    "Collider: 32 solid collider(s) intrude into a driving lane (e.g. prop:bus_stop_3109533893) — obstacle on the drivable surface",
+    "Collider: 12 junction seam(s) step more than 8 cm (worst 639 cm at 1708,-1661) — bump crossing the junction"
+  ]
+}

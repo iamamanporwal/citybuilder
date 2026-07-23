@@ -540,6 +540,141 @@ def build_arch(centerline, elevs, width, color, water_y=-1.2, towers=False):
     return md
 
 
+# --- vertical structures (Buildings v3, PLAN.md §3.5) ------------------------------
+# Church spires, water towers and industrial chimneys — pure parametric
+# builders called by build.py (churches from building kind, the rest from
+# graph["structures"] man_made nodes/ways). All deterministic, tint attr 0.
+
+SPIRE_MAT_BODY = "stone"
+SPIRE_MAT_ROOF = "roof_tile"
+SPIRE_MAT_CROSS = "metal"
+
+
+def _frame_ring(ring):
+    """Dominant-axis frame (longest edge): (ex, ey, u0, u1, v0, v1)."""
+    n = len(ring)
+    best, k = -1.0, 0
+    for i in range(n):
+        j = (i + 1) % n
+        d2 = (ring[j][0] - ring[i][0]) ** 2 + (ring[j][1] - ring[i][1]) ** 2
+        if d2 > best:
+            best, k = d2, i
+    ax, ay = ring[k]
+    bx, by = ring[(k + 1) % n]
+    ln = math.hypot(bx - ax, by - ay) or 1.0
+    ex, ey = (bx - ax) / ln, (by - ay) / ln
+    us = [p[0] * ex + p[1] * ey for p in ring]
+    vs = [-p[0] * ey + p[1] * ex for p in ring]
+    return ex, ey, min(us), max(us), min(vs), max(vs)
+
+
+def _ring_stack_at(md, cx, cy, rings, mat, segs=8, cap_top=True):
+    """Loft circular rings [(z, r), ...] around (cx, cy); CCW from outside."""
+    base = len(md["verts"])
+    for z, r in rings:
+        for k in range(segs):
+            a = (k / segs) * math.tau
+            md["verts"].append((cx + r * math.cos(a), cy + r * math.sin(a), z))
+    for i in range(len(rings) - 1):
+        lo, hi = base + i * segs, base + (i + 1) * segs
+        for k in range(segs):
+            k2 = (k + 1) % segs
+            _add_face(md, [lo + k, lo + k2, hi + k2, hi + k], mat)
+    if cap_top:
+        top = base + (len(rings) - 1) * segs
+        _add_face(md, [top + k for k in range(segs)], mat)
+    return md
+
+
+def build_spire(ring, base_z, top_z):
+    """Church tower + pyramidal spire + cross, seated at the 'west front'
+    (~18% along the longest footprint axis). Tower side = clamp(0.5 × shorter
+    extent, 2.5, 7); tower rises 45% of the body height (min 4 m) above the
+    roofline; spire height = 1.5 × side; cross 1.6 m. Empty for slivers."""
+    md = geom.new_meshdata()
+    ring = [(float(x), float(y)) for x, y in ring]
+    if len(ring) < 3:
+        return md
+    ex, ey, u0, u1, v0, v1 = _frame_ring(ring)
+    e_min = min(u1 - u0, v1 - v0)
+    if e_min < 4.0 or top_z - base_z < 3.0:
+        return md
+    s = _clamp(0.5 * e_min, 2.5, 7.0)
+    uc = max(u0 + s / 2.0 + 0.3, u0 + 0.18 * (u1 - u0))
+    vc = (v0 + v1) / 2.0
+    cx, cy = uc * ex - vc * ey, uc * ey + vc * ex
+    tower_top = top_z + max(4.0, 0.45 * (top_z - base_z))
+    half = s / 2.0
+    sq = [(cx + ex * a * half + -ey * b * half, cy + ey * a * half + ex * b * half)
+          for a, b in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+    geom.add_prism(md, sq, base_z, tower_top, SPIRE_MAT_BODY,
+                   mat_top=SPIRE_MAT_BODY, uv_walls=False)
+    apex_z = tower_top + 1.5 * s
+    base_i = len(md["verts"])
+    md["verts"].extend((p[0], p[1], tower_top) for p in sq)
+    apex = len(md["verts"])
+    md["verts"].append((cx, cy, apex_z))
+    for i in range(4):
+        _add_face(md, [base_i + i, base_i + (i + 1) % 4, apex], SPIRE_MAT_ROOF)
+    # cross: vertical post + horizontal arm (thin prisms)
+    post = [(cx - 0.06, cy - 0.06), (cx + 0.06, cy - 0.06),
+            (cx + 0.06, cy + 0.06), (cx - 0.06, cy + 0.06)]
+    geom.add_prism(md, post, apex_z, apex_z + 1.6, SPIRE_MAT_CROSS,
+                   mat_top=SPIRE_MAT_CROSS, uv_walls=False)
+    arm_z = apex_z + 1.05
+    arm = [(cx + ex * a * 0.5 + -ey * b * 0.06, cy + ey * a * 0.5 + ex * b * 0.06)
+           for a, b in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+    geom.add_prism(md, arm, arm_z, arm_z + 0.12, SPIRE_MAT_CROSS,
+                   mat_top=SPIRE_MAT_CROSS, mat_bottom=SPIRE_MAT_CROSS,
+                   uv_walls=False)
+    if md["uvs"] is not None:
+        md["uvs"] += [None] * (len(md["faces"]) - len(md["uvs"]))
+    md["attrs"]["tint"] = [0.0] * len(md["faces"])
+    return md
+
+
+def build_water_tower(pos, ground_z, height=None):
+    """Classic 4-leg steel water tower: legs to a 62% platform, riser tube,
+    tank cylinder 62–94% + cone cap. height tag clamped to [12, 60], default 25."""
+    md = geom.new_meshdata()
+    x, y = float(pos[0]), float(pos[1])
+    h = _clamp(float(height or 25.0), 12.0, 60.0)
+    z0 = ground_z
+    z_plat, z_tank = z0 + 0.62 * h, z0 + 0.94 * h
+    tank_r = _clamp(h * 0.13, 2.2, 4.5)
+    leg_r = tank_r * 0.72
+    for sx, sy in ((1, 1), (-1, 1), (-1, -1), (1, -1)):
+        geom.merge_meshdata(md, sweep_tube(
+            [(x + sx * leg_r, y + sy * leg_r, z0 - 0.5),
+             (x + sx * leg_r * 0.75, y + sy * leg_r * 0.75, z_plat)],
+            0.16, segs=6, mat="metal"))
+    geom.merge_meshdata(md, sweep_tube([(x, y, z0 - 0.5), (x, y, z_plat)],
+                                       0.3, segs=6, mat="metal"))
+    geom.merge_meshdata(md, sweep_tube([(x, y, z_plat), (x, y, z_tank)],
+                                       tank_r, segs=10, mat="metal"))
+    _ring_stack_at(md, x, y, [(z_tank, tank_r), (z0 + h, 0.15)], "metal",
+                   segs=10)
+    md["attrs"]["tint"] = [0.0] * len(md["faces"])
+    return md
+
+
+def build_chimney(pos, ground_z, height=None):
+    """Industrial stack: tapered 10-seg cone r1.8→1.1 + dark collar at 92%.
+    height tag clamped to [15, 120], default 35."""
+    md = geom.new_meshdata()
+    x, y = float(pos[0]), float(pos[1])
+    h = _clamp(float(height or 35.0), 15.0, 120.0)
+    z0 = ground_z
+    _ring_stack_at(md, x, y,
+                   [(z0 - 0.5, 1.8), (z0 + 0.55 * h, 1.4), (z0 + h, 1.1)],
+                   "concrete", segs=10)
+    _ring_stack_at(md, x, y,
+                   [(z0 + 0.92 * h, 1.24), (z0 + 0.97 * h, 1.2)],
+                   "metal_dark", segs=10, cap_top=False)
+    md["attrs"]["tint"] = [0.0] * len(md["faces"])
+    return md
+
+
 # --- self-tests ------------------------------------------------------------------
 if __name__ == "__main__":
     def check_mesh(md, label, tint=True):
@@ -670,4 +805,43 @@ if __name__ == "__main__":
     arch_again = build_arch([(0.0, 0.0), (150.0, 0.0)], [6.55, 6.55], 10.0,
                             "#b8a883", water_y=-1.2)
     assert arch_again["verts"] == arch["verts"]
-    print("detect ok:", len(det), "landmark span(s); all landmarks_gen self-tests passed")
+    print("detect ok:", len(det), "landmark span(s)")
+
+    # --- vertical structures (v3) ---
+    church = [(0.0, 0.0), (30.0, 0.0), (30.0, 12.0), (0.0, 12.0)]
+    sp = build_spire(church, 2.0, 14.0)   # body base 2, roofline 14
+    check_mesh(sp, "spire")
+    assert SPIRE_MAT_BODY in sp["mats"] and SPIRE_MAT_ROOF in sp["mats"] \
+        and SPIRE_MAT_CROSS in sp["mats"]
+    # side = clamp(0.5·12, 2.5, 7) = 6; tower top = 14 + max(4, 0.45·12) = 19.4;
+    # apex = 19.4 + 9; cross top = apex + 1.6
+    spz = [v[2] for v in sp["verts"]]
+    assert abs(max(spz) - (19.4 + 9.0 + 1.6)) < 1e-6, max(spz)
+    assert abs(min(spz) - 2.0) < 1e-6
+    # tower sits toward the front (u≈0.18·30=5.4 > s/2+0.3=3.3), inside footprint
+    body_x = [v[0] for f, m in zip(sp["faces"], sp["mats"])
+              if m == SPIRE_MAT_BODY for v in (sp["verts"][i] for i in f)]
+    assert 0.0 <= min(body_x) and max(body_x) <= 12.0, (min(body_x), max(body_x))
+    assert build_spire([(0, 0), (3, 0), (3, 2), (0, 2)], 0.0, 8.0)["faces"] == []
+    assert build_spire(church, 2.0, 14.0) == sp  # deterministic
+
+    wt = build_water_tower((100.0, 50.0), 3.0)
+    check_mesh(wt, "water tower")
+    wz = [v[2] for v in wt["verts"]]
+    assert abs(max(wz) - (3.0 + 25.0)) < 1e-6      # default h=25
+    assert min(wz) < 3.0                            # legs buried 0.5
+    assert set(wt["mats"]) == {"metal"}
+    wt2 = build_water_tower((0.0, 0.0), 0.0, height=200.0)
+    assert abs(max(v[2] for v in wt2["verts"]) - 60.0) < 1e-6  # clamp
+
+    ch = build_chimney((0.0, 0.0), 1.0)
+    check_mesh(ch, "chimney")
+    cz = [v[2] for v in ch["verts"]]
+    assert abs(max(cz) - (1.0 + 35.0)) < 1e-6
+    assert "concrete" in ch["mats"] and "metal_dark" in ch["mats"]
+    top_r = max(math.hypot(v[0], v[1]) for v in ch["verts"] if abs(v[2] - 36.0) < 1e-6)
+    assert abs(top_r - 1.1) < 1e-6                  # taper reaches r=1.1
+    assert abs(max(v[2] for v in build_chimney((0, 0), 0.0, height=8.0)["verts"])
+               - 15.0) < 1e-6                       # clamp low
+
+    print("structures ok: spire/water tower/chimney; all landmarks_gen self-tests passed")

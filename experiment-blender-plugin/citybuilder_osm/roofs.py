@@ -1,24 +1,34 @@
-"""roofs.py — building bodies + roof shapes.
+"""roofs.py — building bodies + roof shapes (Buildings v3).
 
 Contract: SPEC.md "roofs.py" + specs/elevation-terrain.md §D (BASE_SINK 0.4,
-cornice numbers). Pure module (stdlib + geom only, no bpy). Coordinates:
-metres, X = east, Y = north, Z = up (app spec is Y-up with (x, z) ground —
-spec z → our y, spec elevation y → our z).
+cornice numbers). Pure module (stdlib + geom only, no bpy — the optional
+straight-skeleton path uses vendored bpypolyskel, which needs mathutils and
+therefore only activates inside Blender). Coordinates: metres, X = east,
+Y = north, Z = up.
 
 Walls are one geom.add_prism from base_z − BASE_SINK to base_z + height with
 courtyard holes honoured. Roof by shape:
   flat      — prism top cap (roof_flat) + parapet (h ≥ 12) or cornice band
-  gabled    — 2 slope quads (roof_tile) + 2 vertical gable tris (building_wall)
-  hipped    — inset-ridge approximation: footprint edges projected onto a
-              ridge shrunk HIP_SHRINK from each end (trapezoids + hip tris)
+  gabled    — 2 slope quads + 2 vertical gable tris (wall material)
+  hipped    — bpypolyskel straight skeleton (true hips, concave OK); falls
+              back to the v0.5 inset-ridge approximation without mathutils
   pyramidal — centroid peak fan
-Complex footprints (holes / concave / too many verts) always fall back to
-flat; unknown tags (skillion, dome, ...) fall back to flat.
+  dome      — flat cap + squashed hemisphere (roof:shape=dome/onion), roof_dome
+Complex low footprints (auto, ≤ 14 verts, no holes) also try the skeleton
+before falling back to flat; unknown tags (skillion, ...) fall back to flat.
+
+Buildings v3 (recognizer-driven, all optional via b["look"], default = v0.5):
+  look.facade plaster|brick|panel|glass → wall material family
+  look.roof   tile|metal                → pitched-roof material
+  look.tint   0..1                      → facade palette selector
+  look.storefront                       → 4.2 m dark-glass ground band
+  look.balconies                        → hash-gated slab+rail boxes on the
+                                          longest facade (residential ≥ 4 fl)
 
 Facade UVs: u = metres along the wall loop (from add_prism), v = metres up
 FROM the wall base (add_prism writes absolute z; we shift by −z0 after).
-Roof/cap faces get planar-metre UVs. attrs["tint"] = geom.hash01(id) on ALL
-faces (facade shader window/lit variation).
+Roof/cap faces get planar-metre UVs. attrs["tint"] = look.tint (else
+geom.hash01(id)) on ALL faces.
 """
 import math
 
@@ -26,6 +36,16 @@ try:
     from . import geom
 except ImportError:  # direct `python3 roofs.py` execution
     import geom
+
+# straight-skeleton backend: vendored bpypolyskel (GPL-3, see vendor/) —
+# imports mathutils, so it is None in plain-python3 self-test runs
+try:
+    from .vendor.bpypolyskel import bpypolyskel as _POLYSKEL
+except Exception:
+    try:
+        from vendor.bpypolyskel import bpypolyskel as _POLYSKEL
+    except Exception:
+        _POLYSKEL = None
 
 # --- specs/elevation-terrain.md §D constants ---------------------------------
 BASE_SINK = 0.4         # building base sits 0.4 m below sampled ground
@@ -48,8 +68,24 @@ ROOF_H_FRAC = 0.35      # auto roof height = 0.35 × shorter OBB extent
 MAT_WALL = "building_wall"
 MAT_FLAT = "roof_flat"
 MAT_TILE = "roof_tile"
+MAT_METAL = "roof_metal"
+MAT_DOME = "roof_dome"
+MAT_STOREFRONT = "storefront"
+MAT_BALCONY = "concrete"
+MAT_RAIL = "metal_dark"
 
-_KNOWN_SHAPES = ("flat", "gabled", "hipped", "pyramidal")
+# recognizer facade family → wall material key
+FACADE_MAT = {"plaster": "building_wall", "brick": "building_wall_brick",
+              "panel": "building_panel", "glass": "curtain_wall"}
+
+STOREFRONT_H = 4.2       # §3.4 ground-floor dark-glass band height (m)
+SKELETON_MAX_VERTS = 24  # bpypolyskel guard: bigger rings fall back to flat
+BALCONY_W = 1.9          # slab width along the facade (m)
+BALCONY_D = 0.92         # slab depth outward (m)
+BALCONY_STEP = 4.6       # spacing between balcony columns (m)
+BALCONY_MAX_FLOORS = 6
+
+_KNOWN_SHAPES = ("flat", "gabled", "hipped", "pyramidal", "dome")
 
 
 # =============================================================================
@@ -220,18 +256,30 @@ def _guard_shape(shape, ring, holes):
         # 0.9 gate: near-convex only — an L-shape (ratio ~0.82) would get hip
         # planes crossing its notch, so it must demote to flat
         return "hipped" if (n <= 6 and area >= 0.9 * hull) else "flat"
+    if shape == "dome":
+        _, _, u0, u1, v0, v1, _ = _frame(ring)
+        return "dome" if min(u1 - u0, v1 - v0) >= 2.0 else "flat"
     return "pyramidal" if (n <= 8 and area >= 0.7 * hull) else "flat"
 
 
 def _pick_shape(b, ring, holes, h):
+    """(shape, skeleton_wanted) — shape is guard-safe for the v0.5 builders;
+    skeleton_wanted marks footprints where the bpypolyskel path should try a
+    true hipped roof FIRST (explicit hipped tags, and complex low auto-flats)."""
     tag = str(b.get("roof_shape") or "auto").strip().lower()
+    if tag == "onion":
+        tag = "dome"
     if tag in _KNOWN_SHAPES:
         shape = tag                      # explicit tag wins over the h>=12 rule
     elif tag != "auto":
-        shape = "flat"                   # skillion / dome / onion / ... → flat
+        shape = "flat"                   # skillion / ... → flat
     else:
         shape = _auto_shape(b, ring, holes, h)
-    return _guard_shape(shape, ring, holes)
+    n = len(ring)
+    skeleton_wanted = (not holes and n <= SKELETON_MAX_VERTS and (
+        shape == "hipped"
+        or (tag == "auto" and shape == "flat" and h < FLAT_MIN_H and n > 4)))
+    return _guard_shape(shape, ring, holes), skeleton_wanted
 
 
 # =============================================================================
@@ -316,7 +364,7 @@ def _fill_planar_uvs(md, f0):
 # roof builders (ring is CCW, deduped; roof sits on the wall-top loop at z=top)
 # =============================================================================
 
-def _roof_gabled(md, ring, top, rh, z0_wall):
+def _roof_gabled(md, ring, top, rh, z0_wall, mat=MAT_TILE, wall_mat=MAT_WALL):
     """Exact gable for a convex quad: 2 slope quads + 2 vertical gable tris.
 
     Longest edge pair = eaves; ridge spans the midpoints of the two end edges
@@ -331,12 +379,12 @@ def _roof_gabled(md, ring, top, rh, z0_wall):
     at, bt = (a[0], a[1], top), (b[0], b[1], top)
     ct, dt = (c[0], c[1], top), (d[0], d[1], top)
     for quad in ([at, bt, r1, r0], [ct, dt, r0, r1]):
-        _add_face(md, quad, MAT_TILE, _roof_uv(quad))
+        _add_face(md, quad, mat, _roof_uv(quad))
     for tri in ([bt, ct, r1], [dt, at, r0]):
-        _add_face(md, tri, MAT_WALL, _gable_uv(tri, z0_wall))
+        _add_face(md, tri, wall_mat, _gable_uv(tri, z0_wall))
 
 
-def _roof_hipped(md, ring, top, rh):
+def _roof_hipped(md, ring, top, rh, mat=MAT_TILE):
     """Inset-ridge hip: project each footprint edge onto a ridge shrunk
     HIP_SHRINK from each end. Rectangles get 2 trapezoids + 2 hip triangles
     exactly; 5–6-vert convex footprints get the same construction with quads
@@ -361,16 +409,16 @@ def _roof_hipped(md, ring, top, rh):
         at, bt = (a[0], a[1], top), (b[0], b[1], top)
         if math.hypot(qa[0] - qb[0], qa[1] - qb[1]) < 1e-6:
             tri = [at, bt, qa]
-            _add_face(md, tri, MAT_TILE, _roof_uv(tri))
+            _add_face(md, tri, mat, _roof_uv(tri))
         elif n == 4:
             quad = [at, bt, qb, qa]
-            _add_face(md, quad, MAT_TILE, _roof_uv(quad))
+            _add_face(md, quad, mat, _roof_uv(quad))
         else:
             for tri in ([at, bt, qb], [at, qb, qa]):
-                _add_face(md, tri, MAT_TILE, _roof_uv(tri))
+                _add_face(md, tri, mat, _roof_uv(tri))
 
 
-def _roof_pyramidal(md, ring, top, rh):
+def _roof_pyramidal(md, ring, top, rh, mat=MAT_TILE):
     """Centroid peak fan — one triangle per footprint edge."""
     cx, cy = _centroid(ring)
     peak = (cx, cy, top + rh)
@@ -378,7 +426,119 @@ def _roof_pyramidal(md, ring, top, rh):
     for i in range(n):
         a, b = ring[i], ring[(i + 1) % n]
         tri = [(a[0], a[1], top), (b[0], b[1], top), peak]
-        _add_face(md, tri, MAT_TILE, _roof_uv(tri))
+        _add_face(md, tri, mat, _roof_uv(tri))
+
+
+def _roof_skeleton(md, ring, top, rh, mat):
+    """True hipped/complex roof via the vendored bpypolyskel straight
+    skeleton (PLAN.md §3.4). Raises on any failure — callers fall back to the
+    v0.5 approximation. Only available inside Blender (mathutils)."""
+    if _POLYSKEL is None:
+        raise ImportError("bpypolyskel unavailable (no mathutils)")
+    from mathutils import Vector
+    verts = [Vector((float(x), float(y), float(top))) for x, y in ring]
+    faces = _POLYSKEL.polygonize(verts, 0, len(ring), None, float(rh), 0.0, [])
+    if not faces:
+        raise ValueError("skeleton produced no roof faces")
+    added = 0
+    for f in faces:
+        pts = []
+        for i in f:
+            p = (verts[i].x, verts[i].y, verts[i].z)
+            if not pts or (abs(p[0] - pts[-1][0]) > 1e-9
+                           or abs(p[1] - pts[-1][1]) > 1e-9
+                           or abs(p[2] - pts[-1][2]) > 1e-9):
+                pts.append(p)
+        if len(pts) < 3:
+            continue
+        for x, y, z in pts:
+            if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+                raise ValueError("skeleton emitted non-finite vertex")
+            if z < top - 1e-6 or z > top + rh + 1e-6:
+                raise ValueError("skeleton z out of range")
+        _add_face(md, pts, mat, _roof_uv(pts))
+        added += 1
+    if not added:
+        raise ValueError("skeleton faces all degenerate")
+
+
+DOME_SQUASH = 0.85   # dome height = 0.85 × inscribed radius
+_DOME_SEGS = 12
+_DOME_RINGS = 5
+
+
+def _roof_dome(md, ring, top):
+    """Squashed hemisphere over the footprint centroid (roof:shape=dome/onion),
+    radius = half the shorter oriented extent. Sits on the flat cap."""
+    cx, cy = _centroid(ring)
+    _, _, u0, u1, v0, v1, _ = _frame(ring)
+    r = 0.5 * min(u1 - u0, v1 - v0)
+    zs = top + r * DOME_SQUASH
+    rows = []
+    for k in range(_DOME_RINGS):
+        th = (k / _DOME_RINGS) * (math.pi / 2.0)
+        rr = r * math.cos(th)
+        z = top + r * DOME_SQUASH * math.sin(th)
+        rows.append([(cx + rr * math.cos(a), cy + rr * math.sin(a), z)
+                     for a in (j * math.tau / _DOME_SEGS for j in range(_DOME_SEGS))])
+    for k in range(_DOME_RINGS - 1):
+        lo, hi = rows[k], rows[k + 1]
+        for j in range(_DOME_SEGS):
+            j2 = (j + 1) % _DOME_SEGS
+            quad = [lo[j], lo[j2], hi[j2], hi[j]]
+            _add_face(md, quad, MAT_DOME,
+                      [(p[0], p[1]) for p in quad])
+    apex = (cx, cy, zs)
+    for j in range(_DOME_SEGS):
+        j2 = (j + 1) % _DOME_SEGS
+        tri = [rows[-1][j], rows[-1][j2], apex]
+        _add_face(md, tri, MAT_DOME, [(p[0], p[1]) for p in tri])
+
+
+# =============================================================================
+# balconies (Buildings v3)
+# =============================================================================
+
+def _balconies(md, ring, base_z, h, bid):
+    """Slab + front-rail boxes on the longest facade edge: one column every
+    BALCONY_STEP m (max 2), floors 1..min(levels−1, 6), slab top at the window
+    sill (v = 3.2·f + 0.99 from the base), hash-gated per box."""
+    n = len(ring)
+    _, _, _, _, _, _, k = _frame(ring)
+    ax, ay = ring[k]
+    bx, by = ring[(k + 1) % n]
+    elen = math.hypot(bx - ax, by - ay)
+    if elen < BALCONY_W + 2.4:
+        return
+    ex, ey = (bx - ax) / elen, (by - ay) / elen
+    ox, oy = ey, -ex                        # outward normal of a CCW ring edge
+    floors = min(int(h / 3.2) - 1, BALCONY_MAX_FLOORS)
+    if floors < 1:
+        return
+    cols = min(2, max(1, int((elen - 2.4) // BALCONY_STEP)))
+    span = cols * BALCONY_W + (cols - 1) * (BALCONY_STEP - BALCONY_W)
+    t_start = (elen - span) / 2.0
+    seed = _id_int(bid)
+    for ci in range(cols):
+        t0 = t_start + ci * BALCONY_STEP
+        p0 = (ax + ex * t0, ay + ey * t0)
+        p1 = (ax + ex * (t0 + BALCONY_W), ay + ey * (t0 + BALCONY_W))
+        for f in range(1, floors + 1):
+            if geom.hash01(seed * 8191 + ci * 127 + f * 31) > 0.8:
+                continue  # a skipped box here and there reads lived-in
+            sill = base_z + f * 3.2 + 0.99
+            slab = [p0, p1,
+                    (p1[0] + ox * BALCONY_D, p1[1] + oy * BALCONY_D),
+                    (p0[0] + ox * BALCONY_D, p0[1] + oy * BALCONY_D)]
+            geom.add_prism(md, slab, sill - 0.14, sill, MAT_BALCONY,
+                           mat_top=MAT_BALCONY, mat_bottom=MAT_BALCONY,
+                           uv_walls=False)
+            rail = [(p0[0] + ox * (BALCONY_D - 0.06), p0[1] + oy * (BALCONY_D - 0.06)),
+                    (p1[0] + ox * (BALCONY_D - 0.06), p1[1] + oy * (BALCONY_D - 0.06)),
+                    (p1[0] + ox * BALCONY_D, p1[1] + oy * BALCONY_D),
+                    (p0[0] + ox * BALCONY_D, p0[1] + oy * BALCONY_D)]
+            geom.add_prism(md, rail, sill, sill + 0.95, MAT_RAIL,
+                           mat_top=MAT_RAIL, uv_walls=False)
 
 
 # =============================================================================
@@ -390,7 +550,9 @@ def build_building(b, base_z):
 
     Walls run base_z − BASE_SINK → base_z + height (or from base_z +
     min_height for floating parts like building:part decks); courtyard holes
-    honoured. Roof per _pick_shape. tint attr = hash01(id) on every face.
+    honoured. Roof per _pick_shape (+ bpypolyskel skeleton path in Blender).
+    b["look"] (recognizer) drives wall/roof materials, tint, storefront band
+    and balconies; absent look = exact v0.5 behaviour.
     """
     md = geom.new_meshdata()
     ring = geom.dedupe_ring([(float(x), float(y)) for x, y in (b.get("ring") or [])])
@@ -408,22 +570,63 @@ def build_building(b, base_z):
     minh = max(0.0, min(float(b.get("min_height") or 0.0), h - 0.5))
     z0 = (base_z + minh) if minh > 0 else (base_z - BASE_SINK)
     top = base_z + h
-    shape = _pick_shape(b, ring, holes, h)
+    shape, skeleton_wanted = _pick_shape(b, ring, holes, h)
+
+    look = b.get("look") or {}
+    wall_mat = FACADE_MAT.get(look.get("facade"), MAT_WALL)
+    roof_mat = MAT_METAL if look.get("roof") == "metal" else MAT_TILE
+    glass = wall_mat == "curtain_wall"
+    if glass:
+        shape, skeleton_wanted = "flat", False  # towers stay flat masses
+
+    # skeleton path FIRST (true hips, concave OK); silently falls back
+    roof_done = False
+    if skeleton_wanted:
+        pre = (len(md["verts"]), len(md["faces"]))
+        try:
+            _roof_skeleton(md, ring, top, _roof_h(b, ring), roof_mat)
+            roof_done = True
+            shape = "skeleton"
+        except Exception:
+            del md["verts"][pre[0]:]      # roll back partial skeleton output
+            del md["faces"][pre[1]:]
+            del md["mats"][pre[1]:]
+            if md["uvs"] is not None:
+                del md["uvs"][pre[1]:]
+            if shape == "skeleton":
+                shape = "flat"
 
     # --- body: walls (+ flat cap when the roof IS the cap) -------------------
-    f0 = len(md["faces"])
-    geom.add_prism(md, ring, z0, top, MAT_WALL,
-                   mat_top=(MAT_FLAT if shape == "flat" else None), holes=holes)
-    _shift_wall_v(md, f0, z0)   # facade v = metres up from wall base
-    _fill_planar_uvs(md, f0)    # flat cap → plan-metre UVs
+    storefront = (bool(look.get("storefront")) and minh <= 0.0
+                  and h >= STOREFRONT_H + 1.2 and not glass)
+    cap = MAT_FLAT if shape in ("flat", "dome") else None
+    if storefront:
+        fs = len(md["faces"])
+        geom.add_prism(md, ring, z0, base_z + STOREFRONT_H, MAT_STOREFRONT,
+                       holes=holes)
+        _shift_wall_v(md, fs, z0)
+        f0 = len(md["faces"])
+        geom.add_prism(md, ring, base_z + STOREFRONT_H, top, wall_mat,
+                       mat_top=cap, holes=holes)
+        _shift_wall_v(md, f0, base_z + STOREFRONT_H)  # window rows restart
+        _fill_planar_uvs(md, f0)
+    else:
+        f0 = len(md["faces"])
+        geom.add_prism(md, ring, z0, top, wall_mat, mat_top=cap, holes=holes)
+        _shift_wall_v(md, f0, z0)   # facade v = metres up from wall base
+        _fill_planar_uvs(md, f0)    # flat cap → plan-metre UVs
 
     # --- roof ----------------------------------------------------------------
-    if shape == "gabled":
-        _roof_gabled(md, ring, top, _roof_h(b, ring), z0)
+    if roof_done:
+        pass
+    elif shape == "gabled":
+        _roof_gabled(md, ring, top, _roof_h(b, ring), z0, roof_mat, wall_mat)
     elif shape == "hipped":
-        _roof_hipped(md, ring, top, _roof_h(b, ring))
+        _roof_hipped(md, ring, top, _roof_h(b, ring), roof_mat)
     elif shape == "pyramidal":
-        _roof_pyramidal(md, ring, top, _roof_h(b, ring))
+        _roof_pyramidal(md, ring, top, _roof_h(b, ring), roof_mat)
+    elif shape == "dome":
+        _roof_dome(md, ring, top)
     else:
         r = _half_extent(ring)
         if h >= FLAT_MIN_H:
@@ -431,11 +634,11 @@ def build_building(b, base_z):
             if r >= 2.0:  # too thin → inner ring would collapse
                 inner = _scale_ring(ring, max(0.5, 1.0 - PARAPET_W / r))
                 fp = len(md["faces"])
-                geom.add_prism(md, ring, top, top + PARAPET_H, MAT_WALL,
+                geom.add_prism(md, ring, top, top + PARAPET_H, wall_mat,
                                mat_top=MAT_FLAT, holes=[inner])
                 _shift_wall_v(md, fp, top)
                 _fill_planar_uvs(md, fp)
-        elif r >= CORNICE_MIN_R:
+        elif r >= CORNICE_MIN_R and not glass:
             # §D cornice: 0.7 band straddling the roofline, ~0.4 overhang via
             # scale about the outer centroid (holes scaled with the SAME
             # transform so the courtyard stays open and nothing goes coplanar)
@@ -452,7 +655,14 @@ def build_building(b, base_z):
             _shift_wall_v(md, fp, top - CORNICE_BAND / 2.0)
             _fill_planar_uvs(md, fp)
 
-    md["attrs"]["tint"] = [geom.hash01(_id_int(b.get("id", 0)))] * len(md["faces"])
+    # --- balconies (residential ≥ 4 storeys, recognizer hash-gated) ----------
+    if look.get("balconies") and minh <= 0.0 and not glass:
+        fb = len(md["faces"])
+        _balconies(md, ring, base_z, h, b.get("id", 0))
+        _fill_planar_uvs(md, fb)  # concrete/rail ignore UVs; contract wants them
+
+    tint = look["tint"] if "tint" in look else geom.hash01(_id_int(b.get("id", 0)))
+    md["attrs"]["tint"] = [tint] * len(md["faces"])
     return md
 
 
@@ -566,12 +776,25 @@ if __name__ == "__main__":
     band_top = [v for v in md_c["verts"] if abs(v[2] - (6.0 + 0.35)) < EPS]
     assert any(abs(v[0] - (10.0 + (6.0 - 10.0) * 1.04)) < 1e-3 for v in band_top)
 
-    # ---- 5. skillion / dome tags → flat fallback, no crash ------------------
-    for tag in ("skillion", "dome", "onion", "gambrel"):
+    # ---- 5. skillion/gambrel → flat fallback; dome/onion → hemisphere -------
+    for tag in ("skillion", "gambrel"):
         md = build_building({"ring": rect, "height": 8.0, "roof_shape": tag, "id": 3}, 0.0)
         check(md, tag)
         assert MAT_TILE not in md["mats"], tag
         assert abs(maxz(md) - (8.0 + CORNICE_BAND / 2.0)) < EPS, tag  # cornice (r=10)
+    for tag in ("dome", "onion"):
+        md = build_building({"ring": rect, "height": 8.0, "roof_shape": tag, "id": 3}, 0.0)
+        check(md, tag)
+        assert MAT_DOME in md["mats"], tag
+        assert MAT_FLAT in md["mats"], tag + " cap under the dome"
+        # r = half shorter extent (5), squash 0.85 → apex at 8 + 4.25
+        assert abs(maxz(md) - (8.0 + 5.0 * DOME_SQUASH)) < EPS, tag
+    dome_faces = [f for f, m in zip(md["faces"], md["mats"]) if m == MAT_DOME]
+    assert len(dome_faces) == _DOME_SEGS * _DOME_RINGS, len(dome_faces)
+    # tiny footprint: dome demotes to flat
+    md = build_building({"ring": [(0, 0), (3, 0), (3, 1.5), (0, 1.5)],
+                         "height": 6.0, "roof_shape": "dome", "id": 3}, 0.0)
+    assert MAT_DOME not in md["mats"]
 
     # ---- 6. explicit pyramidal on a square ----------------------------------
     sq = [(0.0, 0.0), (8.0, 0.0), (8.0, 8.0), (0.0, 8.0)]
@@ -601,6 +824,9 @@ if __name__ == "__main__":
     assert abs(maxz(md) - 17.0) < EPS, "tagged roof_height 2.0"
 
     # ---- 10. guards: concave / many-vert / string id -------------------------
+    # (plain python3 has no mathutils → the skeleton path falls back and the
+    # v0.5 guards apply verbatim; inside Blender these get true hips instead)
+    assert _POLYSKEL is None, "run module self-tests with python3, not Blender"
     dart = [(0.0, 0.0), (10.0, 6.0), (20.0, 0.0), (10.0, 10.0)]  # area < 0.6×hull
     md = build_building({"ring": dart, "height": 6.0, "id": 12}, 0.0)
     check(md, "concave auto")
@@ -615,6 +841,72 @@ if __name__ == "__main__":
     md = build_building({"ring": ngon, "height": 6.0, "id": 13}, 0.0)
     check(md, "12-gon auto flat")
     assert MAT_TILE not in md["mats"], ">8 verts → flat"
+    # skeleton candidates are flagged where they should be
+    assert _pick_shape({"roof_shape": "hipped"}, lshape, [], 6.0) == ("flat", True)
+    assert _pick_shape({}, ngon, [], 6.0) == ("flat", True)      # low complex auto
+    assert _pick_shape({}, ngon, [], 20.0) == ("flat", False)    # tall → stays flat
+    assert _pick_shape({}, ngon, [hole], 6.0) == ("flat", False)  # holes → never
+
+    # ---- 12. Buildings v3: look-driven materials -----------------------------
+    look_brick = {"facade": "brick", "roof": "tile", "tint": 0.63}
+    md = build_building({"ring": rect, "height": 8.0, "roof_shape": "gabled",
+                         "id": 21, "look": look_brick}, 0.0)
+    check(md, "brick look")
+    assert "building_wall_brick" in md["mats"] and MAT_WALL not in md["mats"]
+    assert md["mats"].count(MAT_TILE) == 2
+    assert md["attrs"]["tint"][0] == 0.63
+    md = build_building({"ring": rect, "height": 8.0, "roof_shape": "gabled", "id": 21,
+                         "look": {"facade": "panel", "roof": "metal", "tint": 0.2}}, 0.0)
+    assert "building_panel" in md["mats"]
+    assert md["mats"].count(MAT_METAL) == 2 and MAT_TILE not in md["mats"]
+
+    # ---- 13. curtain wall towers stay flat masses ----------------------------
+    md = build_building({"ring": rect, "height": 48.0, "roof_shape": "gabled",
+                         "id": 22, "look": {"facade": "glass", "roof": "flat",
+                                            "tint": 0.5}}, 0.0)
+    check(md, "curtain wall")
+    assert "curtain_wall" in md["mats"] and MAT_TILE not in md["mats"]
+    assert abs(maxz(md) - (48.0 + PARAPET_H)) < EPS  # parapet, no pitched roof
+
+    # ---- 14. storefront band --------------------------------------------------
+    md_sf = build_building({"ring": rect, "height": 12.0, "roof_shape": "flat",
+                            "id": 23, "look": {"facade": "plaster", "roof": "flat",
+                                               "tint": 0.4, "storefront": True}}, base)
+    check(md_sf, "storefront")
+    assert MAT_STOREFRONT in md_sf["mats"] and MAT_WALL in md_sf["mats"]
+    sf_top = max(v[2] for f, m in zip(md_sf["faces"], md_sf["mats"])
+                 if m == MAT_STOREFRONT for v in (md_sf["verts"][i] for i in f))
+    assert abs(sf_top - (base + STOREFRONT_H)) < EPS, "band ends at base+4.2"
+    # upper walls restart their v at the band top (window rows re-anchored)
+    up_v = [vv for f, uv, m in zip(md_sf["faces"], md_sf["uvs"], md_sf["mats"])
+            if m == MAT_WALL and uv for _, vv in uv]
+    assert abs(min(up_v)) < EPS
+    # min_height parts and too-low buildings never get the band
+    md = build_building({"ring": rect, "height": 12.0, "min_height": 3.0,
+                         "roof_shape": "flat", "id": 23,
+                         "look": {"facade": "plaster", "roof": "flat",
+                                  "tint": 0.4, "storefront": True}}, base)
+    assert MAT_STOREFRONT not in md["mats"]
+
+    # ---- 15. balconies ---------------------------------------------------------
+    md_b = build_building({"ring": rect, "height": 19.2, "roof_shape": "flat",
+                           "id": 24, "look": {"facade": "plaster", "roof": "flat",
+                                              "tint": 0.4, "balconies": True}}, 0.0)
+    check(md_b, "balconies")
+    assert MAT_BALCONY in md_b["mats"] and MAT_RAIL in md_b["mats"]
+    md_nb = build_building({"ring": rect, "height": 19.2, "roof_shape": "flat",
+                            "id": 24, "look": {"facade": "plaster", "roof": "flat",
+                                               "tint": 0.4}}, 0.0)
+    assert len(md_b["faces"]) > len(md_nb["faces"])
+    assert MAT_RAIL not in md_nb["mats"]
+    # balcony rails hang OUTSIDE the footprint (longest edge y=0, outward −y)
+    rail_y = [v[1] for f, m in zip(md_b["faces"], md_b["mats"])
+              if m == MAT_RAIL for v in (md_b["verts"][i] for i in f)]
+    assert min(rail_y) < -0.5 and max(rail_y) < 0.01, (min(rail_y), max(rail_y))
+    # no look → exact v0.5 output (regression fence)
+    md_v05 = build_building({"ring": rect, "height": 8.0, "roof_shape": "gabled",
+                             "id": 42}, base)
+    assert md_v05["mats"].count(MAT_WALL) == 6 and md_v05["mats"].count(MAT_TILE) == 2
 
     # ---- 11. merge compatibility (uvs/attrs stay aligned) --------------------
     merged = geom.merge_meshdata(geom.new_meshdata(), md_g)
