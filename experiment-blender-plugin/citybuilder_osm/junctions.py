@@ -224,24 +224,66 @@ def _mouth_corners(arm):
             (px + rx * h, py + ry * h))   # right (= +perp side)
 
 
+def _wedge_corner(a, b, center, max_reach):
+    """osm2streets wedge corner between CCW-adjacent arms a → b: intersect a's
+    LEFT edge line with b's RIGHT edge line (edges run along each arm's dir).
+    None when the arms are near-parallel (through pair) or the intersection
+    shoots past max_reach (shallow angles) — callers fall back to a straight
+    edge / midpoint."""
+    la = _mouth_corners(a)[0]
+    rb = _mouth_corners(b)[1]
+    da, db = a["dir"], b["dir"]
+    cross = da[0] * db[1] - da[1] * db[0]
+    if abs(cross) < 0.09:  # < ~5°: collinear through-pair → straight edge
+        return None
+    # solve la + t·da = rb + u·db
+    ex, ey = rb[0] - la[0], rb[1] - la[1]
+    t = (ex * db[1] - ey * db[0]) / cross
+    wx, wy = la[0] + da[0] * t, la[1] + da[1] * t
+    if math.hypot(wx - center[0], wy - center[1]) > max_reach:
+        return ((la[0] + rb[0]) / 2.0, (la[1] + rb[1]) / 2.0)  # shallow wedge
+    return (wx, wy)
+
+
 def _pad_rings(j):
-    """(rounded pad ring, raw convex hull). Octagon fallback when hull < 3."""
-    corners = []
-    for a in j["arms"]:
-        left, right = _mouth_corners(a)
-        corners.append(left)
-        corners.append(right)
-    hull = convex_hull(corners)
-    if len(hull) < 3:
+    """(rounded pad ring, raw ring) — osm2streets-style walk (PLAN §3.2):
+    arms CCW by angle; per arm append [right corner, left corner], then the
+    wedge corner toward the next arm. Non-convex T/Y pads come out correctly
+    (the old convex hull ballooned them). Octagon fallback when < 2 arms."""
+    arms = sorted(j["arms"],
+                  key=lambda a: math.atan2(a["dir"][1], a["dir"][0]))
+    if len(arms) < 2:
         cx, cy = j["center"]
-        rad = j["radius"]
-        hull = [(cx + rad * math.cos(k * math.pi / 4.0),
+        rad = max(j["radius"], 2.0)
+        ring = [(cx + rad * math.cos(k * math.pi / 4.0),
                  cy + rad * math.sin(k * math.pi / 4.0)) for k in range(8)]
-    # fillet radius clamp(maxW*0.45, 2, 7); armless fallback derives maxW from
-    # radius via the roadnet DISC factor (radius = 0.58 * max incident width)
-    maxw = max((a["width"] for a in j["arms"]), default=j["radius"] / 0.58)
-    fillet = max(2.0, min(7.0, maxw * 0.45))
-    return round_polygon(hull, fillet, FILLET_SEGS), hull
+        return round_polygon(ring, 1.5, FILLET_SEGS), ring
+
+    mouth_reach = max(math.hypot(a["p"][0] - j["center"][0],
+                                 a["p"][1] - j["center"][1]) + a["width"]
+                      for a in arms)
+    ring = []
+    n = len(arms)
+    for k in range(n):
+        a, b = arms[k], arms[(k + 1) % n]
+        la, ra = _mouth_corners(a)
+        ring.append(ra)
+        ring.append(la)
+        w = _wedge_corner(a, b, j["center"], mouth_reach * 2.2)
+        if w is not None:
+            ring.append(w)
+    # dedupe near-coincident walk points (< 0.1 m)
+    ring = [p for i, p in enumerate(ring)
+            if math.hypot(p[0] - ring[i - 1][0], p[1] - ring[i - 1][1]) > 0.1]
+    if len(ring) < 3:
+        return _pad_rings({**j, "arms": []})
+    if geom.ring_area_signed(ring) < 0:
+        ring.reverse()
+    # small curb-radius fillet on the wedge corners (the ring IS the shape now,
+    # unlike the hull era where the fillet had to fake the corners)
+    minw = min((a["width"] for a in j["arms"]), default=5.0)
+    fillet = max(1.0, min(3.5, minw * 0.25))
+    return round_polygon(ring, fillet, FILLET_SEGS), ring
 
 
 # ---- corner curb + footpath bands (kit arc method) ---------------------------
@@ -491,3 +533,18 @@ if __name__ == "__main__":
           % (pad_area, len(band), len(marks)))
     print("  T-junction: %d band faces (2 corners), octagon pad %.1f m²"
           % (len(bandt), area0))
+
+    # 6. wedge corners (osm2streets walk): 4-arm 90° w=7 → raw ring has the
+    # four inner wedge points at (±3.55, ±3.55) and mouths beyond them
+    j = mk([(1, 0), (0, 1), (-1, 0), (0, -1)], [7, 7, 7, 7])
+    _pad, raw = _pad_rings(j)
+    h = 7 / 2.0 + CORNER_CLEAR
+    wedges = [p for p in raw
+              if abs(abs(p[0]) - h) < 0.01 and abs(abs(p[1]) - h) < 0.01]
+    assert len(wedges) == 4, (len(wedges), raw)
+    assert len(raw) == 12, len(raw)  # 2 mouth corners + 1 wedge per arm
+    # T-junction: through pair contributes a straight edge (no wedge point)
+    jt = mk([(1, 0), (-1, 0), (0, 1)], [7, 7, 7])
+    _padt, rawt = _pad_rings(jt)
+    assert len(rawt) == 8, (len(rawt), rawt)  # 6 mouths + 2 wedges only
+    print("test 6 OK (wedge corners exact on 4-arm; T through-pair straight)")

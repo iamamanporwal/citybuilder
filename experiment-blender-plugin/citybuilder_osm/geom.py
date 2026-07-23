@@ -454,3 +454,43 @@ def clip_ring_to_rect(ring, minx, miny, maxx, maxy):
         if len(pts) < 3:
             return []
     return dedupe_ring(pts)
+
+
+def offset_polyline_var(pts, dists):
+    """offset_polyline with a per-point signed lateral distance (port of the
+    app's offsetPolylineVar — needed for tree-lawn tapers and gap-clamped
+    bands). dists must be len(pts); positive = left of travel."""
+    n = len(pts)
+    if n < 2:
+        return list(pts)
+    dirs = []
+    for i in range(n - 1):
+        dx = pts[i + 1][0] - pts[i][0]
+        dy = pts[i + 1][1] - pts[i][1]
+        ln = math.hypot(dx, dy) or 1.0
+        dirs.append((dx / ln, dy / ln))
+    out = []
+    for i in range(n):
+        if i == 0:
+            tx, ty = dirs[0]
+        elif i == n - 1:
+            tx, ty = dirs[-1]
+        else:
+            ax, ay = dirs[i - 1]
+            bx, by = dirs[i]
+            tx, ty = ax + bx, ay + by
+            ln = math.hypot(tx, ty)
+            if ln < 1e-9:
+                tx, ty = bx, by
+            else:
+                tx, ty = tx / ln, ty / ln
+        nx, ny = -ty, tx
+        if 0 < i < n - 1:
+            ax, ay = dirs[i - 1]
+            cos_half = tx * ax + ty * ay
+            scale = min(2.0, 1.0 / max(0.5, cos_half))
+        else:
+            scale = 1.0
+        d = dists[i]
+        out.append((pts[i][0] + nx * d * scale, pts[i][1] + ny * d * scale))
+    return out

@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "citybuilder_osm"
-version = "0.6.0"
+version = "0.6.1"
 name = "CityBuilder OSM"
 tagline = "Game-ready 3D cities from OpenStreetMap data"
 maintainer = "Aman Porwal <aman@aganastudios.com>"

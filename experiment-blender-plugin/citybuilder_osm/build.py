@@ -11,7 +11,7 @@ import bpy
 import os
 
 from . import (elevation, geom, junctions, landmarks_gen, matlib, overpass,
-               profile, props_gen, roadnet, roofs, terrain, texcache)
+               profile, props_gen, roadmerge, roadnet, roofs, terrain, texcache)
 
 ROOT_NAME = "CityBuilder"
 SUBS = ("Ground", "Roads", "Junctions", "Areas", "Buildings", "Landmarks", "Props", "Trees")
@@ -258,6 +258,14 @@ def build_scene(context, graph, params, progress=None):
     counts = {"textured_keys": counts_tex}
     radius = params["radius"]
 
+    # Phase 1 pre-pass: merge parallel ways (dual carriageways clamped to the
+    # median, cycle tracks/sidewalks absorbed into their host cross-section)
+    # BEFORE the elevation solve so the whole pipeline sees one street
+    tick(4, "road merge")
+    graph["roads"], merge_info = roadmerge.preprocess(graph["roads"])
+    counts["absorbed_paths"] = merge_info["removed"]
+    counts["dual_pairs"] = len(merge_info["duals"])
+
     # clip area rings to the scene rect — relations (rivers, big parks) drag
     # kilometres of out-of-scene geometry otherwise (app: clipRingToRect)
     ext = radius * 1.25
@@ -310,8 +318,12 @@ def build_scene(context, graph, params, progress=None):
     for s in segs:
         if s["internal"] or len(s["pts"]) < 2:
             continue
-        if graph["roads"][s["road_idx"]].get("tunnel"):
+        road = graph["roads"][s["road_idx"]]
+        if road.get("tunnel"):
             continue  # underground — never rendered (app parity)
+        # thread the merge annotations into the SegDesc for the sweep
+        s["sidepaths"] = road.get("sidepaths")
+        s["median_side"] = road.get("median_side")
         road_md_i = profile.sweep_road(s, {"framed": params.get("framed", True)})
         geom.merge_meshdata(road_md, road_md_i)
         geom.merge_meshdata(mark_md, profile.markings(s))

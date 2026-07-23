@@ -12,7 +12,7 @@ Docs: [PLAN.md](PLAN.md) (roadmap) · [SPEC.md](SPEC.md) (module contracts) ·
 
 ```
 citybuilder_osm/            add-on source (Blender extension, pure stdlib)
-citybuilder_osm-0.6.0.zip   ready-to-install package
+citybuilder_osm-0.6.1.zip   ready-to-install package
 test_headless.py            integration matrix (quick | prague | goldengate)
 test_matlib.py/test_export.py  Blender-side module tests
 showcase.py                 Cycles beauty renders from a saved .blend
@@ -25,7 +25,7 @@ showcase.py                 Cycles beauty renders from a saved .blend
 
 1. Blender 4.2+ (tested on 5.1): https://www.blender.org/download/ or `brew install --cask blender`.
 2. **Edit ▸ Preferences ▸ Get Extensions ▸ ˅ (top-right) ▸ Install from Disk…** → pick
-   `citybuilder_osm-0.6.0.zip`.
+   `citybuilder_osm-0.6.1.zip`.
 3. **Preferences ▸ System ▸ Network → enable "Allow Online Access"** (OSM fetch; DEM
    terrain and photo textures also download on first use).
 
@@ -72,16 +72,15 @@ blender --command extension install-file --repo user_default --enable citybuilde
 - Map data: **© OpenStreetMap contributors (ODbL 1.0)** — embedded in every export.
 - DEM terrain: Terrain tiles by Mapzen/Tilezen via AWS Open Data; SRTM/3DEP courtesy USGS.
 
-## Known limits (v0.6a → see PLAN.md roadmap)
+## Known limits (v0.6.1 → see PLAN.md roadmap)
 
-- Junction pads are convex hulls + corner arcs; the osm2streets trim-back port lands v0.6.
 - Hipped roofs are ridge approximations (bpypolyskel vendoring is v0.6); complex/concave
   footprints fall back to flat.
 - Tree-lawn does not yet taper at junction mouths; tunnels are skipped, not rendered.
 - UI blocks during fetch; radius capped at 1.5 km (tiled fetch is v0.6).
-- Parallel-mapped ways (dual carriageways, segregated cycle tracks) are swept
-  independently and overlap instead of merging into one cross-section — the
-  osm2streets pre-pass (v0.6) merges them. Paths/cycleways already follow terrain.
+- Parallel-way merge (v0.6.1) absorbs cycle tracks/sidewalks and clamps dual
+  carriageways to a shared median; roundabout-specific junction treatment and
+  full lane-graph markings are still pending.
 - Heavy Overpass boxes (giant park relations, e.g. Golden Gate/Presidio) can 504;
   the fetch degrades gracefully (relations dropped) but may still fail under
   mirror load — retry, shrink radius, or use the tiled fetch when it lands.

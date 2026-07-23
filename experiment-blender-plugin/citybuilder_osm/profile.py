@@ -30,6 +30,7 @@ CROWN_SLOPE = 0.02          # §6 centre lift = 0.02 * half * (1 - ln^2)
 SUPERELEV_MAX = 0.06        # §6 max 6 % bank ...
 SUPERELEV_FULL_CURV = 0.02  # §6 ... reached at curvature 0.02/m (~50 m radius)
 TAPER_M = 6.0               # §6 crown/bank fade to 0 within 6 m of each end
+LAWN_TAPER_M = 4.0          # §2 tree-lawn tapers to 0 within 4 m of a junction
 REVEAL_W = 0.05             # §1 5 cm reveal between asphalt edge and curb face
 CURB_H = 0.16               # §1 FRAME_CURB_H — curb top AND footpath top
 VERGE_H = 0.04              # §1 FRAME_VERGE_H — tree-lawn trough
@@ -106,13 +107,34 @@ def _seg_ctx(seg):
     # §6 bank = SUPERELEV_MAX at |curvature| >= 0.02, sign = -sign(curvature)
     bank = [-SUPERELEV_MAX * max(-1.0, min(1.0, k / SUPERELEV_FULL_CURV))
             for k in _curvatures(pts)]
+    # §2: tree-lawn tapers to 0 within ~4 m of a junction mouth
+    taper = []
+    for c in cum:
+        f = 1.0
+        if seg.get("j_start") is not None:
+            f = min(f, c / LAWN_TAPER_M)
+        if seg.get("j_end") is not None:
+            f = min(f, (length - c) / LAWN_TAPER_M)
+        taper.append(geom.smoothstep(max(0.0, f)))
     return {"pts": pts, "n": n, "elev": elev, "cum": cum, "length": length,
-            "half": half, "fade": fade, "bank": bank,
+            "half": half, "fade": fade, "bank": bank, "taper": taper,
             "crown": CROWN_SLOPE * half, "offs": {}}
 
 
+def _lat(d, i):
+    """Lateral at station i — d may be a scalar or a per-station array."""
+    return d[i] if isinstance(d, (list, tuple)) else d
+
+
+def _mean_lat(d):
+    return sum(d) / len(d) if isinstance(d, (list, tuple)) else d
+
+
 def _off(ctx, d):
-    """Cached offset polyline at signed lateral d (+ = left of travel)."""
+    """Cached offset polyline at signed lateral d (+ = left of travel).
+    Per-station arrays (lawn taper) use offset_polyline_var, uncached."""
+    if isinstance(d, (list, tuple)):
+        return geom.offset_polyline_var(ctx["pts"], list(d))
     key = round(d, 6)
     poly = ctx["offs"].get(key)
     if poly is None:
@@ -146,7 +168,7 @@ def _locate(ctx, s):
 def _top_strip(md, ctx, d_a, z_a, d_b, z_b, mat, up=True):
     """Ribbon between two band-edge laterals with per-station heights.
     UV: u = lateral metres from centreline, v = arc metres."""
-    if d_b < d_a:
+    if _mean_lat(d_b) < _mean_lat(d_a):
         d_a, d_b, z_a, z_b = d_b, d_a, z_b, z_a
     pa, pb = _off(ctx, d_a), _off(ctx, d_b)
     cum, n = ctx["cum"], ctx["n"]
@@ -157,12 +179,12 @@ def _top_strip(md, ctx, d_a, z_a, d_b, z_b, mat, up=True):
         a0, a1, b0, b1 = base + i, base + i + 1, base + n + i, base + n + i + 1
         if up:  # lower lateral runs first along travel -> CCW from +Z
             md["faces"].append([a0, a1, b1, b0])
-            uv = [(d_a, cum[i]), (d_a, cum[i + 1]),
-                  (d_b, cum[i + 1]), (d_b, cum[i])]
+            uv = [(_lat(d_a, i), cum[i]), (_lat(d_a, i + 1), cum[i + 1]),
+                  (_lat(d_b, i + 1), cum[i + 1]), (_lat(d_b, i), cum[i])]
         else:
             md["faces"].append([b0, b1, a1, a0])
-            uv = [(d_b, cum[i]), (d_b, cum[i + 1]),
-                  (d_a, cum[i + 1]), (d_a, cum[i])]
+            uv = [(_lat(d_b, i), cum[i]), (_lat(d_b, i + 1), cum[i + 1]),
+                  (_lat(d_a, i + 1), cum[i + 1]), (_lat(d_a, i), cum[i])]
         md["mats"].append(mat)
         md["uvs"].append(uv)
 
@@ -194,12 +216,14 @@ def _end_cap(md, ctx, d_lo, zt_lo, d_hi, zt_hi, zb_lo, zb_hi, mat, end):
     """Close one band's cross-section at a segment end (junction trim / dead
     end) so solids never show hollow interiors. Faces -travel at the start,
     +travel at the end."""
-    if abs(d_hi - d_lo) < 1e-9:
+    if abs(_mean_lat(d_hi) - _mean_lat(d_lo)) < 1e-9:
         return
-    if d_hi < d_lo:
+    if _mean_lat(d_hi) < _mean_lat(d_lo):
         d_lo, d_hi, zt_lo, zt_hi, zb_lo, zb_hi = \
             d_hi, d_lo, zt_hi, zt_lo, zb_hi, zb_lo
     i = ctx["n"] - 1 if end else 0
+    if abs(_lat(d_hi, i) - _lat(d_lo, i)) < 1e-6:
+        return  # band tapered to nothing at this end (lawn at a junction)
     lo, hi = _off(ctx, d_lo)[i], _off(ctx, d_hi)[i]
     ztl, zth, zbl, zbh = zt_lo[i], zt_hi[i], zb_lo[i], zb_hi[i]
     if abs(ztl - zbl) < 1e-9 and abs(zth - zbh) < 1e-9:
@@ -207,12 +231,13 @@ def _end_cap(md, ctx, d_lo, zt_lo, d_hi, zt_hi, zb_lo, zb_hi, mat, end):
     base = len(md["verts"])
     md["verts"].extend([(lo[0], lo[1], zbl), (hi[0], hi[1], zbh),
                         (hi[0], hi[1], zth), (lo[0], lo[1], ztl)])
+    dl, dh = _lat(d_lo, i), _lat(d_hi, i)
     if end:
         md["faces"].append([base, base + 1, base + 2, base + 3])
-        uv = [(d_lo, zbl), (d_hi, zbh), (d_hi, zth), (d_lo, ztl)]
+        uv = [(dl, zbl), (dh, zbh), (dh, zth), (dl, ztl)]
     else:
         md["faces"].append([base + 1, base, base + 3, base + 2])
-        uv = [(d_hi, zbh), (d_lo, zbl), (d_lo, ztl), (d_hi, zth)]
+        uv = [(dh, zbh), (dl, zbl), (dl, ztl), (dh, zth)]
     md["mats"].append(mat)
     md["uvs"].append(uv)
 
@@ -221,10 +246,14 @@ def _end_cap(md, ctx, d_lo, zt_lo, d_hi, zt_hi, zb_lo, zb_hi, mat, end):
 # Cross-section assembly
 # ============================================================================
 
-def _frame_side(md, ctx, s, curb_w, verge_w, foot_w, caps):
+def _frame_side(md, ctx, s, curb_w, verge_w, foot_w, caps, cycle_w=0.0):
     """One framed side (§1-2). s = +1 left of travel, -1 right. Every band
     is surface-relative to the centreline elevation (§7: crown is 0 at the
-    kerb, superelevation is absorbed by the 5 cm reveal ramp)."""
+    kerb, superelevation is absorbed by the 5 cm reveal ramp).
+
+    cycle_w > 0 inserts an absorbed cycle-track band (asphalt, flush with the
+    curb/footpath level) between curb and lawn. The tree-lawn width tapers to
+    0 within LAWN_TAPER_M of junction mouths (ctx["taper"])."""
     n, half, elev = ctx["n"], ctx["half"], ctx["elev"]
     z_edge = [_surf_z(ctx, i, 1.0 if s > 0 else -1.0) for i in range(n)]
     z_curb = [e + CURB_H for e in elev]
@@ -234,8 +263,17 @@ def _frame_side(md, ctx, s, curb_w, verge_w, foot_w, caps):
     e0 = s * half
     e1 = s * (half + REVEAL_W)
     e2 = s * (half + REVEAL_W + curb_w)
-    e3 = s * (half + REVEAL_W + curb_w + verge_w)
-    e4 = s * (half + REVEAL_W + curb_w + verge_w + foot_w)
+    e2c = s * (half + REVEAL_W + curb_w + cycle_w)
+    # lawn outer edge tapers with the per-station junction factor
+    verge_i = [verge_w * ctx["taper"][i] for i in range(n)]
+    tapered = any(v < verge_w - 1e-9 for v in verge_i)
+    base3 = half + REVEAL_W + curb_w + cycle_w
+    if verge_w > 1e-6 and tapered:
+        e3 = [s * (base3 + verge_i[i]) for i in range(n)]
+        e4 = [s * (base3 + verge_i[i] + foot_w) for i in range(n)]
+    else:
+        e3 = s * (base3 + verge_w)
+        e4 = s * (base3 + verge_w + foot_w)
 
     # 5 cm reveal: gutter strip at road level, part of the curb piece (§1)
     _top_strip(md, ctx, e0, z_edge, e1, list(elev), "curb")
@@ -246,10 +284,15 @@ def _frame_side(md, ctx, s, curb_w, verge_w, foot_w, caps):
     _top_strip(md, ctx, e1, z_curb, e2, z_curb, "curb")
     caps.append((e1, z_curb, e2, z_curb))
     outer_d, outer_top = e2, z_curb
+    if cycle_w > 1e-6:
+        # absorbed cycle track: asphalt band flush with curb/footpath level
+        _top_strip(md, ctx, e2, z_curb, e2c, z_curb, "asphalt")
+        caps.append((e2, z_curb, e2c, z_curb))
+        outer_d, outer_top = e2c, z_curb
     if verge_w > 1e-6:
-        _wall(md, ctx, e2, z_lawn, z_curb, "curb", s)       # step down 0.16->0.04
-        _top_strip(md, ctx, e2, z_lawn, e3, z_lawn, "grass")
-        caps.append((e2, z_lawn, e3, z_lawn))
+        _wall(md, ctx, e2c, z_lawn, z_curb, "curb", s)      # step down 0.16->0.04
+        _top_strip(md, ctx, e2c, z_lawn, e3, z_lawn, "grass")
+        caps.append((e2c, z_lawn, e3, z_lawn))
         outer_d, outer_top = e3, z_lawn
     if foot_w > 1e-6:
         if verge_w > 1e-6:
@@ -329,8 +372,17 @@ def sweep_road(seg, opts=None):
         curb_w, verge_w, foot_w = _PRESETS.get(cls, _PRESET_DEFAULT)
         if paver:
             verge_w, foot_w = 0.0, 1.5  # §2 cobble: no lawn, 1.5 m footpath
+        sidepaths = {sp["side"]: sp for sp in (seg.get("sidepaths") or [])}
+        median_side = seg.get("median_side") or 0
         for s in (1.0, -1.0):
-            _frame_side(md, ctx, s, curb_w, verge_w, foot_w, caps)
+            si = 1 if s > 0 else -1
+            if si == median_side:
+                # dual-carriageway inner side: curb only, no walk into the median
+                _frame_side(md, ctx, s, curb_w, 0.0, 0.0, caps)
+            else:
+                sp = sidepaths.get(si)
+                _frame_side(md, ctx, s, curb_w, verge_w, foot_w, caps,
+                            cycle_w=sp["width"] if sp else 0.0)
 
     if o["end_caps"]:
         for d_lo, zt_lo, d_hi, zt_hi in caps:
@@ -652,3 +704,50 @@ if __name__ == "__main__":
     assert set(ff["mats"]) <= {"asphalt", "concrete"}
 
     print("ALL PROFILE TESTS PASSED")
+
+    # ---- Phase 1: lawn taper / median side / cycle band -------------------------
+    pts10 = [(float(x), 0.0) for x in range(0, 101, 10)]
+
+    # lawn taper: junction at both ends → grass width 0 at mouths, full mid-block
+    seg = mk(pts10)
+    seg["j_start"], seg["j_end"] = 0, 1
+    md = sweep_road(seg)
+    check(md, "taper")
+    grass_u = [(min(abs(u) for u, v in uv), max(abs(u) for u, v in uv), uv)
+               for uv, m in zip(md["uvs"], md["mats"]) if m == "grass"]
+    inner_edge = 8.0 / 2 + 0.05 + 0.40           # half + reveal + curbW
+    full_outer = inner_edge + 1.6                # + residential lawn 1.6
+    at_ends = [rec for rec in grass_u
+               if any(v < 1e-6 or v > 99.9 for _u, _o, uvq in [rec]
+                      for _uu, v in uvq)]
+    assert at_ends, "no grass faces touch the ends"
+    for lo, hi, uvq in at_ends:
+        for u, v in uvq:
+            if v < 1e-6 or v > 99.9:  # corners AT the mouth: lawn tapered to 0
+                assert abs(abs(u) - inner_edge) < 0.05, (u, v)
+    assert any(hi > full_outer - 0.05 for lo, hi, uvq in grass_u), \
+        "lawn never reaches full width mid-block"
+    print("taper OK (lawn 0 at junction mouths, full mid-block)")
+
+    # median side: left (+1) renders curb-only — no grass/sidewalk with u > 0
+    seg = mk(pts10)
+    seg["median_side"] = 1
+    md = sweep_road(seg)
+    check(md, "median")
+    for uv, m in zip(md["uvs"], md["mats"]):
+        # top strips only: uv = (lateral, arc) so v spans the 100 m length;
+        # walls carry (arc, z) and are exempt
+        if m in ("grass", "sidewalk") and max(v for _u, v in uv) > 5.0:
+            assert all(u < 0 for u, v in uv if abs(u) > 1e-6), (m, uv)
+    print("median OK (no walk into the median side)")
+
+    # cycle band: absorbed track on the right (-1) → asphalt beyond the curb
+    seg = mk(pts10)
+    seg["sidepaths"] = [{"side": -1, "kind": "cycleway", "width": 2.5}]
+    md = sweep_road(seg)
+    check(md, "cycle")
+    beyond = [uv for uv, m in zip(md["uvs"], md["mats"])
+              if m == "asphalt" and all(u <= -(inner_edge - 0.01) for u, v in uv)]
+    assert beyond, "no cycle band emitted beyond the curb"
+    print("cycle band OK (asphalt track inside the frame)")
+    print("ALL PHASE-1 PROFILE TESTS PASSED")

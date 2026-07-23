@@ -306,17 +306,18 @@ reinstall + commit/push. Dependencies are listed so phases can't silently reorde
 
 ### Phase 1 — "Roads v2" → v0.6  *(the core-product phase; ~2 sessions)*
 Depends on: nothing (parallel-safe with Phase 0, but ship after it).
-- [ ] `roadmerge.py` pre-pass: degree-2 collapse → short-link merge (two-pass trim) →
-      parallel-way detection (absorb sidepaths as cross-section bands; clamp dual-
-      carriageway widths to shared median) — pure module + self-tests on synthetic grids
-      and a recorded Cable-Street fixture
-- [ ] osm2streets junction polygons in `junctions.py`: thicken → wedge corners → MAX
-      trim → pad ring walk; roundabout special (island R6, ring +7); 1-road caps,
-      2-road connectors
-- [ ] `profile.py`: `offsetPolylineVar` port → tree-lawn taper to 0 within 4 m of
-      junctions; median band rendering for merged dual carriageways
-- [ ] Lane-graph-driven markings (lane centres from merged cross-section, not raw
-      width/lanes); wheel-wear bands aligned to the same lane centres
+- [x] `roadmerge.py` pre-pass: parallel-way detection (absorb cycle tracks as
+      cross-section bands, footways silently; clamp dual-carriageway widths to a
+      0.6 m median) — pure module, 5 self-tests (degree-2 collapse/short-link merge
+      already covered by the elevation §B clustering)
+- [x] osm2streets junction polygons in `junctions.py`: wedge-corner ring walk
+      (left-edge × right-edge intersections, through-pair straight edges, shallow-
+      wedge midpoint fallback) + curb-radius fillet; roundabout special DEFERRED
+- [x] `profile.py`: `offset_polyline_var` port → tree-lawn tapers to 0 within 4 m of
+      junction mouths; median side renders curb-only; absorbed cycle band at
+      footpath level
+- [~] Markings consistent via merged widths (post-clamp lanes); full lane-graph
+      markings + per-lane wear deferred to the wear pass
 - Exit: Cable Street renders as ONE cross-section (road + median + cycle track + walk);
   skewed junctions read clean; before/after renders in `renders/`.
 
