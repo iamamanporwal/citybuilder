@@ -12,7 +12,7 @@ Docs: [PLAN.md](PLAN.md) (roadmap) · [SPEC.md](SPEC.md) (module contracts) ·
 
 ```
 citybuilder_osm/            add-on source (Blender extension, pure stdlib)
-citybuilder_osm-0.5.0.zip   ready-to-install package
+citybuilder_osm-0.6.0.zip   ready-to-install package
 test_headless.py            integration matrix (quick | prague | goldengate)
 test_matlib.py/test_export.py  Blender-side module tests
 showcase.py                 Cycles beauty renders from a saved .blend
@@ -25,9 +25,13 @@ showcase.py                 Cycles beauty renders from a saved .blend
 
 1. Blender 4.2+ (tested on 5.1): https://www.blender.org/download/ or `brew install --cask blender`.
 2. **Edit ▸ Preferences ▸ Get Extensions ▸ ˅ (top-right) ▸ Install from Disk…** → pick
-   `citybuilder_osm-0.5.0.zip`.
-3. **Preferences ▸ System ▸ Network → enable "Allow Online Access"** (OSM fetch; the DEM
-   terrain mode also downloads elevation tiles).
+   `citybuilder_osm-0.6.0.zip`.
+3. **Preferences ▸ System ▸ Network → enable "Allow Online Access"** (OSM fetch; DEM
+   terrain and photo textures also download on first use).
+
+Photo-PBR textures (ambientCG, CC0 — game-legal) download once on the first build
+(~50–90 MB) into the extension's user cache and are reused forever. Untick
+*Photo textures* in the panel for fully-offline procedural builds.
 
 ## Use
 
@@ -68,9 +72,8 @@ blender --command extension install-file --repo user_default --enable citybuilde
 - Map data: **© OpenStreetMap contributors (ODbL 1.0)** — embedded in every export.
 - DEM terrain: Terrain tiles by Mapzen/Tilezen via AWS Open Data; SRTM/3DEP courtesy USGS.
 
-## Known limits (v0.5 → see PLAN.md)
+## Known limits (v0.6a → see PLAN.md roadmap)
 
-- Procedural materials only — photographic PBR textures (ambientCG, CC0) are v0.6.
 - Junction pads are convex hulls + corner arcs; the osm2streets trim-back port lands v0.6.
 - Hipped roofs are ridge approximations (bpypolyskel vendoring is v0.6); complex/concave
   footprints fall back to flat.

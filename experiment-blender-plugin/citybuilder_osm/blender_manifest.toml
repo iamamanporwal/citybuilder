@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "citybuilder_osm"
-version = "0.5.0"
+version = "0.6.0"
 name = "CityBuilder OSM"
 tagline = "Game-ready 3D cities from OpenStreetMap data"
 maintainer = "Aman Porwal <aman@aganastudios.com>"
@@ -12,4 +12,4 @@ license = ["SPDX:GPL-3.0-or-later"]
 tags = ["3D View", "Import-Export"]
 
 [permissions]
-network = "Fetches OpenStreetMap data and optional elevation tiles"
+network = "Fetches OSM data, elevation tiles and CC0 PBR textures"

@@ -8,8 +8,10 @@ import math
 
 import bpy
 
+import os
+
 from . import (elevation, geom, junctions, landmarks_gen, matlib, overpass,
-               profile, props_gen, roadnet, roofs, terrain)
+               profile, props_gen, roadnet, roofs, terrain, texcache)
 
 ROOT_NAME = "CityBuilder"
 SUBS = ("Ground", "Roads", "Junctions", "Areas", "Buildings", "Landmarks", "Props", "Trees")
@@ -207,6 +209,35 @@ def _water_fraction(ring, water_areas):
     return hits / max(1, len(ring))
 
 
+# ---- photo textures -------------------------------------------------------------
+
+def texture_cache_dir():
+    """Persistent per-user texture cache: the extension user dir when installed,
+    ~/.cache fallback when running from source (headless tests)."""
+    try:
+        return bpy.utils.extension_path_user(__package__, path="textures", create=True)
+    except Exception:
+        d = os.path.expanduser("~/.cache/citybuilder_osm/textures")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+
+def prepare_textures(enabled, quality="med", progress=None):
+    """Fetch/load the photo-PBR set and arm matlib. Never raises; empty maps =
+    procedural fallback (fully offline)."""
+    if not enabled:
+        matlib.set_textures({})
+        return 0
+    res = "1K" if str(quality).lower().startswith("l") else "2K"
+    try:
+        maps = texcache.ensure(texture_cache_dir(), res=res, progress=progress)
+    except Exception as e:
+        print(f"[citybuilder] texture pipeline failed ({e}) — procedural fallback")
+        maps = {}
+    matlib.set_textures(maps)
+    return len(maps)
+
+
 # ---- orchestrator --------------------------------------------------------------
 
 def build_scene(context, graph, params, progress=None):
@@ -216,8 +247,15 @@ def build_scene(context, graph, params, progress=None):
         if progress:
             progress(pct, label)
 
+    # arm the material library (photo PBR or procedural) BEFORE any mesh is built
+    tick(2, "textures")
+    n_tex = prepare_textures(params.get("photo_textures", True),
+                             params.get("quality", "med"),
+                             progress=lambda f, label: tick(2 + f * 3, label))
+    counts_tex = n_tex
+
     subs = ensure_collections(context)
-    counts = {}
+    counts = {"textured_keys": counts_tex}
     radius = params["radius"]
 
     # clip area rings to the scene rect — relations (rivers, big parks) drag

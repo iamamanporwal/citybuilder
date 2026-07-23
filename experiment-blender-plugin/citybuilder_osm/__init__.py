@@ -51,6 +51,10 @@ class CityBuilderProps(bpy.types.PropertyGroup):
                ("HIGH", "High", "Dense terrain grid")])
     framed: bpy.props.BoolProperty(
         name="Framed roads (curbs + sidewalks)", default=True)
+    photo_textures: bpy.props.BoolProperty(
+        name="Photo textures (ambientCG CC0)", default=True,
+        description="Download photographic PBR textures on first build "
+                    "(cached on disk; disable for fully-offline builds)")
     do_buildings: bpy.props.BoolProperty(name="Buildings", default=True)
     do_props: bpy.props.BoolProperty(name="Street props", default=True)
     do_trees: bpy.props.BoolProperty(name="Trees", default=True)
@@ -92,6 +96,7 @@ class CITYBUILDER_OT_build(bpy.types.Operator):
                  "quality": p.quality.lower(),
                  "seed": p.seed,
                  "framed": p.framed,
+                 "photo_textures": p.photo_textures,
                  "do_buildings": p.do_buildings,
                  "do_props": p.do_props,
                  "do_trees": p.do_trees,
@@ -141,6 +146,7 @@ class CITYBUILDER_PT_panel(bpy.types.Panel):
         layout.prop(p, "quality")
         box = layout.box()
         box.prop(p, "framed")
+        box.prop(p, "photo_textures")
         row = box.row()
         row.prop(p, "do_buildings")
         row.prop(p, "do_trees")
@@ -153,6 +159,7 @@ class CITYBUILDER_PT_panel(bpy.types.Panel):
         layout.separator()
         layout.operator("citybuilder.export_game", icon="EXPORT")
         layout.label(text="Fetch + build takes 10-60 s", icon="INFO")
+        layout.label(text="Data © OSM · Textures: ambientCG (CC0)")
 
 
 classes = (

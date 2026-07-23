@@ -49,6 +49,8 @@ p.lat, p.lon, p.radius = cfg["lat"], cfg["lon"], cfg["radius"]
 p.terrain_mode = cfg["terrain"]
 p.quality = cfg["quality"]
 p.city_name = cfg["name"]
+NO_TEX = os.environ.get("CB_NO_TEXTURES") == "1"
+p.photo_textures = not NO_TEX
 
 t0 = time.time()
 result = bpy.ops.citybuilder.build()
@@ -75,6 +77,19 @@ if SCENARIO in ("goldengate", "london"):
 
 export_data = json.loads(scene["cb_export"])
 assert export_data["roads"], "cb_export has no roads"
+
+# texture smoke: photo mode must load real image datablocks into "CB <key> T"
+# materials; offline mode must produce zero textured materials and still build
+tex_mats = [m.name for m in bpy.data.materials if m.name.startswith("CB ")
+            and m.name.split(" ")[-1] == "T"]
+imgs = [i for i in bpy.data.images if i.filepath]  # has_data is lazy pre-render
+if NO_TEX:
+    assert not tex_mats, f"offline build produced textured materials: {tex_mats}"
+    print("[matrix] offline fallback OK (procedural materials only)")
+else:
+    assert len(tex_mats) >= 6, f"too few textured materials: {tex_mats}"
+    assert len(imgs) >= 8, f"too few loaded texture images: {len(imgs)}"
+    print(f"[matrix] textures OK — {len(tex_mats)} textured materials, {len(imgs)} images")
 
 # ---- cameras + render ----------------------------------------------------------
 

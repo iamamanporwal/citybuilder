@@ -237,6 +237,166 @@ def _bricks(hexcol, mortar_hex, row, width, rough, offset=0.5, coords="UV",
     return build
 
 
+# ---- photo-PBR layer (Phase 0) --------------------------------------------------
+# build.py calls set_textures(texcache.ensure(...)) before materials are built;
+# keys present in _TEXTURES get photographic builders (cached as "CB <key> T"),
+# everything else keeps the procedural recipes below. Empty dict = fully offline.
+
+_TEXTURES = {}
+
+
+def set_textures(maps):
+    """maps: {key: {"size_m", "color", "normal"?, "rough"?, "ao"?}} from texcache."""
+    global _TEXTURES
+    _TEXTURES = maps or {}
+
+
+def _img_node(nt, path, srgb, loc):
+    img = bpy.data.images.load(path, check_existing=True)
+    img.colorspace_settings.name = "sRGB" if srgb else "Non-Color"
+    n = nt.nodes.new("ShaderNodeTexImage")
+    n.image = img
+    n.extension = "REPEAT"
+    n.location = loc
+    return n
+
+
+def _photo_chain(nt, maps, coords="UV", loc=(-1600, 0), value_mul=1.0,
+                 tint_hex=None, ao_mix=0.75, normal_strength=1.0):
+    """Image-PBR subgraph: returns {"color": socket, "rough": socket?, "normal": socket?}.
+
+    Mapping scale = 1/size_m — UVs and Object coords are both metres, so one
+    texture tile spans its real physical size.
+    """
+    x, y = loc
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc.location = (x, y)
+    mp = nt.nodes.new("ShaderNodeMapping")
+    mp.location = (x + 180, y)
+    s = 1.0 / max(0.1, maps.get("size_m", 2.0))
+    mp.inputs["Scale"].default_value = (s, s, s)
+    nt.links.new(tc.outputs[coords], mp.inputs["Vector"])
+    out = {}
+
+    col = _img_node(nt, maps["color"], True, (x + 420, y + 160))
+    nt.links.new(mp.outputs["Vector"], col.inputs["Vector"])
+    col_socket = col.outputs["Color"]
+    if maps.get("ao"):
+        ao = _img_node(nt, maps["ao"], False, (x + 420, y + 460))
+        nt.links.new(mp.outputs["Vector"], ao.inputs["Vector"])
+        m = _mix(nt, "RGBA", "MULTIPLY", (x + 720, y + 260))
+        m.label = "AO"
+        _in(m, "Factor_Float").default_value = ao_mix
+        nt.links.new(col_socket, _in(m, "A_Color"))
+        nt.links.new(ao.outputs["Color"], _in(m, "B_Color"))
+        col_socket = _outp(m, "Result_Color")
+    if tint_hex or value_mul != 1.0:
+        t = _mix(nt, "RGBA", "MULTIPLY", (x + 920, y + 160))
+        t.label = "tint"
+        _in(t, "Factor_Float").default_value = 1.0
+        nt.links.new(col_socket, _in(t, "A_Color"))
+        _in(t, "B_Color").default_value = _hex_rgba(tint_hex or "#ffffff", value_mul)
+        col_socket = _outp(t, "Result_Color")
+    out["color"] = col_socket
+
+    if maps.get("rough"):
+        rg = _img_node(nt, maps["rough"], False, (x + 420, y - 160))
+        nt.links.new(mp.outputs["Vector"], rg.inputs["Vector"])
+        out["rough"] = rg.outputs["Color"]
+    if maps.get("normal"):
+        nm = _img_node(nt, maps["normal"], False, (x + 420, y - 460))
+        nt.links.new(mp.outputs["Vector"], nm.inputs["Vector"])
+        nmap = nt.nodes.new("ShaderNodeNormalMap")
+        nmap.location = (x + 720, y - 460)
+        _set(nmap, "Strength", normal_strength)
+        nt.links.new(nm.outputs["Color"], nmap.inputs["Color"])
+        out["normal"] = nmap.outputs["Normal"]
+    return out
+
+
+def _asphalt_wear(nt, bsdf, color_socket, loc=(-700, 500)):
+    """Wheel-path + oil-band wear multiplied onto the road surface.
+
+    Road sweep UVs: u = lateral metres from the centerline, so |u| < 0.5 is the
+    lane-centre oil band and 1.0–2.7 covers wheel paths of a 3.0–3.6 m lane.
+    Noise-masked so it reads patchy, not painted. Returns the worn color socket.
+    """
+    x, y = loc
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc.location = (x - 500, y)
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (x - 320, y + 60)
+    nt.links.new(tc.outputs["UV"], sep.inputs["Vector"])
+    au = _math(nt, "ABSOLUTE", sep.outputs["X"], None, (x - 140, y + 60))
+    au.label = "|lateral m|"
+    patch = _noise(nt, tc.outputs["Object"], 0.05, 3.0, (x - 320, y - 220))
+    pmask = _math(nt, "MULTIPLY", patch.outputs["Fac"], 0.9, (x - 140, y - 160))
+
+    oil = _math(nt, "LESS_THAN", au.outputs[0], 0.5, (x + 40, y + 120))
+    oil.label = "oil band"
+    ofac = _math(nt, "MULTIPLY", oil.outputs[0], pmask.outputs[0], (x + 220, y + 100))
+    omix = _mix(nt, "RGBA", "MULTIPLY", (x + 420, y + 80))
+    omix.label = "oil dark"
+    nt.links.new(ofac.outputs[0], _in(omix, "Factor_Float"))
+    nt.links.new(color_socket, _in(omix, "A_Color"))
+    _in(omix, "B_Color").default_value = (0.80, 0.80, 0.82, 1.0)
+
+    wlo = _math(nt, "GREATER_THAN", au.outputs[0], 1.0, (x + 40, y - 60))
+    whi = _math(nt, "LESS_THAN", au.outputs[0], 2.7, (x + 40, y - 200))
+    wband = _math(nt, "MULTIPLY", wlo.outputs[0], whi.outputs[0], (x + 220, y - 120))
+    wband.label = "wheel paths"
+    wfac = _math(nt, "MULTIPLY", wband.outputs[0], pmask.outputs[0], (x + 400, y - 160))
+    wmix = _mix(nt, "RGBA", "MULTIPLY", (x + 620, y - 40))
+    wmix.label = "wheel polish (lighter)"
+    nt.links.new(wfac.outputs[0], _in(wmix, "Factor_Float"))
+    nt.links.new(_outp(omix, "Result_Color"), _in(wmix, "A_Color"))
+    _in(wmix, "B_Color").default_value = (1.10, 1.10, 1.09, 1.0)
+    return _outp(wmix, "Result_Color")
+
+
+# per-key photo recipe: viewport hex + options for _photo_chain / wear
+_PHOTO_SPECS = {
+    "asphalt":       dict(hex="#2a2b2e", coords="UV", wear=True, value_mul=0.7,
+                          rough_min=0.8, normal_strength=0.5),
+    "asphalt_old":   dict(hex="#242527", coords="UV", value_mul=0.75,
+                          rough_min=0.82, normal_strength=0.5),
+    "sidewalk":      dict(hex="#9b968c", coords="UV"),
+    "paver":         dict(hex="#8a857c", coords="UV"),
+    "curb":          dict(hex="#a8a49c", coords="UV", value_mul=0.85),
+    "concrete":      dict(hex="#8f8d88", coords="UV", value_mul=0.85),
+    "stone":         dict(hex="#b8a883", coords="UV", tint="#c8b795"),
+    "roof_tile":     dict(hex="#9a5843", coords="Object", tint="#c07a58"),
+    "grass":         dict(hex="#46602c", coords="Object"),
+    "forest_floor":  dict(hex="#35471f", coords="Object", value_mul=0.75),
+    "gravel":        dict(hex="#8a8478", coords="Object"),
+}
+
+
+def _photo_builder(key, spec):
+    """Generic photographic Principled builder for one vocabulary key."""
+    def build(mat):
+        maps = _TEXTURES[key]
+        nt, bsdf = _reset(mat, spec["hex"], 0.9)
+        ch = _photo_chain(nt, maps, coords=spec.get("coords", "UV"),
+                          loc=(-1600, 0), value_mul=spec.get("value_mul", 1.0),
+                          tint_hex=spec.get("tint"),
+                          normal_strength=spec.get("normal_strength", 1.0))
+        col = ch["color"]
+        if spec.get("wear"):
+            col = _asphalt_wear(nt, bsdf, col)
+        nt.links.new(col, bsdf.inputs["Base Color"])
+        if ch.get("rough"):
+            rsock = ch["rough"]
+            if spec.get("rough_min"):
+                clamp = _math(nt, "MAXIMUM", rsock, spec["rough_min"], (-260, -220))
+                clamp.label = "roughness floor (no sky mirror)"
+                rsock = clamp.outputs[0]
+            nt.links.new(rsock, bsdf.inputs["Roughness"])
+        if ch.get("normal"):
+            nt.links.new(ch["normal"], bsdf.inputs["Normal"])
+    return build
+
+
 # Facade palette: 5 plausible wall colours chosen by the per-face "tint" attr.
 _WALL_PALETTE = ("#b8a488", "#a89179", "#c4b49a", "#9a8a80", "#b0a190")
 _GLASS_HEX = "#1c2226"
@@ -249,8 +409,11 @@ _COL_W, _WIN_U0, _WIN_U1 = 2.6, 0.27, 0.73
 _LIT_THRESHOLD = 0.82   # white-noise gate → ~18% of window cells glow
 
 
-def _build_wall(mat):
-    """THE facade: window grid from UV metres + tint palette + lit windows."""
+def _build_wall(mat, photo=None):
+    """THE facade: window grid from UV metres + tint palette + lit windows.
+
+    photo = {"plaster": maps, "brick": maps|None} swaps the flat palette for
+    photographic wall textures (palette survives as a 30% multiply tint)."""
     nt, bsdf = _reset(mat, _WALL_PALETTE[0], 0.8)
     ln = nt.links.new
     bsdf.location = (240, 0)
@@ -295,11 +458,36 @@ def _build_wall(mat):
     ln(at.outputs["Fac"], pal.inputs["Fac"])
     _frame(nt, "Facade colour (tint attr)", pal)
 
+    # wall colour source: flat palette, or photo wall × palette tint
+    wall_col = pal.outputs["Color"]
+    if photo:
+        pl = _photo_chain(nt, photo["plaster"], coords="UV", loc=(-2400, 700))
+        if photo.get("brick"):
+            br = _photo_chain(nt, photo["brick"], coords="UV", loc=(-2400, 1150))
+            pick = _math(nt, "GREATER_THAN", at.outputs["Fac"], 0.65, (-1400, 760))
+            pick.label = "brick if tint > 0.65"
+            pmix = _mix(nt, "RGBA", "MIX", (-1180, 820))
+            ln(pick.outputs[0], _in(pmix, "Factor_Float"))
+            ln(pl["color"], _in(pmix, "A_Color"))
+            ln(br["color"], _in(pmix, "B_Color"))
+            photo_col = _outp(pmix, "Result_Color")
+        else:
+            photo_col = pl["color"]
+        tintmix = _mix(nt, "RGBA", "MULTIPLY", (-960, 700))
+        tintmix.label = "photo × palette (55%)"
+        _in(tintmix, "Factor_Float").default_value = 0.55
+        ln(photo_col, _in(tintmix, "A_Color"))
+        ln(pal.outputs["Color"], _in(tintmix, "B_Color"))
+        wall_col = _outp(tintmix, "Result_Color")
+        if pl.get("normal"):
+            ln(pl["normal"], bsdf.inputs["Normal"])
+        _frame(nt, "Photo wall (ambientCG)", tintmix)
+
     # wall ↔ dark glass by window mask
     colmix = _mix(nt, "RGBA", "MIX", (-560, 40))
     colmix.label = "wall / glass"
     ln(win.outputs[0], _in(colmix, "Factor_Float"))
-    ln(pal.outputs["Color"], _in(colmix, "A_Color"))
+    ln(wall_col, _in(colmix, "A_Color"))
     _in(colmix, "B_Color").default_value = _hex_rgba(_GLASS_HEX)
     ln(_outp(colmix, "Result_Color"), bsdf.inputs["Base Color"])
 
@@ -337,8 +525,11 @@ def _build_wall(mat):
            flu, flv, comb, wn, lit, th, variety, gate, gate2, strength)
 
 
-def _build_terrain(mat):
-    """Grass ↔ rock splat by per-face "rock" attribute + noise breakup."""
+def _build_terrain(mat, photo=None):
+    """Grass ↔ rock splat by per-face "rock" attribute + noise breakup.
+
+    photo = {"grass": maps, "rock": maps|None} swaps the flat colours for
+    photographic ground textures (Object coords — terrain UVs are metres/8)."""
     grass, rock = "#46602c", "#6f6a5f"
     nt, bsdf = _reset(mat, grass, 1.0)
     at = nt.nodes.new("ShaderNodeAttribute")
@@ -356,8 +547,19 @@ def _build_terrain(mat):
     mx = _mix(nt, "RGBA", "MIX", (-180, 60))
     mx.label = "grass / rock"
     nt.links.new(fac.outputs[0], _in(mx, "Factor_Float"))
-    _in(mx, "A_Color").default_value = _hex_rgba(grass)
-    _in(mx, "B_Color").default_value = _hex_rgba(rock)
+    if photo:
+        g = _photo_chain(nt, photo["grass"], coords="Object", loc=(-2200, 400))
+        nt.links.new(g["color"], _in(mx, "A_Color"))
+        if g.get("normal"):
+            nt.links.new(g["normal"], bsdf.inputs["Normal"])
+        if photo.get("rock"):
+            r = _photo_chain(nt, photo["rock"], coords="Object", loc=(-2200, 850))
+            nt.links.new(r["color"], _in(mx, "B_Color"))
+        else:
+            _in(mx, "B_Color").default_value = _hex_rgba(rock)
+    else:
+        _in(mx, "A_Color").default_value = _hex_rgba(grass)
+        _in(mx, "B_Color").default_value = _hex_rgba(rock)
     nt.links.new(_outp(mx, "Result_Color"), bsdf.inputs["Base Color"])
 
 
@@ -442,14 +644,33 @@ def _tint(mat, hexcol):
     mat.diffuse_color = rgba
 
 
+def _resolve_builder(key):
+    """(builder, textured?) — photo builder when its maps are cached."""
+    _display, builder = MATERIALS[key]
+    if key in _PHOTO_SPECS and key in _TEXTURES:
+        return _photo_builder(key, _PHOTO_SPECS[key]), True
+    if key == "building_wall" and "building_wall" in _TEXTURES:
+        photo = {"plaster": _TEXTURES["building_wall"],
+                 "brick": _TEXTURES.get("building_brick")}
+        return (lambda mat: _build_wall(mat, photo=photo)), True
+    if key == "terrain" and "terrain" in _TEXTURES:
+        photo = {"grass": _TEXTURES["terrain"],
+                 "rock": _TEXTURES.get("terrain_rock")}
+        return (lambda mat: _build_terrain(mat, photo=photo)), True
+    return builder, False
+
+
 def get(key, color=None):
     """Material for a vocabulary key, cached as "CB <key>" (rebuilt if the
     datablock exists but lost its Principled graph). color="#rrggbb" returns a
-    tinted variant cached as "CB <key> <hex>"."""
+    tinted variant cached as "CB <key> <hex>". When photo textures are active
+    (set_textures) the textured variant is cached separately as "CB <key> T"
+    so texture-on/off rebuilds never collide."""
     if key not in MATERIALS:
         raise KeyError(f"matlib: unknown material key {key!r}")
-    _display, builder = MATERIALS[key]
-    name = f"CB {key}" + (f" {_norm_hex(color)}" if color else "")
+    builder, textured = _resolve_builder(key)
+    name = (f"CB {key}" + (" T" if textured else "")
+            + (f" {_norm_hex(color)}" if color else ""))
     mat = bpy.data.materials.get(name)
     if (mat is not None and mat.node_tree is not None
             and any(n.type == "BSDF_PRINCIPLED" for n in mat.node_tree.nodes)):
